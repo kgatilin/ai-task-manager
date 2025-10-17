@@ -29,6 +29,7 @@ func NewSettingsManager() (*SettingsManager, error) {
 }
 
 // findSettingsFile locates the Claude Code settings file
+// Only returns local project settings files, never global settings
 func findSettingsFile() (string, error) {
 	// Check local settings first
 	localSettings := []string{
@@ -42,18 +43,8 @@ func findSettingsFile() (string, error) {
 		}
 	}
 
-	// Check home directory
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
-	}
-
-	globalSettings := filepath.Join(homeDir, ".claude", "settings.json")
-	if _, err := os.Stat(globalSettings); err == nil {
-		return globalSettings, nil
-	}
-
-	// Default to local settings.json if none exist
+	// Always default to local settings.json if none exist
+	// This ensures we never modify global ~/.claude/settings.json
 	return ".claude/settings.json", nil
 }
 

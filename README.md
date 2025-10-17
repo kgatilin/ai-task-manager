@@ -7,6 +7,7 @@ DarwinFlow is a lightweight logging system that automatically captures all Claud
 ## Features
 
 - **Automatic Logging**: Captures all Claude Code events via hooks (tool invocations, user prompts, etc.)
+- **Log Viewer**: Query and explore captured events with `dw logs` command
 - **Event Sourcing**: Immutable event log enabling replay and analysis
 - **SQLite Storage**: Fast, file-based storage with full-text search
 - **Zero Performance Impact**: Non-blocking, concurrent-safe logging
@@ -53,7 +54,7 @@ DarwinFlow follows a strict 3-layer architecture enforced by [go-arch-lint](http
 cmd → pkg → internal
 ```
 
-- **cmd/dw**: CLI entry points (`dw claude init`, `dw claude log`)
+- **cmd/dw**: CLI entry points (`dw claude init`, `dw claude log`, `dw logs`)
 - **pkg/claude**: Orchestration layer (settings management, logging coordination)
 - **internal/**: Domain primitives (events, hooks config, storage interfaces)
 
@@ -75,6 +76,33 @@ dw claude init
 
 # Log an event (typically called by hooks)
 dw claude log <event-type>
+
+# View logged events
+dw logs                                    # Show 20 most recent logs
+dw logs --limit 50                         # Show 50 most recent logs
+dw logs --help                             # Show database schema and help
+
+# Execute arbitrary SQL queries
+dw logs --query "SELECT event_type, COUNT(*) FROM events GROUP BY event_type"
+```
+
+#### Log Viewing Examples
+
+```bash
+# Show recent activity
+dw logs --limit 10
+
+# Count events by type
+dw logs --query "SELECT event_type, COUNT(*) as count FROM events GROUP BY event_type ORDER BY count DESC"
+
+# Find tool invocations in the last hour
+dw logs --query "SELECT * FROM events WHERE event_type = 'tool.invoked' AND timestamp > strftime('%s', 'now', '-1 hour') * 1000"
+
+# Search for specific content
+dw logs --query "SELECT * FROM events WHERE content LIKE '%sqlite%' LIMIT 10"
+
+# View database schema
+dw logs --help
 ```
 
 ### Event Types
@@ -132,7 +160,9 @@ go-arch-lint -format=api . > docs/public-api-generated.md
 darwinflow-pub/
 ├── cmd/dw/              # CLI entry points
 │   ├── main.go          # Main command router
-│   └── claude.go        # Claude subcommand handlers
+│   ├── claude.go        # Claude subcommand handlers
+│   ├── logs.go          # Logs command handlers
+│   └── logs_test.go     # Logs command tests
 ├── pkg/claude/          # Orchestration & adapters
 │   ├── logger.go        # Event logging
 │   ├── settings.go      # Settings file management
@@ -156,6 +186,7 @@ darwinflow-pub/
 - ✅ Basic event capture (PreToolUse, UserPromptSubmit)
 - ✅ SQLite storage with full-text search
 - ✅ Hook management and merging
+- ✅ Log viewer with SQL query support (`dw logs`)
 
 ### V2 (Planned)
 - Vector embeddings for semantic search

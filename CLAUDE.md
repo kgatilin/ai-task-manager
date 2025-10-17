@@ -6,10 +6,14 @@
 
 ### Key Components
 
-- **CLI Tool (`dw`)**: Main entry point with `claude init` and `claude log` subcommands
+- **CLI Tool (`dw`)**: Main entry point with multiple subcommands
+  - `dw claude init` - Initialize logging infrastructure
+  - `dw claude log` - Log events (called by hooks)
+  - `dw logs` - View and query logged events
 - **Event Logging**: Captures tool invocations and user prompts via Claude Code hooks
 - **SQLite Storage**: Fast, file-based event storage with full-text search capability
 - **Hook Management**: Automatically configures and merges Claude Code hooks
+- **Log Viewer**: Query interface with SQL support for exploring captured events
 
 ### Architecture Documentation
 
@@ -35,7 +39,10 @@ When working on this project:
 2. Check @docs/arch-generated.md to see current package dependencies
 3. Check @docs/public-api-generated.md to see what's exported
 4. Follow the architecture guidelines strictly
-5. Run tests and linter before committing
+5. Write tests for new functionality (aim for 70-80% coverage)
+6. **Update documentation** (README.md and CLAUDE.md) when adding features
+7. Run tests and linter before committing
+8. Regenerate architecture docs if needed
 
 ---
 
@@ -81,6 +88,7 @@ go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
 1. `go test ./...` - all tests must pass
 2. `go-arch-lint .` - ZERO violations required (non-negotiable)
 3. Regenerate docs if architecture/API changed (see above)
+4. Update README.md and CLAUDE.md if functionality changed
 
 ## When Linter Reports Violations
 
@@ -98,7 +106,7 @@ Example: `internal/A` imports `internal/B` → Should B's logic move to A? Shoul
 - Add domain logic to internal/ packages
 - Define interfaces in consumer packages
 - Create adapters in pkg/ to bridge internal packages
-- Use white-box tests (`package mypackage`) for internal packages
+- Use black-box tests (`package pkgname_test`) for pkg packages
 
 **DON'T**:
 - Import between internal/ packages (violation!) or pass []ConcreteType as []InterfaceType
@@ -106,3 +114,171 @@ Example: `internal/A` imports `internal/B` → Should B's logic move to A? Shoul
 - Modify .goarchlint (immutable architectural contract)
 
 Run `go-arch-lint .` frequently during development. Zero violations required.
+
+---
+
+# Testing Conventions
+
+## Test Organization
+
+**Coverage Target**: 70-80% for all packages
+
+**Package Naming**:
+- Use black-box testing: `package pkgname_test` (not `package pkgname`)
+- This enforces testing only the public API, ensuring good API design
+
+**File Naming**:
+- Test files: `*_test.go` in same directory as code under test
+- Example: `pkg/claude/logger.go` → `pkg/claude/logger_test.go`
+
+## Test Function Naming
+
+**Format**: `TestFunctionName` or `TestType_Method`
+
+Examples:
+- `TestNewLogger` - tests the NewLogger function
+- `TestSQLiteStore_Init` - tests the Init method on SQLiteStore type
+- `TestDetectContext_FromEnv` - tests DetectContext with specific scenario
+
+## Test Structure
+
+**Setup and Cleanup**:
+```go
+func TestExample(t *testing.T) {
+    // Use t.TempDir() for temporary directories/files
+    tmpDir := t.TempDir()
+    dbPath := filepath.Join(tmpDir, "test.db")
+
+    // Setup code...
+    resource, err := setupFunction()
+    if err != nil {
+        t.Fatalf("Setup failed: %v", err)
+    }
+    defer resource.Close()  // Use defer for cleanup
+
+    // Test logic...
+}
+```
+
+**Error Handling**:
+- `t.Fatalf(format, args...)` - Fatal errors that prevent test from continuing (setup failures)
+- `t.Errorf(format, args...)` - Assertion failures (test should continue to report all failures)
+
+**Table-Driven Tests**:
+Use for multiple test cases with same logic:
+```go
+func TestFunction(t *testing.T) {
+    tests := []struct {
+        name    string
+        input   string
+        want    string
+    }{
+        {name: "case1", input: "a", want: "A"},
+        {name: "case2", input: "b", want: "B"},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got := Function(tt.input)
+            if got != tt.want {
+                t.Errorf("Function() = %q, want %q", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+**Assertions**:
+- Use simple if-checks (no external assertion libraries)
+- Provide descriptive error messages with actual vs expected values
+- Format: `t.Errorf("Expected X, got Y")` or `t.Errorf("Function() = %v, want %v", got, want)`
+
+## Running Tests
+
+**Run all tests**:
+```bash
+go test ./...
+```
+
+**Run with coverage**:
+```bash
+go test -cover ./...
+```
+
+**Generate coverage report**:
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out  # View in browser
+```
+
+**Run specific test**:
+```bash
+go test -run TestFunctionName ./pkg/claude
+```
+
+## Testing Best Practices
+
+1. **Isolation**: Each test should be independent and not rely on other tests
+2. **Temp Resources**: Always use `t.TempDir()` for file/directory operations
+3. **Cleanup**: Use `defer` for cleanup to ensure resources are released even on failure
+4. **Fast Tests**: Tests should run quickly (< 1s per test typically)
+5. **Clear Names**: Test names should describe what they're testing
+6. **Test Public API**: Focus on testing exported functions/methods (black-box testing)
+7. **Edge Cases**: Test boundary conditions, empty inputs, nil values, errors
+
+---
+
+# Documentation Workflow
+
+**CRITICAL**: Documentation must be updated whenever functionality changes. This is not optional.
+
+## When to Update Documentation
+
+Update documentation when you:
+1. Add new commands or subcommands
+2. Add new flags or options
+3. Change public APIs or behavior
+4. Add new features or capabilities
+5. Modify architecture or package structure
+
+## What to Update
+
+### README.md
+Update the user-facing README when:
+- Adding commands: Update **Commands** section with usage examples
+- Adding features: Update **Features** list
+- Changing structure: Update **Project Structure** section
+- Completing roadmap items: Move items from Planned to Current in **Roadmap**
+
+### CLAUDE.md
+Update the development documentation when:
+- Adding functionality: Update **Key Components** section
+- Changing workflow: Update **Development Workflow** section
+- Adding architectural patterns: Document in relevant sections
+- Changing test conventions: Update **Testing Conventions** section
+
+### Generated Documentation
+Regenerate when architecture or API changes:
+```bash
+# After modifying package dependencies or exports
+go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
+go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
+```
+
+## Documentation Checklist
+
+When adding a feature, follow this checklist:
+
+- [ ] Code is implemented and tested
+- [ ] README.md updated with user-facing changes
+- [ ] CLAUDE.md updated with development notes
+- [ ] Architecture docs regenerated if needed
+- [ ] Examples added to demonstrate usage
+- [ ] All tests pass
+- [ ] Architecture linter passes
+
+**Example**: Adding `dw logs` command required:
+- ✅ README.md: Added to Commands, Log Viewing Examples, Features, Project Structure, Roadmap
+- ✅ CLAUDE.md: Updated Key Components, Development Workflow
+- ✅ Test coverage: 88% (exceeds 70-80% target)
+- ✅ Documentation: Comprehensive testing conventions added
