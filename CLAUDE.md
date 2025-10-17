@@ -1,169 +1,108 @@
-# DarwinFlow - Project Context
+# DarwinFlow - Claude Code Logging System
 
-## What This Project Is
+## Project Overview
 
-DarwinFlow is a **learning workflow framework** that makes AI assistants improve through use by learning from user corrections.
+**DarwinFlow** is a lightweight logging system that captures Claude Code interactions as structured events using event sourcing principles. The system stores events in SQLite and enables future pattern detection and workflow optimization.
 
-**Core concept**: Instead of manually correcting the AI every time, the system observes corrections, identifies patterns, and automatically creates improved workflow versions.
+### Key Components
 
-## The MVP
+- **CLI Tool (`dw`)**: Main entry point with `claude init` and `claude log` subcommands
+- **Event Logging**: Captures tool invocations and user prompts via Claude Code hooks
+- **SQLite Storage**: Fast, file-based event storage with full-text search capability
+- **Hook Management**: Automatically configures and merges Claude Code hooks
 
-### What We're Building (3 Steps)
+### Architecture Documentation
 
-**Step 1: Workflow Execution + Logging**
-- Execute workflows defined in YAML
-- Single node type initially: `CLAUDE_CODE` (delegates to Claude Code)
-- Log everything to files (one file per execution)
-- Abstract storage interface (not tied to specific database)
+For detailed architecture and API information, see:
+- @docs/arch-generated.md - Complete dependency graph with method-level details
+- @docs/public-api-generated.md - Public API reference for all exported types and functions
 
-**Step 2: Metrics Tracking**
-- Separate from detailed logs
-- Track patterns, durations, success rates
-- File-based storage (can add DB later)
+### Current Implementation Status
 
-**Step 3: Reflection & Learning**
-- Manual command: `darwinflow reflect`
-- LLM analyzes execution logs to find patterns
-- Automatically creates new workflow versions (v2, v3, etc.)
-- User chooses which version to use
+**Active Hooks**:
+- `PreToolUse`: Logs all tool invocations (Read, Write, Bash, etc.)
+- `UserPromptSubmit`: Logs user message submissions
 
-### How It Works
+**Event Types**: Defined in `internal/events/event.go`
+- `tool.invoked`, `tool.result`
+- `chat.message.user`, `chat.message.assistant`
+- `chat.started`, `file.read`, `file.written`, etc.
 
-```
-1. User runs workflow v1 → system logs everything
-2. User corrects: "No, read vision.md first"
-3. After multiple corrections, user runs: darwinflow reflect
-4. LLM finds pattern: "read vision.md first" corrected 3 times
-5. System creates workflows/assistant_v2.yaml automatically
-6. User chooses to use v1 or v2 for next task
-```
+### Development Workflow
 
-## Current File Structure
-
-```
-darwinflow-pub/
-├── docs/
-│   ├── mvp_simple.md              # THE MVP specification
-│   └── product/
-│       └── vision.md              # Product vision & principles
-├── workflows/
-│   └── assistant_v1.yaml          # Initial simple workflow
-└── README.md                      # Project overview
-```
-
-## Key Design Decisions
-
-### Start Simple, Evolve Through Use
-- Begin with single-node workflow (just call Claude Code)
-- Don't predict complexity upfront
-- Let complexity emerge from actual usage patterns
-
-### No Approval Flow
-- Reflection creates new versions automatically
-- User picks which version to use (v1, v2, v3, etc.)
-- No "approve/reject" prompts
-
-### Abstract Storage
-- Logs: Files (one JSON per execution)
-- Metrics: Separate aggregated files
-- Can add SQLite/Postgres later behind same interface
-
-### Workflow Format: YAML
-- Human-readable
-- Version controlled
-- Easy to diff versions
-
-## Important Files
-
-### docs/mvp_simple.md
-Complete MVP specification. Read this to understand:
-- What needs to be built
-- Workflow structure
-- Logging requirements
-- Reflection process
-- Success criteria
-
-### docs/product/vision.md
-Product vision and architecture:
-- Three-layer architecture (Core / Integrations / Reference Workflows)
-- Decision criteria for features
-- "Learn, Don't Hardcode" principle
-
-### workflows/assistant_v1.yaml
-The starting workflow:
-- Single node: `CLAUDE_CODE`
-- Just delegates to Claude Code
-- Will evolve based on usage
-
-## What NOT to Do
-
-❌ Don't design complex workflows upfront
-❌ Don't hardcode domain logic in core framework
-❌ Don't require user approval for every change
-❌ Don't tie implementation to specific database (SQLite, etc.)
-❌ Don't add features that aren't in mvp_simple.md
-
-## What TO Do
-
-✅ Keep workflows simple (start with 1 node)
-✅ Use abstract interfaces (storage, logging)
-✅ Let LLM generate new workflow versions
-✅ Store everything as files initially
-✅ Follow mvp_simple.md specification
-
-## Development Approach
-
-### Dogfooding
-Use DarwinFlow to build DarwinFlow itself:
-- Run workflow for each feature
-- Make corrections naturally
-- Run reflection periodically
-- Use evolved workflows
-- Validate learning works in real usage
-
-### Success Criteria
-
-**Step 1**: Can execute workflows and review logs
-**Step 2**: Metrics showing patterns in usage
-**Step 3**: Reflection creates improved workflow versions
-
-**MVP Success**:
-- 3+ workflow evolutions from real usage
-- 30%+ reduction in corrections
-- System measurably improves through use
-
-## Workflow Evolution Example
-
-**v1**: `START → [CLAUDE_CODE] → END`
-
-**v2** (after learning "read vision.md first"):
-```yaml
-START → [READ_FILE: vision.md] → [CLAUDE_CODE] → END
-```
-
-**v3** (after learning "classify features"):
-```yaml
-START → [READ vision.md] → [CLASSIFY_FEATURE] → [CLAUDE_CODE] → END
-```
-
-Each version created by reflection, not designed upfront.
-
-## Key Principles
-
-1. **Learn, Don't Hardcode** - Patterns emerge from corrections
-2. **General Over Specific** - Framework, not domain solutions
-3. **Start Simple** - Single node → complexity emerges
-4. **User Choice** - No forced changes, user picks versions
-5. **Transparent** - All changes visible and understandable
-
-## Questions During Development
-
-When building, refer to `docs/mvp_simple.md` for:
-- Exact workflow structure
-- Logging interface requirements
-- Reflection process details
-- Open questions and TBD items
+When working on this project:
+1. Understand the 3-layer architecture (see below)
+2. Check @docs/arch-generated.md to see current package dependencies
+3. Check @docs/public-api-generated.md to see what's exported
+4. Follow the architecture guidelines strictly
+5. Run tests and linter before committing
 
 ---
 
-**Remember**: We're building a system that learns. Start simple, use it for real work, let patterns emerge naturally.
+# go-arch-lint - Architecture Linting
+
+**CRITICAL**: The .goarchlint configuration is IMMUTABLE - AI agents must NOT modify it.
+
+## Architecture (3-layer strict dependency flow)
+
+```
+cmd → pkg → internal
+```
+
+**cmd**: Entry points (imports only pkg) | **pkg**: Orchestration & adapters (imports only internal) | **internal**: Domain primitives (NO imports between internal packages)
+
+## Core Principles
+
+1. **Dependency Inversion**: Internal packages define interfaces. Adapters bridge them in pkg layer.
+2. **Structural Typing**: Types satisfy interfaces via matching methods (no explicit implements)
+3. **No Slice Covariance**: Create adapters to convert []ConcreteType → []InterfaceType
+
+## Documentation Generation (Run Regularly)
+
+Keep documentation synchronized with code changes:
+
+```bash
+# Generate dependency graph with method-level details
+go-arch-lint -detailed -format=markdown . > docs/arch-generated.md 2>&1
+
+# Generate public API documentation
+go-arch-lint -format=api . > docs/public-api-generated.md 2>&1
+```
+
+**When to regenerate**:
+- After adding/removing packages or files
+- After changing public APIs (exported functions, types, methods)
+- After modifying package dependencies
+- Before committing architectural changes
+- Run regularly during development to track changes
+
+## Before Every Commit
+
+1. `go test ./...` - all tests must pass
+2. `go-arch-lint .` - ZERO violations required (non-negotiable)
+3. Regenerate docs if architecture/API changed (see above)
+
+## When Linter Reports Violations
+
+**Do NOT mechanically fix imports.** Violations reveal architectural issues. Process:
+1. **Reflect**: Why does this violation exist? What dependency is wrong?
+2. **Plan**: Which layer should own this logic? What's the right structure?
+3. **Refactor**: Move code to correct layer or add interfaces/adapters in pkg
+4. **Verify**: Run `go-arch-lint .` - confirm zero violations
+
+Example: `internal/A` imports `internal/B` → Should B's logic move to A? Should both define interfaces with pkg adapter? Architecture enforces intentional design.
+
+## Code Guidelines
+
+**DO**:
+- Add domain logic to internal/ packages
+- Define interfaces in consumer packages
+- Create adapters in pkg/ to bridge internal packages
+- Use white-box tests (`package mypackage`) for internal packages
+
+**DON'T**:
+- Import between internal/ packages (violation!) or pass []ConcreteType as []InterfaceType
+- Put business logic in pkg/ or cmd/ (belongs in internal/)
+- Modify .goarchlint (immutable architectural contract)
+
+Run `go-arch-lint .` frequently during development. Zero violations required.

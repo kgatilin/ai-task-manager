@@ -1,0 +1,17 @@
+# go-arch-lint configuration
+#
+# This configuration enforces a strict 3-layer architecture:
+# - cmd: Entry points, can only import from pkg
+# - pkg: Public APIs and orchestration, can import from internal
+# - internal: Domain primitives with complete isolation (cannot import each other)
+
+# Validation rules
+rules:
+  # Define what each directory type can import
+  directories_import:
+    cmd: [pkg]
+    pkg: [internal]
+    internal: []
+
+  # Detect unused packages (packages not transitively imported by cmd)
+  detect_unused: true

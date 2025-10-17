@@ -1,232 +1,185 @@
 # DarwinFlow
 
-**A learning workflow framework that transforms personal AI assistants from static prompt executors into adaptive systems that improve through use.**
+**Capture, store, and analyze your Claude Code interactions**
 
-## The Problem
+DarwinFlow is a lightweight logging system that automatically captures all Claude Code interactions as structured events. Built with event sourcing principles, it enables pattern detection, workflow optimization, and deep insights into your AI-assisted development sessions.
 
-When you use AI assistants for repetitive work:
-- ❌ You provide the same context repeatedly
-- ❌ You make the same corrections over and over
-- ❌ You pay for the same reasoning each time
-- ❌ The AI never learns from your corrections
+## Features
 
-**Current AI assistants have amnesia.** They don't get better with use.
-
-## The Solution
-
-DarwinFlow learns from your corrections:
-
-1. **You work normally** - Use AI assistant as you do today
-2. **System observes** - Captures what happens during execution
-3. **You reflect** - Manually trigger reflection on recent work
-4. **LLM analyzes** - Finds patterns in logs and corrections
-5. **New version created** - System generates improved workflow automatically
-6. **You choose** - Use v1, v2, or v3 - whichever works best
-
-**Workflow versions emerge from your actual usage patterns.**
-
-## Example
-
-### Using v1 (Initial Workflow)
-```
-You: "Add Telegram bot support"
-AI: Starts implementing
-You: "Wait, read vision.md first to classify this"
-AI: Reads vision.md, classifies, continues
-Task completes in 20 minutes
-
-[All logged to logs/runs/run_abc123.json]
-```
-
-### After Using v1 for a While
-```
-You: darwinflow reflect --workflow workflows/assistant_v1.yaml --recent-runs 20
-
-[LLM analyzes logs]
-Pattern found: "Read vision.md first" corrected 3 times
-
-[Creates workflows/assistant_v2.yaml automatically]
-[Creates workflows/assistant_v2_reasoning.md]
-
-New version available: v2 now reads vision.md before starting
-```
-
-### Using v2 (Evolved Workflow)
-```
-You: "Add Slack integration"
-    (using workflows/assistant_v2.yaml)
-
-AI: [Automatically reads vision.md first]
-AI: "Based on vision.md, this is an Integration..."
-Task completes in 12 minutes, no correction needed!
-```
-
-## Key Benefits
-
-- **Fewer corrections**: Measurable reduction over time
-- **Faster completion**: Significant improvement for repeated tasks
-- **Lower costs**: Learned patterns replace expensive reasoning
-- **Better quality**: Consistent approach from learned behaviors
-- **Personalized**: Workflow adapts to *your* specific needs
-
-## How It's Different
-
-### vs Workflow Automation (Zapier, n8n)
-- **Them**: Configure workflows upfront
-- **Us**: Workflows emerge from your actual corrections
-
-### vs Prompt Engineering
-- **Them**: Write better prompts manually
-- **Us**: System learns what context to provide
-
-### vs Fine-tuning
-- **Them**: Train models (expensive, complex)
-- **Us**: Adapt workflows (fast, transparent)
-
-### vs Current AI Assistants
-- **Them**: Static, no learning
-- **Us**: Improves every time you use it
-
-## Architecture
-
-### Three Layers
-
-1. **Core Framework** (domain-agnostic)
-   - Workflow execution and learning engine
-   - Pattern recognition from corrections
-   - Workflow evolution mechanisms
-
-2. **Integrations** (reusable tools)
-   - Communication platforms (Telegram, Slack)
-   - Development tools (GitHub, file systems)
-   - LLM providers and AI services
-
-3. **Reference Workflows** (domain demonstrations)
-   - Software engineering workflows
-   - Product management workflows
-   - Architecture review workflows
-
-**Philosophy**: Never hardcode domain logic. Provide primitives others build upon.
-
-## Current Status
-
-**Status**: Requirements phase - MVP specification complete
-
-### Next Steps
-1. **Step 1**: Build workflow execution + logging (file-based)
-2. **Step 2**: Add metrics tracking (separate from logs)
-3. **Step 3**: Build reflection command (LLM analyzes → creates new versions)
-4. **Dogfood**: Use DarwinFlow to build DarwinFlow itself
+- **Automatic Logging**: Captures all Claude Code events via hooks (tool invocations, user prompts, etc.)
+- **Event Sourcing**: Immutable event log enabling replay and analysis
+- **SQLite Storage**: Fast, file-based storage with full-text search
+- **Zero Performance Impact**: Non-blocking, concurrent-safe logging
+- **Context-Aware**: Automatically detects project context from environment
+- **Clean Architecture**: Strict 3-layer design (`cmd → pkg → internal`)
 
 ## Quick Start
 
-### For Users (Coming Soon)
+### Installation
+
 ```bash
-# Install
-pip install darwinflow
-
-# Run workflow
-darwinflow run --workflow workflows/assistant_v1.yaml "Your task here"
-
-# After some usage, reflect to create improved versions
-darwinflow reflect --workflow workflows/assistant_v1.yaml --recent-runs 20
-```
-
-### For Developers
-```bash
-# Clone
-git clone https://github.com/yourusername/darwinflow-pub.git
+# Clone the repository
+git clone https://github.com/kgatilin/darwinflow-pub.git
 cd darwinflow-pub
 
-# Read MVP specification
-cat docs/mvp_simple.md
+# Build the CLI
+go build -o dw ./cmd/dw
 
-# Read product vision
-cat docs/product/vision.md
+# Install to your PATH (optional)
+go install ./cmd/dw
 ```
 
-## Documentation
+### Initialize Logging
 
-- **[MVP Specification](docs/mvp_simple.md)** - Complete MVP description (start here)
-- **[Product Vision](docs/product/vision.md)** - Overall strategy and principles
-- **[Initial Workflow](workflows/assistant_v1.yaml)** - Simple starting workflow
+```bash
+# Set up Claude Code logging infrastructure
+dw claude init
+```
 
-## Use Cases
+This will:
+- Create the SQLite database at `~/.darwinflow/logs/events.db`
+- Add hooks to your Claude Code settings (typically `~/.claude/settings.json`)
+- Configure automatic event capture for PreToolUse and UserPromptSubmit hooks
 
-### Software Engineering
-Learn to:
-- Always check architecture docs before features
-- Check recent commits before debugging
-- Classify changes as Core/Integration/Workflow
-- Run specific test suites after certain changes
+### Start Using Claude Code
 
-### Product Management
-Learn to:
-- Check analytics before feature requests
-- Validate against target persona
-- Follow prioritization framework
-- Maintain consistent documentation
+After running `dw claude init`, restart Claude Code. All your interactions will now be automatically logged!
 
-### Any Repetitive Knowledge Work
-If you:
-- Do similar tasks repeatedly
-- Provide same context multiple times
-- Make same corrections frequently
-- Want AI to learn your style
+## Architecture
 
-Then DarwinFlow helps.
+DarwinFlow follows a strict 3-layer architecture enforced by [go-arch-lint](https://github.com/fdaines/go-arch-lint):
 
-## Success Metrics
+```
+cmd → pkg → internal
+```
 
-### MVP Success
-- 3+ workflow evolutions from real corrections
-- 30%+ reduction in correction frequency
-- 30%+ reduction in task completion time
-- User confirms system "getting better"
+- **cmd/dw**: CLI entry points (`dw claude init`, `dw claude log`)
+- **pkg/claude**: Orchestration layer (settings management, logging coordination)
+- **internal/**: Domain primitives (events, hooks config, storage interfaces)
 
-### Long-term Vision
-- 70%+ reduction in corrections
-- 10x cost reduction (learned vs reasoning)
-- Community of shared workflows
-- Multiple domain workflows
+### Key Components
 
-## Principles
+- **Events** (`internal/events`): Event types and payload definitions
+- **Hooks** (`internal/hooks`): Claude Code hook configuration and merging logic
+- **Storage** (`internal/storage`): Storage interface definitions
+- **Logger** (`pkg/claude`): Event logging and database interaction
+- **Settings Manager** (`pkg/claude`): Claude Code settings file management
 
-1. **Learn, Don't Hardcode** - Solutions emerge from patterns
-2. **General Over Specific** - Framework capabilities over domain solutions
-3. **Efficiency Through Learning** - Every interaction reduces future cost
-4. **Human-Guided Evolution** - Learn from usage, user chooses versions
-5. **Transparent Learning** - All workflow changes visible and understandable
+## Usage
+
+### Commands
+
+```bash
+# Initialize logging infrastructure
+dw claude init
+
+# Log an event (typically called by hooks)
+dw claude log <event-type>
+```
+
+### Event Types
+
+Currently captured events:
+
+- `tool.invoked` - Claude Code tool invocation (Read, Write, Bash, etc.)
+- `chat.message.user` - User prompt submission
+
+### Environment Variables
+
+- `DW_CONTEXT` - Set the current context (e.g., `project/myapp`)
+- `DW_MAX_PARAM_LENGTH` - Maximum parameter length for logging (default: 30)
+
+## Development
+
+### Prerequisites
+
+- Go 1.25.1 or later
+- [go-arch-lint](https://github.com/fdaines/go-arch-lint) for architecture validation
+
+### Building
+
+```bash
+# Build the CLI
+make
+
+# Run tests
+make test
+```
+
+### Architecture Compliance
+
+Before committing, ensure:
+
+1. All tests pass: `go test ./...`
+2. Zero architecture violations: `go-arch-lint .`
+3. Documentation is up-to-date (see [CLAUDE.md](./CLAUDE.md))
+
+### Generated Documentation
+
+Architecture and API documentation is generated automatically:
+
+```bash
+# Generate dependency graph
+go-arch-lint -detailed -format=markdown . > docs/arch-generated.md
+
+# Generate public API reference
+go-arch-lint -format=api . > docs/public-api-generated.md
+```
+
+## Project Structure
+
+```
+darwinflow-pub/
+├── cmd/dw/              # CLI entry points
+│   ├── main.go          # Main command router
+│   └── claude.go        # Claude subcommand handlers
+├── pkg/claude/          # Orchestration & adapters
+│   ├── logger.go        # Event logging
+│   ├── settings.go      # Settings file management
+│   ├── sqlite.go        # SQLite storage adapter
+│   ├── transcript.go    # Transcript parsing
+│   └── cli.go           # CLI helper functions
+├── internal/            # Domain primitives
+│   ├── events/          # Event definitions
+│   ├── hooks/           # Hook configuration
+│   └── storage/         # Storage interfaces
+├── docs/                # Generated documentation
+│   ├── arch-generated.md      # Dependency graph
+│   └── public-api-generated.md # Public API reference
+├── CLAUDE.md            # AI agent instructions
+└── README.md            # This file
+```
+
+## Roadmap
+
+### V1 (Current)
+- ✅ Basic event capture (PreToolUse, UserPromptSubmit)
+- ✅ SQLite storage with full-text search
+- ✅ Hook management and merging
+
+### V2 (Planned)
+- Vector embeddings for semantic search
+- Pattern detection across sessions
+- Enhanced context extraction
+
+### V3 (Future)
+- Workflow optimization suggestions
+- Self-modifying commands based on patterns
+- Advanced analytics and insights
 
 ## Contributing
 
-DarwinFlow is in early development. We're focused on:
-1. Building the MVP (workflow execution + logging + reflection)
-2. Validating the learning loop works
-3. Proving measurable improvement through dogfooding
+Contributions are welcome! Please ensure:
 
-Interested in contributing? Start by:
-- Reading `docs/mvp_simple.md` - the complete MVP spec
-- Understanding `docs/product/vision.md` - the product vision
-- Trying the system when ready
-- Sharing feedback on the learning approach
+1. Code follows the 3-layer architecture
+2. All tests pass (`go test ./...`)
+3. Architecture linter passes (`go-arch-lint .`)
+4. Documentation is updated for API/architecture changes
 
 ## License
 
-[To be determined - likely MIT or Apache 2.0]
+MIT License - See LICENSE file for details
 
-## Project Status
+## Acknowledgments
 
-**Phase**: MVP specification complete, implementation starting
-**Approach**: Dogfooding (using DarwinFlow to build DarwinFlow)
-
-## Contact
-
-- **Issues**: [GitHub Issues](https://github.com/yourusername/darwinflow-pub/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/darwinflow-pub/discussions)
-
----
-
-**The future of AI assistants isn't better prompts. It's systems that learn from your corrections.**
-
-**That's DarwinFlow.**
+Built to enhance [Claude Code](https://www.anthropic.com/claude/code) workflows and enable AI-assisted development insights.
