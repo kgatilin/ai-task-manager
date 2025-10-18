@@ -51,6 +51,8 @@ For detailed architecture and API information, see:
 
 ### Development Workflow
 
+**Note**: When the user refers to "workflow", they mean these CLAUDE.md instructions.
+
 When working on this project:
 1. Understand the 3-layer architecture (see below)
 2. Check @docs/arch-generated.md to see current package dependencies
@@ -60,6 +62,7 @@ When working on this project:
 6. **Update documentation** (README.md and CLAUDE.md) when adding features
 7. Run tests and linter before committing
 8. Regenerate architecture docs if needed
+9. **Commit after each iteration** - After completing each logical task/iteration, commit all changes with a concise, informative commit message (e.g., "add session refresh feature" rather than long explanations)
 
 ---
 
