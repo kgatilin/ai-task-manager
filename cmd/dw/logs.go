@@ -1,16 +1,13 @@
 package main
 
 import (
-	"database/sql"
-	"encoding/json"
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-
-	"github.com/kgatilin/darwinflow-pub/pkg/claude"
+	"github.com/kgatilin/darwinflow-pub/internal/app"
+	"github.com/kgatilin/darwinflow-pub/internal/infra"
 )
 
 type logsOptions struct {
@@ -48,7 +45,7 @@ func handleLogs(args []string) {
 		return
 	}
 
-	dbPath := claude.DefaultDBPath
+	dbPath := app.DefaultDBPath
 
 	// Check if database exists
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
@@ -57,9 +54,20 @@ func handleLogs(args []string) {
 		os.Exit(1)
 	}
 
+	// Initialize repository and service
+	repo, err := infra.NewSQLiteEventRepository(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: Failed to open database: %v\n", err)
+		os.Exit(1)
+	}
+	defer repo.Close()
+
+	service := app.NewLogsService(repo, repo)
+	ctx := context.Background()
+
 	// Handle arbitrary SQL query
 	if opts.query != "" {
-		if err := executeRawQuery(dbPath, opts.query); err != nil {
+		if err := executeRawQuery(ctx, service, opts.query); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -67,7 +75,7 @@ func handleLogs(args []string) {
 	}
 
 	// Handle standard log listing
-	if err := listLogs(dbPath, opts.limit); err != nil {
+	if err := listLogs(ctx, service, opts.limit); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -130,85 +138,12 @@ func printLogsHelp() {
 	fmt.Println("  # Search content for specific text")
 	fmt.Printf("  dw logs --query \"SELECT * FROM events WHERE content LIKE '%%sqlite%%' LIMIT 10\"\n")
 	fmt.Println()
-	fmt.Println("Database location:", claude.DefaultDBPath)
+	fmt.Println("Database location:", app.DefaultDBPath)
 	fmt.Println()
 }
 
-type logRecord struct {
-	ID        string
-	Timestamp int64
-	EventType string
-	Payload   []byte
-	Content   string
-}
-
-func queryLogs(dbPath string, limit int) ([]logRecord, error) {
-	db, err := sql.Open("sqlite3", dbPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
-	query := "SELECT id, timestamp, event_type, payload, content FROM events ORDER BY timestamp DESC LIMIT ?"
-	rows, err := db.Query(query, limit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query logs: %w", err)
-	}
-	defer rows.Close()
-
-	var records []logRecord
-
-	for rows.Next() {
-		var r logRecord
-		var payloadStr string
-
-		if err := rows.Scan(&r.ID, &r.Timestamp, &r.EventType, &payloadStr, &r.Content); err != nil {
-			return nil, fmt.Errorf("failed to scan row: %w", err)
-		}
-
-		r.Payload = []byte(payloadStr)
-		records = append(records, r)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating rows: %w", err)
-	}
-
-	return records, nil
-}
-
-func formatLogRecord(i int, record logRecord) string {
-	var output string
-
-	timestamp := time.UnixMilli(record.Timestamp)
-	output += fmt.Sprintf("[%d] %s\n", i+1, timestamp.Format("2006-01-02 15:04:05.000"))
-	output += fmt.Sprintf("    Event: %s\n", record.EventType)
-	output += fmt.Sprintf("    ID: %s\n", record.ID)
-
-	// Pretty print JSON payload
-	var payload interface{}
-	if err := json.Unmarshal(record.Payload, &payload); err == nil {
-		prettyPayload, _ := json.MarshalIndent(payload, "    ", "  ")
-		output += fmt.Sprintf("    Payload: %s\n", string(prettyPayload))
-	} else {
-		output += fmt.Sprintf("    Payload: %s\n", string(record.Payload))
-	}
-
-	if record.Content != "" {
-		// Truncate content if too long
-		content := record.Content
-		if len(content) > 200 {
-			content = content[:200] + "..."
-		}
-		output += fmt.Sprintf("    Content: %s\n", content)
-	}
-
-	output += "\n"
-	return output
-}
-
-func listLogs(dbPath string, limit int) error {
-	records, err := queryLogs(dbPath, limit)
+func listLogs(ctx context.Context, service *app.LogsService, limit int) error {
+	records, err := service.ListRecentLogs(ctx, limit)
 	if err != nil {
 		return err
 	}
@@ -223,70 +158,20 @@ func listLogs(dbPath string, limit int) error {
 	fmt.Printf("Showing %d most recent logs:\n\n", len(records))
 
 	for i, record := range records {
-		fmt.Print(formatLogRecord(i, record))
+		fmt.Print(app.FormatLogRecord(i, record))
 	}
 
 	return nil
 }
 
-func formatQueryValue(val interface{}) string {
-	switch v := val.(type) {
-	case nil:
-		return "NULL"
-	case []byte:
-		// Try to parse as JSON for pretty printing
-		var jsonObj interface{}
-		if err := json.Unmarshal(v, &jsonObj); err == nil {
-			jsonBytes, _ := json.Marshal(jsonObj)
-			str := string(jsonBytes)
-			if len(str) > 100 {
-				str = str[:100] + "..."
-			}
-			return str
-		}
-		str := string(v)
-		if len(str) > 100 {
-			str = str[:100] + "..."
-		}
-		return str
-	case string:
-		if len(v) > 100 {
-			return v[:100] + "..."
-		}
-		return v
-	case int64:
-		// Check if it might be a timestamp (13 digits for milliseconds)
-		if v > 1000000000000 && v < 9999999999999 {
-			t := time.UnixMilli(v)
-			return fmt.Sprintf("%d (%s)", v, t.Format("2006-01-02 15:04:05"))
-		}
-		return fmt.Sprintf("%d", v)
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
-
-func executeRawQuery(dbPath string, query string) error {
-	db, err := sql.Open("sqlite3", dbPath)
+func executeRawQuery(ctx context.Context, service *app.LogsService, query string) error {
+	result, err := service.ExecuteRawQuery(ctx, query)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
-	}
-	defer db.Close()
-
-	rows, err := db.Query(query)
-	if err != nil {
-		return fmt.Errorf("failed to execute query: %w", err)
-	}
-	defer rows.Close()
-
-	// Get column names
-	columns, err := rows.Columns()
-	if err != nil {
-		return fmt.Errorf("failed to get columns: %w", err)
+		return err
 	}
 
 	// Print column headers
-	for i, col := range columns {
+	for i, col := range result.Columns {
 		if i > 0 {
 			fmt.Print(" | ")
 		}
@@ -295,36 +180,19 @@ func executeRawQuery(dbPath string, query string) error {
 	fmt.Println()
 	fmt.Println(repeatString("-", 80))
 
-	// Prepare scan destinations
-	values := make([]interface{}, len(columns))
-	valuePtrs := make([]interface{}, len(columns))
-	for i := range values {
-		valuePtrs[i] = &values[i]
-	}
-
 	// Print rows
-	rowCount := 0
-	for rows.Next() {
-		if err := rows.Scan(valuePtrs...); err != nil {
-			return fmt.Errorf("failed to scan row: %w", err)
-		}
-
-		for i, val := range values {
+	for _, row := range result.Rows {
+		for i, val := range row {
 			if i > 0 {
 				fmt.Print(" | ")
 			}
-			fmt.Print(formatQueryValue(val))
+			fmt.Print(app.FormatQueryValue(val))
 		}
 		fmt.Println()
-		rowCount++
-	}
-
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating rows: %w", err)
 	}
 
 	fmt.Println()
-	fmt.Printf("(%d rows)\n", rowCount)
+	fmt.Printf("(%d rows)\n", len(result.Rows))
 	return nil
 }
 

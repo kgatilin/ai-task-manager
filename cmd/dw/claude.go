@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"os"
 
-	"github.com/kgatilin/darwinflow-pub/pkg/claude"
+	"github.com/kgatilin/darwinflow-pub/internal/app"
+	"github.com/kgatilin/darwinflow-pub/internal/infra"
 )
 
 func handleClaudeCommand(args []string) {
@@ -37,26 +41,37 @@ func printClaudeUsage() {
 }
 
 func handleInit(args []string) {
-	dbPath := claude.DefaultDBPath
+	dbPath := app.DefaultDBPath
 
 	fmt.Println("Initializing Claude Code logging for DarwinFlow...")
 	fmt.Println()
 
-	// Initialize logging infrastructure
-	if err := claude.InitializeLogging(dbPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	// Create infrastructure dependencies
+	repository, err := infra.NewSQLiteEventRepository(dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating repository: %v\n", err)
+		os.Exit(1)
+	}
+	defer repository.Close()
+
+	hookConfigManager, err := infra.NewHookConfigManager()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating hook config manager: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Get settings path
-	settingsManager, err := claude.NewSettingsManager()
-	if err != nil {
+	// Create application service
+	setupService := app.NewSetupService(repository, hookConfigManager)
+
+	// Initialize logging infrastructure
+	ctx := context.Background()
+	if err := setupService.Initialize(ctx, dbPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	fmt.Println("✓ Created logging database:", dbPath)
-	fmt.Println("✓ Added hooks to Claude Code settings:", settingsManager.GetSettingsPath())
+	fmt.Println("✓ Added hooks to Claude Code settings:", setupService.GetSettingsPath())
 	fmt.Println()
 	fmt.Println("DarwinFlow logging is now active for all Claude Code sessions.")
 	fmt.Println()
@@ -82,6 +97,64 @@ func handleLog(args []string) {
 		}
 	}
 
-	// Delegate to pkg layer
-	_ = claude.LogFromStdin(eventTypeStr, maxParamLength)
+	// Silently execute (errors shouldn't disrupt Claude Code)
+	if err := logFromStdin(eventTypeStr, maxParamLength); err != nil {
+		// Silently fail - don't disrupt Claude Code
+		return
+	}
+}
+
+func logFromStdin(eventTypeStr string, maxParamLength int) error {
+	// Read hook input from stdin
+	stdinData, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return err
+	}
+
+	// Try to parse as hook input
+	hookInput, err := infra.ParseHookInput(io.NopCloser(bytes.NewReader(stdinData)))
+	if err != nil {
+		// Not valid hook input, fail silently
+		return nil
+	}
+
+	// Map event type string to domain event type
+	eventMapper := &app.EventMapper{}
+	eventType := eventMapper.MapEventType(eventTypeStr)
+
+	// Create infrastructure dependencies
+	repository, err := infra.NewSQLiteEventRepository(app.DefaultDBPath)
+	if err != nil {
+		return err
+	}
+	defer repository.Close()
+
+	transcriptParser := infra.NewTranscriptParser()
+	contextDetector := infra.NewContextDetector()
+
+	// Create application service
+	loggerService := app.NewLoggerService(
+		repository,
+		transcriptParser,
+		contextDetector,
+		infra.NormalizeContent,
+	)
+	defer loggerService.Close()
+
+	// Convert infra.HookInput to app.HookInputData
+	hookInputData := app.HookInputData{
+		SessionID:      hookInput.SessionID,
+		TranscriptPath: hookInput.TranscriptPath,
+		CWD:            hookInput.CWD,
+		PermissionMode: hookInput.PermissionMode,
+		HookEventName:  hookInput.HookEventName,
+		ToolName:       hookInput.ToolName,
+		ToolInput:      hookInput.ToolInput,
+		ToolOutput:     hookInput.ToolOutput,
+		Error:          hookInput.Error,
+	}
+
+	// Log event
+	ctx := context.Background()
+	return loggerService.LogFromHookInput(ctx, hookInputData, eventType, maxParamLength)
 }

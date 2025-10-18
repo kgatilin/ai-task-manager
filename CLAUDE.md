@@ -18,8 +18,7 @@
 ### Architecture Documentation
 
 For detailed architecture and API information, see:
-- @docs/arch-generated.md - Complete dependency graph with method-level details
-- @docs/public-api-generated.md - Public API reference for all exported types and functions
+- @docs/arch-generated.md - Complete dependency graph with method-level details and public APIs
 
 ### Current Implementation Status
 

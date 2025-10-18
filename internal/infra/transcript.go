@@ -1,4 +1,4 @@
-package claude
+package infra
 
 import (
 	"bufio"
@@ -20,8 +20,16 @@ type TranscriptEntry struct {
 	Input      map[string]interface{} `json:"input,omitempty"`
 }
 
-// ParseTranscript reads the transcript file and returns all entries
-func ParseTranscript(path string) ([]TranscriptEntry, error) {
+// TranscriptParser parses Claude Code transcript files
+type TranscriptParser struct{}
+
+// NewTranscriptParser creates a new transcript parser
+func NewTranscriptParser() *TranscriptParser {
+	return &TranscriptParser{}
+}
+
+// Parse reads the transcript file and returns all entries
+func (p *TranscriptParser) Parse(path string) ([]TranscriptEntry, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open transcript: %w", err)
@@ -54,8 +62,8 @@ func ParseTranscript(path string) ([]TranscriptEntry, error) {
 }
 
 // ExtractLastToolUse extracts tool name and parameters from the last tool use in transcript
-func ExtractLastToolUse(transcriptPath string, maxParamLength int) (string, string, error) {
-	entries, err := ParseTranscript(transcriptPath)
+func (p *TranscriptParser) ExtractLastToolUse(transcriptPath string, maxParamLength int) (string, string, error) {
+	entries, err := p.Parse(transcriptPath)
 	if err != nil {
 		return "", "", err
 	}
@@ -94,8 +102,8 @@ func ExtractLastToolUse(transcriptPath string, maxParamLength int) (string, stri
 }
 
 // ExtractLastUserMessage extracts the last user message from transcript
-func ExtractLastUserMessage(transcriptPath string) (string, error) {
-	entries, err := ParseTranscript(transcriptPath)
+func (p *TranscriptParser) ExtractLastUserMessage(transcriptPath string) (string, error) {
+	entries, err := p.Parse(transcriptPath)
 	if err != nil {
 		return "", err
 	}
@@ -112,8 +120,8 @@ func ExtractLastUserMessage(transcriptPath string) (string, error) {
 }
 
 // ExtractLastAssistantMessage extracts the last assistant message from transcript
-func ExtractLastAssistantMessage(transcriptPath string) (string, error) {
-	entries, err := ParseTranscript(transcriptPath)
+func (p *TranscriptParser) ExtractLastAssistantMessage(transcriptPath string) (string, error) {
+	entries, err := p.Parse(transcriptPath)
 	if err != nil {
 		return "", err
 	}
