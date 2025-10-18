@@ -11,12 +11,13 @@ import (
 )
 
 type logsOptions struct {
-	limit     int
-	query     string
-	sessionID string
-	ordered   bool
-	format    string
-	help      bool
+	limit        int
+	sessionLimit int
+	query        string
+	sessionID    string
+	ordered      bool
+	format       string
+	help         bool
 }
 
 func parseLogsFlags(args []string) (*logsOptions, error) {
@@ -24,6 +25,7 @@ func parseLogsFlags(args []string) (*logsOptions, error) {
 	opts := &logsOptions{}
 
 	fs.IntVar(&opts.limit, "limit", 20, "Number of most recent logs to display")
+	fs.IntVar(&opts.sessionLimit, "session-limit", 0, "Limit by number of sessions instead of logs (0 = use --limit)")
 	fs.StringVar(&opts.query, "query", "", "Arbitrary SQL query to execute")
 	fs.StringVar(&opts.sessionID, "session-id", "", "Filter logs by session ID")
 	fs.BoolVar(&opts.ordered, "ordered", false, "Order by timestamp ASC and session ID (chronological)")
@@ -91,20 +93,22 @@ func printLogsUsage() {
 	fmt.Println("Usage: dw logs [flags]")
 	fmt.Println()
 	fmt.Println("Flags:")
-	fmt.Println("  --limit N          Number of most recent logs to display (default: 20)")
-	fmt.Println("  --session-id ID    Filter logs by session ID")
-	fmt.Println("  --ordered          Order by timestamp ASC and session ID (chronological)")
-	fmt.Println("  --format FORMAT    Output format: text, csv, or markdown (default: text)")
-	fmt.Println("  --query SQL        Execute an arbitrary SQL query")
-	fmt.Println("  --help             Show help and database schema")
+	fmt.Println("  --limit N            Number of most recent logs to display (default: 20)")
+	fmt.Println("  --session-limit N    Limit by number of sessions instead of logs (0 = use --limit)")
+	fmt.Println("  --session-id ID      Filter logs by session ID")
+	fmt.Println("  --ordered            Order by timestamp ASC and session ID (chronological)")
+	fmt.Println("  --format FORMAT      Output format: text, csv, or markdown (default: text)")
+	fmt.Println("  --query SQL          Execute an arbitrary SQL query")
+	fmt.Println("  --help               Show help and database schema")
 	fmt.Println()
 	fmt.Println("Examples:")
 	fmt.Println("  dw logs                                          # Show 20 most recent logs")
 	fmt.Println("  dw logs --limit 50                               # Show 50 most recent logs")
+	fmt.Println("  dw logs --session-limit 3                        # Show all logs from 3 most recent sessions")
 	fmt.Println("  dw logs --session-id abc123                      # Show logs for session abc123")
 	fmt.Println("  dw logs --session-id abc123 --ordered            # Show session abc123 in chronological order")
 	fmt.Println("  dw logs --format csv --limit 100                 # Export 100 logs as CSV")
-	fmt.Println("  dw logs --format markdown --limit 50             # Export 50 logs as Markdown for LLM analysis")
+	fmt.Println("  dw logs --format markdown --session-limit 5      # Export 5 most recent sessions as Markdown")
 	fmt.Println("  dw logs --query \"SELECT * FROM events\"           # Run custom SQL query")
 	fmt.Println()
 }
@@ -159,7 +163,7 @@ func printLogsHelp() {
 }
 
 func listLogs(ctx context.Context, service *app.LogsService, opts *logsOptions) error {
-	records, err := service.ListRecentLogs(ctx, opts.limit, opts.sessionID, opts.ordered)
+	records, err := service.ListRecentLogs(ctx, opts.limit, opts.sessionLimit, opts.sessionID, opts.ordered)
 	if err != nil {
 		return err
 	}
@@ -189,6 +193,8 @@ func listLogs(ctx context.Context, service *app.LogsService, opts *logsOptions) 
 	// Display logs in text format
 	if opts.sessionID != "" {
 		fmt.Printf("Showing %d logs for session %s:\n\n", len(records), opts.sessionID)
+	} else if opts.sessionLimit > 0 {
+		fmt.Printf("Showing %d logs from %d most recent sessions:\n\n", len(records), opts.sessionLimit)
 	} else {
 		fmt.Printf("Showing %d most recent logs:\n\n", len(records))
 	}

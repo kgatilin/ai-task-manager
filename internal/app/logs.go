@@ -37,7 +37,45 @@ func NewLogsService(repo domain.EventRepository, rawExecutor domain.RawQueryExec
 }
 
 // ListRecentLogs retrieves the most recent N logs, optionally filtered by session ID and ordered chronologically
-func (s *LogsService) ListRecentLogs(ctx context.Context, limit int, sessionID string, ordered bool) ([]*LogRecord, error) {
+// If sessionLimit > 0, limits by number of sessions instead of number of events
+func (s *LogsService) ListRecentLogs(ctx context.Context, limit int, sessionLimit int, sessionID string, ordered bool) ([]*LogRecord, error) {
+	// If sessionLimit is specified, we need to first find the N most recent sessions
+	// and then fetch all events for those sessions
+	if sessionLimit > 0 && sessionID == "" {
+		// Use raw query executor to find recent session IDs
+		sessionQuery := fmt.Sprintf(`
+			SELECT session_id
+			FROM events
+			WHERE session_id IS NOT NULL AND session_id != ''
+			GROUP BY session_id
+			ORDER BY MAX(timestamp) DESC
+			LIMIT %d
+		`, sessionLimit)
+
+		result, err := s.rawExecutor.ExecuteRawQuery(ctx, sessionQuery)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get recent sessions: %w", err)
+		}
+
+		// Extract session IDs
+		sessionIDs := make([]string, 0, len(result.Rows))
+		for _, row := range result.Rows {
+			if len(row) > 0 {
+				if sessionIDStr, ok := row[0].(string); ok {
+					sessionIDs = append(sessionIDs, sessionIDStr)
+				}
+			}
+		}
+
+		if len(sessionIDs) == 0 {
+			return []*LogRecord{}, nil
+		}
+
+		// Fetch all events for these sessions
+		return s.fetchEventsForSessions(ctx, sessionIDs, ordered)
+	}
+
+	// Original behavior: limit by number of events
 	query := domain.EventQuery{
 		Limit:       limit,
 		SessionID:   sessionID,
@@ -49,6 +87,49 @@ func (s *LogsService) ListRecentLogs(ctx context.Context, limit int, sessionID s
 		return nil, fmt.Errorf("failed to query logs: %w", err)
 	}
 
+	return s.convertEventsToRecords(events)
+}
+
+// fetchEventsForSessions fetches all events for the given session IDs
+func (s *LogsService) fetchEventsForSessions(ctx context.Context, sessionIDs []string, ordered bool) ([]*LogRecord, error) {
+	allRecords := make([]*LogRecord, 0)
+
+	for _, sessionID := range sessionIDs {
+		query := domain.EventQuery{
+			SessionID:   sessionID,
+			OrderByTime: ordered,
+			Limit:       0, // No limit for individual sessions
+		}
+
+		events, err := s.repo.FindByQuery(ctx, query)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query logs for session %s: %w", sessionID, err)
+		}
+
+		records, err := s.convertEventsToRecords(events)
+		if err != nil {
+			return nil, err
+		}
+
+		allRecords = append(allRecords, records...)
+	}
+
+	// Sort all records by timestamp (most recent first) unless ordered is true
+	if !ordered {
+		sort.Slice(allRecords, func(i, j int) bool {
+			return allRecords[i].Timestamp.After(allRecords[j].Timestamp)
+		})
+	} else {
+		sort.Slice(allRecords, func(i, j int) bool {
+			return allRecords[i].Timestamp.Before(allRecords[j].Timestamp)
+		})
+	}
+
+	return allRecords, nil
+}
+
+// convertEventsToRecords converts domain events to log records
+func (s *LogsService) convertEventsToRecords(events []*domain.Event) ([]*LogRecord, error) {
 	records := make([]*LogRecord, len(events))
 	for i, event := range events {
 		payloadBytes, err := event.MarshalPayload()

@@ -70,7 +70,7 @@ func NewAnalysisService(
 func (s *AnalysisService) AnalyzeSession(ctx context.Context, sessionID string) (*domain.SessionAnalysis, error) {
 	// Get session logs
 	s.logger.Debug("Fetching logs for session %s", sessionID)
-	logs, err := s.logsService.ListRecentLogs(ctx, 0, sessionID, true)
+	logs, err := s.logsService.ListRecentLogs(ctx, 0, 0, sessionID, true)
 	if err != nil {
 		s.logger.Error("Failed to get session logs: %v", err)
 		return nil, fmt.Errorf("failed to get session logs: %w", err)
@@ -129,7 +129,7 @@ func (s *AnalysisService) AnalyzeSession(ctx context.Context, sessionID string) 
 
 // GetLastSession returns the ID of the most recent session
 func (s *AnalysisService) GetLastSession(ctx context.Context) (string, error) {
-	logs, err := s.logsService.ListRecentLogs(ctx, 1, "", false)
+	logs, err := s.logsService.ListRecentLogs(ctx, 1, 0, "", false)
 	if err != nil {
 		return "", fmt.Errorf("failed to get last session: %w", err)
 	}
