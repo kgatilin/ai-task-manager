@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/infra"
@@ -26,6 +27,8 @@ func handleClaudeCommand(args []string) {
 		handleLog(args[1:])
 	case "auto-summary":
 		handleAutoSummary(args[1:])
+	case "auto-summary-exec":
+		handleAutoSummaryExec(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown claude subcommand: %s\n\n", subcommand)
 		printClaudeUsage()
@@ -40,31 +43,33 @@ func printClaudeUsage() {
 	fmt.Println("  init              Initialize Claude Code logging infrastructure")
 	fmt.Println("  log <event-type>  Log a Claude Code event (reads JSON from stdin)")
 	fmt.Println("  auto-summary      Auto-trigger session summary (called by SessionEnd hook)")
+	fmt.Println("  auto-summary-exec Internal: Execute summary in background (do not call directly)")
 	fmt.Println()
 }
 
 // handleAutoSummary handles auto-triggered session summaries on SessionEnd
-// This is called by the SessionEnd hook and only runs if auto_summary_enabled is true in config
+// This is called by the SessionEnd hook and spawns a background process to do the actual work
+// Returns immediately so Claude Code is not blocked
 func handleAutoSummary(args []string) {
-	// Silently execute (errors shouldn't disrupt Claude Code)
-	if err := autoSummaryFromStdin(); err != nil {
-		// Fail silently - don't disrupt Claude Code
-		return
-	}
-}
-
-func autoSummaryFromStdin() error {
 	// Read hook input from stdin
 	stdinData, err := io.ReadAll(os.Stdin)
 	if err != nil {
-		return err
+		// Fail silently - don't disrupt Claude Code
+		return
 	}
 
-	// Try to parse as hook input
+	// Try to parse as hook input to extract session ID
 	hookInput, err := infra.ParseHookInput(io.NopCloser(bytes.NewReader(stdinData)))
 	if err != nil {
 		// Not valid hook input, fail silently
-		return nil
+		return
+	}
+
+	// Get session ID
+	sessionID := hookInput.SessionID
+	if sessionID == "" {
+		// No session ID, can't analyze
+		return
 	}
 
 	// Load config to check if auto-summary is enabled
@@ -73,20 +78,68 @@ func autoSummaryFromStdin() error {
 	config, err := configLoader.LoadConfig("")
 	if err != nil {
 		// Config load failed, fail silently
-		return nil
+		return
 	}
 
 	// Check if auto-summary is enabled
 	if !config.Analysis.AutoSummaryEnabled {
 		// Auto-summary disabled, silently exit
-		return nil
+		return
 	}
 
-	// Get the session ID from hook input
-	sessionID := hookInput.SessionID
-	if sessionID == "" {
-		// No session ID, can't analyze
-		return nil
+	// Spawn detached background process to execute the summary
+	// This allows the hook to return immediately while analysis runs in background
+	if err := spawnBackgroundSummary(sessionID); err != nil {
+		// Fail silently - don't disrupt Claude Code
+		return
+	}
+
+	// Return immediately - background process will handle the analysis
+}
+
+// spawnBackgroundSummary spawns a detached background process to execute the summary
+func spawnBackgroundSummary(sessionID string) error {
+	// Get the path to the current executable
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	// Create command: dw claude auto-summary-exec <session-id>
+	cmd := exec.Command(executable, "claude", "auto-summary-exec", sessionID)
+
+	// Detach from parent process
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+
+	// Start the process without waiting for it to complete
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	// Don't wait for the process - let it run in background
+	// The process will continue even after the parent exits
+	return nil
+}
+
+// handleAutoSummaryExec executes the actual summary analysis
+// This is called by the background process spawned by handleAutoSummary
+func handleAutoSummaryExec(args []string) {
+	if len(args) < 1 {
+		// No session ID provided
+		return
+	}
+
+	sessionID := args[0]
+
+	// Load config
+	logger := infra.NewDefaultLogger()
+	configLoader := infra.NewConfigLoader(logger)
+	config, err := configLoader.LoadConfig("")
+	if err != nil {
+		// Config load failed, exit silently
+		return
 	}
 
 	// Get the prompt name from config
@@ -98,7 +151,7 @@ func autoSummaryFromStdin() error {
 	// Create repository and services
 	repo, err := infra.NewSQLiteEventRepository(app.DefaultDBPath)
 	if err != nil {
-		return err
+		return
 	}
 	defer repo.Close()
 
@@ -106,14 +159,9 @@ func autoSummaryFromStdin() error {
 	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
 	analysisService := app.NewAnalysisService(repo, repo, logsService, llmExecutor, logger, config)
 
-	// Trigger analysis in background (don't block)
-	// Use a goroutine so the hook returns quickly
-	go func() {
-		_, _ = analysisService.AnalyzeSessionWithPrompt(context.Background(), sessionID, promptName)
-		// Ignore errors - this is best-effort background analysis
-	}()
-
-	return nil
+	// Execute the analysis
+	_, _ = analysisService.AnalyzeSessionWithPrompt(context.Background(), sessionID, promptName)
+	// Ignore errors - this is best-effort background analysis
 }
 
 func handleInit(args []string) {

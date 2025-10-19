@@ -40,8 +40,8 @@ func NewSQLiteEventRepository(dbPath string) (*SQLiteEventRepository, error) {
 
 // Initialize initializes the database schema
 func (r *SQLiteEventRepository) Initialize(ctx context.Context) error {
-	// Create base schema
-	baseSchema := `
+	// Step 1: Create base tables (minimal schema for old versions)
+	baseTablesSchema := `
 		CREATE TABLE IF NOT EXISTS events (
 			id TEXT PRIMARY KEY,
 			timestamp INTEGER NOT NULL,
@@ -51,12 +51,6 @@ func (r *SQLiteEventRepository) Initialize(ctx context.Context) error {
 			content TEXT NOT NULL
 		);
 
-		CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
-		CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
-		CREATE INDEX IF NOT EXISTS idx_events_timestamp_type ON events(timestamp, event_type);
-		CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id);
-		CREATE INDEX IF NOT EXISTS idx_events_timestamp_session ON events(timestamp, session_id);
-
 		CREATE TABLE IF NOT EXISTS session_analyses (
 			id TEXT PRIMARY KEY,
 			session_id TEXT NOT NULL,
@@ -64,34 +58,76 @@ func (r *SQLiteEventRepository) Initialize(ctx context.Context) error {
 			analysis_result TEXT NOT NULL,
 			model_used TEXT,
 			prompt_used TEXT,
-			patterns_summary TEXT,
-			analysis_type TEXT DEFAULT 'tool_analysis',
-			prompt_name TEXT DEFAULT 'analysis'
+			patterns_summary TEXT
 		);
+	`
+
+	_, err := r.db.ExecContext(ctx, baseTablesSchema)
+	if err != nil {
+		return fmt.Errorf("failed to create base tables: %w", err)
+	}
+
+	// Step 2: Run migrations to add new columns if they don't exist
+	// These will fail silently if columns already exist
+	migrationSQL := `ALTER TABLE session_analyses ADD COLUMN analysis_type TEXT DEFAULT 'tool_analysis';`
+	_, _ = r.db.ExecContext(ctx, migrationSQL)
+
+	migrationSQL2 := `ALTER TABLE session_analyses ADD COLUMN prompt_name TEXT DEFAULT 'analysis';`
+	_, _ = r.db.ExecContext(ctx, migrationSQL2)
+
+	// Step 3: Clean up duplicate analyses (keep only the most recent one per session_id/analysis_type)
+	// This handles the case where old databases have multiple analyses with the same analysis_type
+	cleanupSQL := `
+		DELETE FROM session_analyses
+		WHERE id NOT IN (
+			SELECT id FROM (
+				SELECT id, session_id, analysis_type,
+				       ROW_NUMBER() OVER (PARTITION BY session_id, analysis_type ORDER BY analyzed_at DESC) as rn
+				FROM session_analyses
+			)
+			WHERE rn = 1
+		);
+	`
+	// Ignore errors - older SQLite versions might not support window functions
+	_, _ = r.db.ExecContext(ctx, cleanupSQL)
+
+	// Fallback cleanup for older SQLite without window functions
+	fallbackCleanup := `
+		DELETE FROM session_analyses
+		WHERE id IN (
+			SELECT a1.id
+			FROM session_analyses a1
+			INNER JOIN session_analyses a2
+			ON a1.session_id = a2.session_id
+			   AND a1.analysis_type = a2.analysis_type
+			   AND a1.analyzed_at < a2.analyzed_at
+		);
+	`
+	_, _ = r.db.ExecContext(ctx, fallbackCleanup)
+
+	// Step 4: Create indexes (including those on new columns)
+	indexSchema := `
+		CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+		CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type);
+		CREATE INDEX IF NOT EXISTS idx_events_timestamp_type ON events(timestamp, event_type);
+		CREATE INDEX IF NOT EXISTS idx_events_session_id ON events(session_id);
+		CREATE INDEX IF NOT EXISTS idx_events_timestamp_session ON events(timestamp, session_id);
 
 		CREATE INDEX IF NOT EXISTS idx_analyses_session_id ON session_analyses(session_id);
 		CREATE INDEX IF NOT EXISTS idx_analyses_analyzed_at ON session_analyses(analyzed_at);
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_analyses_session_type ON session_analyses(session_id, analysis_type);
 	`
 
-	_, err := r.db.ExecContext(ctx, baseSchema)
+	_, err = r.db.ExecContext(ctx, indexSchema)
 	if err != nil {
-		return fmt.Errorf("failed to initialize schema: %w", err)
+		return fmt.Errorf("failed to create indexes: %w", err)
 	}
 
-	// Migrate existing databases to add new columns if needed
-	migrationSQL := `
-		-- Add analysis_type column if it doesn't exist
-		ALTER TABLE session_analyses ADD COLUMN analysis_type TEXT DEFAULT 'tool_analysis';
-	`
-	// Ignore errors - column may already exist
-	_, _ = r.db.ExecContext(ctx, migrationSQL)
-
-	migrationSQL2 := `
-		-- Add prompt_name column if it doesn't exist
-		ALTER TABLE session_analyses ADD COLUMN prompt_name TEXT DEFAULT 'analysis';
-	`
-	_, _ = r.db.ExecContext(ctx, migrationSQL2)
+	// Step 5: Create unique index (after cleanup)
+	uniqueIndexSQL := `CREATE UNIQUE INDEX IF NOT EXISTS idx_analyses_session_type ON session_analyses(session_id, analysis_type);`
+	_, err = r.db.ExecContext(ctx, uniqueIndexSQL)
+	if err != nil {
+		return fmt.Errorf("failed to create unique index: %w", err)
+	}
 
 	// Try to create FTS5 virtual table (optional, may not be available)
 	ftsSchema := `

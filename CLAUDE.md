@@ -8,6 +8,7 @@
 
 - **CLI Tool (`dw`)**: Main entry point with multiple subcommands
   - `dw claude init` - Initialize logging infrastructure
+  - `dw refresh` - Update database schema and hooks to latest version (run after upgrading)
   - `dw claude log` - Log events (called by hooks)
   - `dw logs` - View and query logged events
   - `dw analyze` - AI-powered session analysis with configurable prompts
@@ -22,6 +23,10 @@
     - `--view` - View existing analysis without re-analyzing
 - **Event Logging**: Captures tool invocations and user prompts via Claude Code hooks
 - **SQLite Storage**: Fast, file-based event storage with full-text search capability
+- **Database Migration**: Safe schema migrations with automatic duplicate cleanup and version upgrades
+  - Multi-step migration process: base tables → column additions → duplicate cleanup → indexes
+  - Handles missing columns, duplicates, and schema inconsistencies
+  - Backwards compatible with existing databases
 - **Hook Management**: Automatically configures and merges Claude Code hooks
 - **Log Viewer**: Query interface with SQL support for exploring captured events
 - **AI Analysis**: Uses Claude CLI to analyze sessions and suggest workflow optimizations
@@ -49,7 +54,8 @@ For detailed architecture and API information, see:
   - Custom prompts can be added to `.darwinflow.yaml` config
 - **Auto-Triggered Session Summaries**: Optional automatic analysis on session end
   - Controlled via `analysis.auto_summary_enabled` (default: false)
-  - Runs in background, doesn't block session end
+  - **Fully asynchronous**: Hook returns immediately (~50ms), analysis runs in detached background process
+  - Zero blocking - Claude Code session ends without waiting for analysis
   - Uses configurable prompt via `analysis.auto_summary_prompt`
   - Requires `dw claude init` to install SessionEnd hook
 - **Configuration-Based Execution**: Analysis settings in `.darwinflow.yaml`

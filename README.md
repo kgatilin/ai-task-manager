@@ -51,6 +51,30 @@ This will:
 
 After running `dw claude init`, restart Claude Code. All your interactions will now be automatically logged!
 
+### Upgrading DarwinFlow
+
+When you upgrade to a new version of DarwinFlow (e.g., after `git pull`), run the refresh command to update your installation:
+
+```bash
+# Rebuild the binary
+go build -o dw ./cmd/dw
+
+# Update database schema and hooks to latest version
+dw refresh
+```
+
+The `dw refresh` command:
+- Updates the database schema with new columns, indexes, and tables
+- Migrates existing data safely (e.g., removes duplicates, adds default values)
+- Reinstalls/updates hooks to the latest version
+- Verifies configuration integrity
+
+**When to use `dw refresh`:**
+- After updating DarwinFlow to a new version
+- When you see database schema errors (e.g., "no such column")
+- When new hooks are added to DarwinFlow
+- To fix database inconsistencies
+
 ## Architecture
 
 DarwinFlow follows a strict 3-layer architecture enforced by [go-arch-lint](https://github.com/fdaines/go-arch-lint):
@@ -78,6 +102,9 @@ cmd → pkg → internal
 ```bash
 # Initialize logging infrastructure
 dw claude init
+
+# Update to latest version (run after upgrading DarwinFlow)
+dw refresh                                 # Update database schema and hooks
 
 # Log an event (typically called by hooks)
 dw claude log <event-type>

@@ -22,6 +22,8 @@ func main() {
 		analyzeCmd(os.Args[2:])
 	case "config":
 		configCmd(os.Args[2:])
+	case "refresh":
+		handleRefresh(os.Args[2:])
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -40,6 +42,7 @@ func printUsage() {
 	fmt.Println("  dw logs              View logged events from the database")
 	fmt.Println("  dw analyze           Analyze sessions to identify tool gaps and inefficiencies")
 	fmt.Println("  dw config            Manage DarwinFlow configuration")
+	fmt.Println("  dw refresh           Update database schema and hooks to latest version")
 	fmt.Println("  dw help              Show this help message")
 	fmt.Println()
 	fmt.Println("For command-specific help:")
