@@ -168,7 +168,10 @@ DarwinFlow uses `.darwinflow.yaml` for configuration. Create this file in your p
 ```yaml
 analysis:
   token_limit: 100000                      # Max tokens for analysis context
-  model: "claude-sonnet-4-5-20250929"      # Claude model to use
+  # Allowed models: sonnet, opus, haiku (aliases for latest versions)
+  # Or specific versions: claude-sonnet-4-5-20250929, claude-opus-4-20250514,
+  # claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
+  model: "sonnet"                          # Model alias or full name
   parallel_limit: 3                        # Max parallel analysis executions
   auto_summary_enabled: false              # Enable auto session summaries
   auto_summary_prompt: "session_summary"   # Prompt for auto summaries

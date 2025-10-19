@@ -71,6 +71,13 @@ func analyzeCmd(args []string) {
 	// Apply CLI overrides to config
 	if *modelOverride != "" {
 		logger.Debug("Overriding model from CLI: %s", *modelOverride)
+		if !infra.ValidateModelAlias(*modelOverride) {
+			logger.Error("Invalid model: %s", *modelOverride)
+			fmt.Fprintf(os.Stderr, "Error: Invalid model '%s'\n", *modelOverride)
+			fmt.Fprintf(os.Stderr, "Allowed models: sonnet, opus, haiku, or specific versions\n")
+			fmt.Fprintf(os.Stderr, "See .darwinflow.yaml for full list\n")
+			os.Exit(1)
+		}
 		config.Analysis.Model = *modelOverride
 	}
 	if *tokenLimit > 0 {

@@ -54,7 +54,10 @@ For detailed architecture and API information, see:
   - Requires `dw claude init` to install SessionEnd hook
 - **Configuration-Based Execution**: Analysis settings in `.darwinflow.yaml`
   - `analysis.token_limit`: Max tokens for analysis context (default: 100000)
-  - `analysis.model`: Claude model to use (default: claude-sonnet-4-5-20250929)
+  - `analysis.model`: Claude model to use - alias (sonnet, opus, haiku) or full name (default: sonnet)
+    - **Allowed models**: sonnet, opus, haiku (latest versions), or specific versions
+    - Whitelist includes: claude-sonnet-4-5-20250929, claude-opus-4-20250514, etc.
+    - Invalid models fall back to default with warning
   - `analysis.parallel_limit`: Max parallel analysis executions (default: 3)
   - `analysis.auto_summary_enabled`: Enable auto session summaries (default: false)
   - `analysis.auto_summary_prompt`: Prompt for auto summaries (default: session_summary)

@@ -1,6 +1,9 @@
 analysis:
   token_limit: 100000
-  model: "claude-sonnet-4-5-20250929"
+  # Allowed models: sonnet, opus, haiku (aliases for latest versions)
+  # Or specific versions: claude-sonnet-4-5-20250929, claude-opus-4-20250514,
+  # claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
+  model: "sonnet"
   parallel_limit: 3
   auto_summary_enabled: false  # Set to true to enable auto-triggered session summaries
   auto_summary_prompt: "session_summary"  # Prompt to use for auto-summaries

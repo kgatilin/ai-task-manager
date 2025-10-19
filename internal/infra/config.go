@@ -78,10 +78,40 @@ func (c *ConfigLoader) LoadConfig(configPath string) (*domain.Config, error) {
 		}
 	}
 
+	// Apply defaults for analysis config fields if not set
+	if config.Analysis.TokenLimit == 0 {
+		config.Analysis.TokenLimit = defaults.Analysis.TokenLimit
+	}
+	if config.Analysis.Model == "" {
+		config.Analysis.Model = defaults.Analysis.Model
+	}
+	if config.Analysis.ParallelLimit == 0 {
+		config.Analysis.ParallelLimit = defaults.Analysis.ParallelLimit
+	}
+	if config.Analysis.AutoSummaryPrompt == "" {
+		config.Analysis.AutoSummaryPrompt = defaults.Analysis.AutoSummaryPrompt
+	}
+	if config.Analysis.ClaudeOptions.SystemPromptMode == "" {
+		config.Analysis.ClaudeOptions.SystemPromptMode = defaults.Analysis.ClaudeOptions.SystemPromptMode
+	}
+
+	// Validate model is in whitelist
+	if !domain.ValidateModel(config.Analysis.Model) {
+		if c.logger != nil {
+			c.logger.Warn("Invalid model '%s', using default '%s'", config.Analysis.Model, defaults.Analysis.Model)
+		}
+		config.Analysis.Model = defaults.Analysis.Model
+	}
+
 	if c.logger != nil {
-		c.logger.Info("Config loaded successfully with %d prompt(s)", len(config.Prompts))
+		c.logger.Info("Config loaded successfully with %d prompt(s), model: %s", len(config.Prompts), config.Analysis.Model)
 	}
 	return &config, nil
+}
+
+// ValidateModelAlias validates a model alias or full name against the whitelist
+func ValidateModelAlias(model string) bool {
+	return domain.ValidateModel(model)
 }
 
 // SaveConfig saves configuration to the specified path

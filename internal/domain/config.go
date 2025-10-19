@@ -39,12 +39,34 @@ type ClaudeOptions struct {
 	SystemPromptMode string `yaml:"system_prompt_mode" json:"system_prompt_mode"`
 }
 
+// AllowedModels is the whitelist of valid model aliases and full names
+var AllowedModels = map[string]bool{
+	// Aliases (recommended)
+	"sonnet": true,
+	"opus":   true,
+	"haiku":  true,
+
+	// Full model names (for specific versions)
+	"claude-sonnet-4-5-20250929":   true,
+	"claude-opus-4-20250514":       true,
+	"claude-3-5-sonnet-20241022":   true,
+	"claude-3-5-haiku-20241022":    true,
+}
+
+// ValidateModel checks if a model is in the allowed whitelist
+func ValidateModel(model string) bool {
+	if model == "" {
+		return true // Empty is valid, uses default
+	}
+	return AllowedModels[model]
+}
+
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
 		Analysis: AnalysisConfig{
 			TokenLimit:         100000,
-			Model:              "claude-sonnet-4-5-20250929",
+			Model:              "sonnet", // Use alias for latest model
 			ParallelLimit:      3,
 			AutoSummaryEnabled: false,           // Disabled by default - user must opt in
 			AutoSummaryPrompt:  "session_summary", // Use session_summary prompt for auto-analysis
