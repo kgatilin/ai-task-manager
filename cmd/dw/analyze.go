@@ -17,9 +17,14 @@ func analyzeCmd(args []string) {
 	viewOnly := fs.Bool("view", false, "View existing analysis without re-analyzing")
 	analyzeAll := fs.Bool("all", false, "Analyze all unanalyzed sessions")
 	refresh := fs.Bool("refresh", false, "Re-analyze sessions even if already analyzed")
-	limit := fs.Int("limit", 0, "Limit number of sessions to refresh (0 = all sessions)")
+	limit := fs.Int("limit", 0, "Limit number of sessions to refresh/analyze (0 = all)")
 	debug := fs.Bool("debug", false, "Enable debug logging")
 	debugShort := fs.Bool("d", false, "Enable debug logging (short flag)")
+
+	// New flags for multi-prompt analysis
+	promptName := fs.String("prompt", "", "Prompt name from config to use (e.g., tool_analysis, session_summary)")
+	modelOverride := fs.String("model", "", "Override model from config")
+	tokenLimit := fs.Int("token-limit", 0, "Override token limit from config")
 
 	if err := fs.Parse(args); err != nil {
 		if err != flag.ErrHelp {
@@ -63,20 +68,37 @@ func analyzeCmd(args []string) {
 		os.Exit(1)
 	}
 
+	// Apply CLI overrides to config
+	if *modelOverride != "" {
+		logger.Debug("Overriding model from CLI: %s", *modelOverride)
+		config.Analysis.Model = *modelOverride
+	}
+	if *tokenLimit > 0 {
+		logger.Debug("Overriding token limit from CLI: %d", *tokenLimit)
+		config.Analysis.TokenLimit = *tokenLimit
+	}
+
+	// Determine prompt name (default to tool_analysis if not specified)
+	selectedPrompt := "tool_analysis"
+	if *promptName != "" {
+		selectedPrompt = *promptName
+		logger.Debug("Using prompt from CLI: %s", selectedPrompt)
+	}
+
 	// Create services
 	logger.Debug("Creating analysis services")
 	logsService := app.NewLogsService(repo, repo)
-	llmExecutor := app.NewClaudeCLIExecutor(logger)
+	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
 	analysisService := app.NewAnalysisService(repo, repo, logsService, llmExecutor, logger, config)
 
 	// Handle different modes
 	if *refresh {
-		refreshAnalyses(ctx, analysisService, logger, *limit)
+		refreshAnalyses(ctx, analysisService, logger, *limit, selectedPrompt)
 		return
 	}
 
 	if *analyzeAll {
-		analyzeAllSessions(ctx, analysisService, logger)
+		analyzeAllSessions(ctx, analysisService, logger, selectedPrompt)
 		return
 	}
 
@@ -105,8 +127,8 @@ func analyzeCmd(args []string) {
 	}
 
 	// Perform analysis
-	fmt.Printf("Analyzing session %s...\n", targetSessionID)
-	analysis, err := analysisService.AnalyzeSession(ctx, targetSessionID)
+	fmt.Printf("Analyzing session %s with prompt '%s'...\n", targetSessionID, selectedPrompt)
+	analysis, err := analysisService.AnalyzeSessionWithPrompt(ctx, targetSessionID, selectedPrompt)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to analyze session: %v\n", err)
 		os.Exit(1)
@@ -137,7 +159,7 @@ func viewAnalysis(ctx context.Context, service *app.AnalysisService, sessionID s
 	fmt.Println(analysis.AnalysisResult)
 }
 
-func analyzeAllSessions(ctx context.Context, service *app.AnalysisService, logger *infra.Logger) {
+func analyzeAllSessions(ctx context.Context, service *app.AnalysisService, logger *infra.Logger, promptName string) {
 	// Get unanalyzed sessions
 	logger.Debug("Fetching unanalyzed sessions")
 	sessionIDs, err := service.GetUnanalyzedSessions(ctx)
@@ -154,7 +176,8 @@ func analyzeAllSessions(ctx context.Context, service *app.AnalysisService, logge
 		return
 	}
 
-	fmt.Printf("Found %d unanalyzed session(s)\n\n", len(sessionIDs))
+	fmt.Printf("Found %d unanalyzed session(s)\n", len(sessionIDs))
+	fmt.Printf("Using prompt: %s\n\n", promptName)
 
 	// Analyze each session
 	successCount := 0
@@ -162,7 +185,7 @@ func analyzeAllSessions(ctx context.Context, service *app.AnalysisService, logge
 		fmt.Printf("[%d/%d] Analyzing session %s...\n", i+1, len(sessionIDs), sessionID)
 		logger.Debug("Starting analysis for session %s (%d/%d)", sessionID, i+1, len(sessionIDs))
 
-		analysis, err := service.AnalyzeSession(ctx, sessionID)
+		analysis, err := service.AnalyzeSessionWithPrompt(ctx, sessionID, promptName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to analyze session %s: %v\n", sessionID, err)
 			logger.Warn("Analysis failed for session %s: %v", sessionID, err)
@@ -178,7 +201,7 @@ func analyzeAllSessions(ctx context.Context, service *app.AnalysisService, logge
 	logger.Info("Batch analysis complete: %d/%d successful", successCount, len(sessionIDs))
 }
 
-func refreshAnalyses(ctx context.Context, service *app.AnalysisService, logger *infra.Logger, limit int) {
+func refreshAnalyses(ctx context.Context, service *app.AnalysisService, logger *infra.Logger, limit int, promptName string) {
 	// Get all sessions (or latest N if limit is specified)
 	logger.Debug("Fetching session IDs for refresh (limit: %d)", limit)
 	sessionIDs, err := service.GetAllSessionIDs(ctx, limit)
@@ -196,10 +219,11 @@ func refreshAnalyses(ctx context.Context, service *app.AnalysisService, logger *
 	}
 
 	if limit > 0 {
-		fmt.Printf("Refreshing analyses for latest %d session(s)...\n\n", len(sessionIDs))
+		fmt.Printf("Refreshing analyses for latest %d session(s)\n", len(sessionIDs))
 	} else {
-		fmt.Printf("Refreshing analyses for all %d session(s)...\n\n", len(sessionIDs))
+		fmt.Printf("Refreshing analyses for all %d session(s)\n", len(sessionIDs))
 	}
+	fmt.Printf("Using prompt: %s\n\n", promptName)
 
 	// Re-analyze each session
 	successCount := 0
@@ -207,7 +231,7 @@ func refreshAnalyses(ctx context.Context, service *app.AnalysisService, logger *
 		fmt.Printf("[%d/%d] Re-analyzing session %s...\n", i+1, len(sessionIDs), sessionID)
 		logger.Debug("Starting re-analysis for session %s (%d/%d)", sessionID, i+1, len(sessionIDs))
 
-		analysis, err := service.AnalyzeSession(ctx, sessionID)
+		analysis, err := service.AnalyzeSessionWithPrompt(ctx, sessionID, promptName)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Failed to re-analyze session %s: %v\n", sessionID, err)
 			logger.Warn("Re-analysis failed for session %s: %v", sessionID, err)

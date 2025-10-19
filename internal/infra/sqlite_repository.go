@@ -64,17 +64,34 @@ func (r *SQLiteEventRepository) Initialize(ctx context.Context) error {
 			analysis_result TEXT NOT NULL,
 			model_used TEXT,
 			prompt_used TEXT,
-			patterns_summary TEXT
+			patterns_summary TEXT,
+			analysis_type TEXT DEFAULT 'tool_analysis',
+			prompt_name TEXT DEFAULT 'analysis'
 		);
 
 		CREATE INDEX IF NOT EXISTS idx_analyses_session_id ON session_analyses(session_id);
 		CREATE INDEX IF NOT EXISTS idx_analyses_analyzed_at ON session_analyses(analyzed_at);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_analyses_session_type ON session_analyses(session_id, analysis_type);
 	`
 
 	_, err := r.db.ExecContext(ctx, baseSchema)
 	if err != nil {
 		return fmt.Errorf("failed to initialize schema: %w", err)
 	}
+
+	// Migrate existing databases to add new columns if needed
+	migrationSQL := `
+		-- Add analysis_type column if it doesn't exist
+		ALTER TABLE session_analyses ADD COLUMN analysis_type TEXT DEFAULT 'tool_analysis';
+	`
+	// Ignore errors - column may already exist
+	_, _ = r.db.ExecContext(ctx, migrationSQL)
+
+	migrationSQL2 := `
+		-- Add prompt_name column if it doesn't exist
+		ALTER TABLE session_analyses ADD COLUMN prompt_name TEXT DEFAULT 'analysis';
+	`
+	_, _ = r.db.ExecContext(ctx, migrationSQL2)
 
 	// Try to create FTS5 virtual table (optional, may not be available)
 	ftsSchema := `
@@ -309,8 +326,15 @@ func (r *SQLiteEventRepository) ExecuteRawQuery(ctx context.Context, query strin
 // SaveAnalysis persists a session analysis
 func (r *SQLiteEventRepository) SaveAnalysis(ctx context.Context, analysis *domain.SessionAnalysis) error {
 	query := `
-		INSERT INTO session_analyses (id, session_id, analyzed_at, analysis_result, model_used, prompt_used, patterns_summary)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO session_analyses (id, session_id, analyzed_at, analysis_result, model_used, prompt_used, patterns_summary, analysis_type, prompt_name)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(session_id, analysis_type) DO UPDATE SET
+			analyzed_at = excluded.analyzed_at,
+			analysis_result = excluded.analysis_result,
+			model_used = excluded.model_used,
+			prompt_used = excluded.prompt_used,
+			patterns_summary = excluded.patterns_summary,
+			prompt_name = excluded.prompt_name
 	`
 
 	_, err := r.db.ExecContext(ctx, query,
@@ -321,6 +345,8 @@ func (r *SQLiteEventRepository) SaveAnalysis(ctx context.Context, analysis *doma
 		analysis.ModelUsed,
 		analysis.PromptUsed,
 		analysis.PatternsSummary,
+		analysis.AnalysisType,
+		analysis.PromptName,
 	)
 
 	if err != nil {
@@ -333,7 +359,9 @@ func (r *SQLiteEventRepository) SaveAnalysis(ctx context.Context, analysis *doma
 // GetAnalysisBySessionID retrieves the most recent analysis for a session
 func (r *SQLiteEventRepository) GetAnalysisBySessionID(ctx context.Context, sessionID string) (*domain.SessionAnalysis, error) {
 	query := `
-		SELECT id, session_id, analyzed_at, analysis_result, model_used, prompt_used, patterns_summary
+		SELECT id, session_id, analyzed_at, analysis_result, model_used, prompt_used, patterns_summary,
+		       COALESCE(analysis_type, 'tool_analysis') as analysis_type,
+		       COALESCE(prompt_name, 'analysis') as prompt_name
 		FROM session_analyses
 		WHERE session_id = ?
 		ORDER BY analyzed_at DESC
@@ -352,6 +380,8 @@ func (r *SQLiteEventRepository) GetAnalysisBySessionID(ctx context.Context, sess
 		&modelUsed,
 		&promptUsed,
 		&patternsSummary,
+		&analysis.AnalysisType,
+		&analysis.PromptName,
 	)
 
 	if err == sql.ErrNoRows {
@@ -405,7 +435,9 @@ func (r *SQLiteEventRepository) GetUnanalyzedSessionIDs(ctx context.Context) ([]
 // GetAllAnalyses retrieves all analyses, ordered by analyzed_at DESC
 func (r *SQLiteEventRepository) GetAllAnalyses(ctx context.Context, limit int) ([]*domain.SessionAnalysis, error) {
 	query := `
-		SELECT id, session_id, analyzed_at, analysis_result, model_used, prompt_used, patterns_summary
+		SELECT id, session_id, analyzed_at, analysis_result, model_used, prompt_used, patterns_summary,
+		       COALESCE(analysis_type, 'tool_analysis') as analysis_type,
+		       COALESCE(prompt_name, 'analysis') as prompt_name
 		FROM session_analyses
 		ORDER BY analyzed_at DESC
 	`
@@ -434,6 +466,8 @@ func (r *SQLiteEventRepository) GetAllAnalyses(ctx context.Context, limit int) (
 			&modelUsed,
 			&promptUsed,
 			&patternsSummary,
+			&analysis.AnalysisType,
+			&analysis.PromptName,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan analysis: %w", err)

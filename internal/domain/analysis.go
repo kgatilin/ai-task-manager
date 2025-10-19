@@ -15,6 +15,8 @@ type SessionAnalysis struct {
 	ModelUsed       string
 	PromptUsed      string
 	PatternsSummary string // Brief summary extracted from analysis
+	AnalysisType    string // Type of analysis: session_summary, tool_analysis, etc.
+	PromptName      string // Name of the prompt from config
 }
 
 // NewSessionAnalysis creates a new session analysis
@@ -26,6 +28,22 @@ func NewSessionAnalysis(sessionID, analysisResult, modelUsed, promptUsed string)
 		AnalysisResult: analysisResult,
 		ModelUsed:      modelUsed,
 		PromptUsed:     promptUsed,
+		AnalysisType:   "tool_analysis", // default for backward compatibility
+		PromptName:     "analysis",      // default for backward compatibility
+	}
+}
+
+// NewSessionAnalysisWithType creates a new session analysis with specific type
+func NewSessionAnalysisWithType(sessionID, analysisResult, modelUsed, promptUsed, analysisType, promptName string) *SessionAnalysis {
+	return &SessionAnalysis{
+		ID:             uuid.New().String(),
+		SessionID:      sessionID,
+		AnalyzedAt:     time.Now(),
+		AnalysisResult: analysisResult,
+		ModelUsed:      modelUsed,
+		PromptUsed:     promptUsed,
+		AnalysisType:   analysisType,
+		PromptName:     promptName,
 	}
 }
 
