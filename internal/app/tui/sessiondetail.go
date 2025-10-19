@@ -177,18 +177,17 @@ func (m SessionDetailModel) renderContent() string {
 
 	// Session metadata
 	b.WriteString(detailHeaderStyle.Render("Session Information") + "\n")
-	b.WriteString(detailContentStyle.Render(fmt.Sprintf("ID: %s\n", m.session.SessionID)))
-	b.WriteString(detailContentStyle.Render(fmt.Sprintf("Time Range: %s - %s\n",
+	b.WriteString(fmt.Sprintf("  ID: %s\n", m.session.SessionID))
+	b.WriteString(fmt.Sprintf("  Time Range: %s - %s\n",
 		m.session.FirstEvent.Format("2006-01-02 15:04:05"),
-		m.session.LastEvent.Format("15:04:05"))))
-	b.WriteString(detailContentStyle.Render(fmt.Sprintf("Event Count: %d\n", m.session.EventCount)))
+		m.session.LastEvent.Format("15:04:05")))
+	b.WriteString(fmt.Sprintf("  Event Count: %d\n", m.session.EventCount))
 	b.WriteString("\n")
 
 	// Analysis information
 	b.WriteString(detailHeaderStyle.Render("Analysis Status") + "\n")
 	if m.session.HasAnalysis {
-		b.WriteString(detailContentStyle.Render(
-			analyzedStyle.Render(fmt.Sprintf("✓ %d analysis/analyses found\n", m.session.AnalysisCount))))
+		b.WriteString(analyzedStyle.Render(fmt.Sprintf("  ✓ %d analysis/analyses found\n", m.session.AnalysisCount)))
 
 		for i, analysis := range m.session.Analyses {
 			b.WriteString(fmt.Sprintf("\n  %d. Type: %s\n", i+1, analysis.AnalysisType))
@@ -201,12 +200,11 @@ func (m SessionDetailModel) renderContent() string {
 			if len(preview) > 300 {
 				preview = preview[:300] + "..."
 			}
-			b.WriteString(detailContentStyle.Render("\n   Preview:\n"))
+			b.WriteString(fmt.Sprintf("\n     Preview:\n"))
 			b.WriteString(previewStyle.Render(preview) + "\n")
 		}
 	} else {
-		b.WriteString(detailContentStyle.Render(
-			unanalyzedStyle.Render("✗ Not analyzed\n")))
+		b.WriteString(unanalyzedStyle.Render("  ✗ Not analyzed\n"))
 	}
 
 	return b.String()
