@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
@@ -18,10 +19,12 @@ var (
 				BorderBottom(true).
 				BorderForeground(lipgloss.Color("240")).
 				PaddingBottom(1).
-				MarginBottom(1)
+				MarginBottom(1).
+				Align(lipgloss.Left)
 
 	viewerContentStyle = lipgloss.NewStyle().
-				Padding(1)
+				Padding(1).
+				Align(lipgloss.Left)
 )
 
 // AnalysisViewerModel displays the full analysis in a scrollable view
@@ -128,12 +131,31 @@ func (m AnalysisViewerModel) renderContent() string {
 	b.WriteString(fmt.Sprintf("Model:       %s\n", m.analysis.ModelUsed))
 	b.WriteString(fmt.Sprintf("Analyzed At: %s\n\n", m.analysis.AnalyzedAt.Format("2006-01-02 15:04:05")))
 
-	// Analysis content
+	// Render analysis content as markdown
 	b.WriteString(detailHeaderStyle.Render("Analysis Result") + "\n\n")
-	b.WriteString(m.analysis.AnalysisResult)
+
+	// Use glamour to render the markdown
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),
+		glamour.WithWordWrap(m.width-4), // Account for padding
+	)
+
+	if err == nil {
+		renderedMarkdown, err := renderer.Render(m.analysis.AnalysisResult)
+		if err == nil {
+			b.WriteString(renderedMarkdown)
+		} else {
+			// Fallback to raw text if rendering fails
+			b.WriteString(m.analysis.AnalysisResult)
+		}
+	} else {
+		// Fallback to raw text if renderer creation fails
+		b.WriteString(m.analysis.AnalysisResult)
+	}
+
 	b.WriteString("\n")
 
-	return viewerContentStyle.Render(b.String())
+	return b.String()
 }
 
 // Message types

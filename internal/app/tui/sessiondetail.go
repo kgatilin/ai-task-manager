@@ -21,10 +21,12 @@ var (
 
 	detailHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(lipgloss.Color("105"))
+				Foreground(lipgloss.Color("105")).
+				Align(lipgloss.Left)
 
 	detailContentStyle = lipgloss.NewStyle().
-				MarginLeft(2)
+				MarginLeft(2).
+				Align(lipgloss.Left)
 
 	actionStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("42")).
@@ -34,7 +36,8 @@ var (
 			MarginTop(1).
 			Padding(1).
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240"))
+			BorderForeground(lipgloss.Color("240")).
+			Align(lipgloss.Left)
 )
 
 // SessionDetailModel shows detailed information about a session
