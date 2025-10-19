@@ -88,6 +88,9 @@ func (c *ConfigLoader) LoadConfig(configPath string) (*domain.Config, error) {
 	if config.Analysis.ParallelLimit == 0 {
 		config.Analysis.ParallelLimit = defaults.Analysis.ParallelLimit
 	}
+	if len(config.Analysis.EnabledPrompts) == 0 {
+		config.Analysis.EnabledPrompts = defaults.Analysis.EnabledPrompts
+	}
 	if config.Analysis.AutoSummaryPrompt == "" {
 		config.Analysis.AutoSummaryPrompt = defaults.Analysis.AutoSummaryPrompt
 	}
@@ -103,8 +106,30 @@ func (c *ConfigLoader) LoadConfig(configPath string) (*domain.Config, error) {
 		config.Analysis.Model = defaults.Analysis.Model
 	}
 
+	// Validate enabled prompts exist
+	validPrompts := []string{}
+	for _, promptName := range config.Analysis.EnabledPrompts {
+		if _, exists := config.Prompts[promptName]; exists {
+			validPrompts = append(validPrompts, promptName)
+		} else {
+			if c.logger != nil {
+				c.logger.Warn("Enabled prompt '%s' not found in prompts section, ignoring", promptName)
+			}
+		}
+	}
+	config.Analysis.EnabledPrompts = validPrompts
+
+	// If all enabled prompts were invalid, use default
+	if len(config.Analysis.EnabledPrompts) == 0 {
+		if c.logger != nil {
+			c.logger.Warn("No valid enabled prompts, using default: %v", defaults.Analysis.EnabledPrompts)
+		}
+		config.Analysis.EnabledPrompts = defaults.Analysis.EnabledPrompts
+	}
+
 	if c.logger != nil {
-		c.logger.Info("Config loaded successfully with %d prompt(s), model: %s", len(config.Prompts), config.Analysis.Model)
+		c.logger.Info("Config loaded successfully with %d prompt(s), enabled: %v, model: %s",
+			len(config.Prompts), config.Analysis.EnabledPrompts, config.Analysis.Model)
 	}
 	return &config, nil
 }

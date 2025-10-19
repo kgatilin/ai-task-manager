@@ -5,6 +5,10 @@ analysis:
   # claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
   model: "sonnet"
   parallel_limit: 3
+  # Prompts to run during analysis (runs in parallel, must exist in prompts section below)
+  enabled_prompts:
+    - tool_analysis
+    # - session_summary  # Uncomment to also run session summaries
   auto_summary_enabled: false  # Set to true to enable auto-triggered session summaries
   auto_summary_prompt: "session_summary"  # Prompt to use for auto-summaries
   claude_options:

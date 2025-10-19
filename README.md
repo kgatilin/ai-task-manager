@@ -173,6 +173,10 @@ analysis:
   # claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
   model: "sonnet"                          # Model alias or full name
   parallel_limit: 3                        # Max parallel analysis executions
+  # Prompts to run during analysis (runs in parallel)
+  enabled_prompts:
+    - tool_analysis                        # Default: run tool_analysis
+    # - session_summary                    # Uncomment to also run session summaries
   auto_summary_enabled: false              # Enable auto session summaries
   auto_summary_prompt: "session_summary"   # Prompt for auto summaries
   claude_options:
@@ -187,6 +191,10 @@ prompts:
 ```
 
 **Key Configuration Options**:
+- `enabled_prompts`: Array of prompts to run during analysis (runs in parallel)
+  - `dw analyze --last` runs all enabled prompts
+  - `dw analyze --last --prompt X` runs only prompt X (overrides config)
+  - Prompts must exist in the `prompts` section
 - `auto_summary_enabled`: Set to `true` to automatically analyze sessions when they end
 - `token_limit`: Controls how many sessions can be batch-analyzed together
 - `parallel_limit`: Controls concurrency for parallel analysis

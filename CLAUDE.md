@@ -59,6 +59,11 @@ For detailed architecture and API information, see:
     - Whitelist includes: claude-sonnet-4-5-20250929, claude-opus-4-20250514, etc.
     - Invalid models fall back to default with warning
   - `analysis.parallel_limit`: Max parallel analysis executions (default: 3)
+  - `analysis.enabled_prompts`: Array of prompts to run during analysis (default: ["tool_analysis"])
+    - Prompts run in parallel when multiple are specified
+    - Must reference prompts defined in `prompts` section
+    - `--prompt` CLI flag overrides this setting
+    - Invalid prompts are filtered out with warning
   - `analysis.auto_summary_enabled`: Enable auto session summaries (default: false)
   - `analysis.auto_summary_prompt`: Prompt for auto summaries (default: session_summary)
   - `analysis.claude_options.allowed_tools`: Tools available during analysis (default: empty = no tools)

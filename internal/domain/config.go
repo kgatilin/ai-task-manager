@@ -14,11 +14,15 @@ type AnalysisConfig struct {
 	// TokenLimit is the maximum tokens for analysis context (default: 100000)
 	TokenLimit int `yaml:"token_limit" json:"token_limit"`
 
-	// Model is the Claude model to use (default: "claude-sonnet-4-5-20250929")
+	// Model is the Claude model to use (default: "sonnet")
 	Model string `yaml:"model" json:"model"`
 
 	// ParallelLimit is the max parallel analysis executions (default: 3)
 	ParallelLimit int `yaml:"parallel_limit" json:"parallel_limit"`
+
+	// EnabledPrompts is the list of prompts to run during analysis (default: ["tool_analysis"])
+	// Prompts run in parallel and must exist in the prompts section
+	EnabledPrompts []string `yaml:"enabled_prompts" json:"enabled_prompts"`
 
 	// AutoSummaryEnabled enables auto-triggered session summaries on session end (default: false)
 	AutoSummaryEnabled bool `yaml:"auto_summary_enabled" json:"auto_summary_enabled"`
@@ -68,8 +72,9 @@ func DefaultConfig() *Config {
 			TokenLimit:         100000,
 			Model:              "sonnet", // Use alias for latest model
 			ParallelLimit:      3,
-			AutoSummaryEnabled: false,           // Disabled by default - user must opt in
-			AutoSummaryPrompt:  "session_summary", // Use session_summary prompt for auto-analysis
+			EnabledPrompts:     []string{"tool_analysis"}, // Default: run tool_analysis
+			AutoSummaryEnabled: false,                     // Disabled by default - user must opt in
+			AutoSummaryPrompt:  "session_summary",         // Use session_summary prompt for auto-analysis
 			ClaudeOptions: ClaudeOptions{
 				AllowedTools:     []string{}, // No tools for pure analysis
 				SystemPromptMode: "replace",  // Use --system-prompt
