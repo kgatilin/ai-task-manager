@@ -12,6 +12,7 @@ type ViewState int
 const (
 	ViewSessionList ViewState = iota
 	ViewSessionDetail
+	ViewAnalysisViewer
 	ViewAnalysisAction
 	ViewSaveDialog
 	ViewProgress

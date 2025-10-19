@@ -38,9 +38,10 @@ type AppModel struct {
 	err         error
 
 	// Sub-models
-	sessionList   SessionListModel
-	sessionDetail SessionDetailModel
-	spinner       spinner.Model
+	sessionList     SessionListModel
+	sessionDetail   SessionDetailModel
+	analysisViewer  AnalysisViewerModel
+	spinner         spinner.Model
 
 	// Selected session for operations
 	selectedSession *SessionInfo
@@ -98,6 +99,13 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			model, cmd = m.sessionDetail.Update(msg)
 			m.sessionDetail = model.(SessionDetailModel)
+			return m, cmd
+		}
+		if !m.loading && m.currentView == ViewAnalysisViewer {
+			var model tea.Model
+			var cmd tea.Cmd
+			model, cmd = m.analysisViewer.Update(msg)
+			m.analysisViewer = model.(AnalysisViewerModel)
 			return m, cmd
 		}
 		return m, nil
@@ -162,6 +170,34 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loading = true
 		return m, m.saveToMarkdown(msg.SessionID)
 
+	case ViewAnalysisMsg:
+		// Get the analysis for this session
+		analyses, err := m.analysisService.GetAnalysesBySessionID(m.ctx, msg.SessionID)
+		if err != nil || len(analyses) == 0 {
+			m.err = fmt.Errorf("no analysis found for session")
+			return m, nil
+		}
+		// Use the most recent analysis
+		m.analysisViewer = NewAnalysisViewerModel(analyses[0])
+		m.currentView = ViewAnalysisViewer
+		// Send initial window size to the viewer
+		if m.width > 0 && m.height > 0 {
+			return m, func() tea.Msg {
+				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+			}
+		}
+		return m, nil
+
+	case BackToDetailMsg:
+		m.currentView = ViewSessionDetail
+		// Send window size when returning to detail view
+		if m.width > 0 && m.height > 0 {
+			return m, func() tea.Msg {
+				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+			}
+		}
+		return m, nil
+
 	case AnalysisCompleteMsg:
 		m.loading = false
 		if msg.Error != nil {
@@ -210,6 +246,11 @@ func (m *AppModel) updateCurrentView(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var model tea.Model
 		model, cmd = m.sessionDetail.Update(msg)
 		m.sessionDetail = model.(SessionDetailModel)
+
+	case ViewAnalysisViewer:
+		var model tea.Model
+		model, cmd = m.analysisViewer.Update(msg)
+		m.analysisViewer = model.(AnalysisViewerModel)
 	}
 
 	return m, cmd
@@ -237,6 +278,8 @@ func (m *AppModel) View() string {
 		return m.sessionList.View()
 	case ViewSessionDetail:
 		return m.sessionDetail.View()
+	case ViewAnalysisViewer:
+		return m.analysisViewer.View()
 	default:
 		return "Unknown view"
 	}
