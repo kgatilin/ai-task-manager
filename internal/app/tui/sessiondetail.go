@@ -88,7 +88,7 @@ func (m SessionDetailModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "esc":
+		case "esc":
 			// Return to list
 			return m, func() tea.Msg {
 				return BackToListMsg{}
@@ -150,13 +150,13 @@ func (m SessionDetailModel) footerView() string {
 		"[r] Re-analyze",
 		"[s] Save",
 		"[v] View",
-		"[q] Back",
+		"[Esc] Back",
 	}
 
 	if !m.session.HasAnalysis {
 		actions = []string{
 			"[a] Analyze",
-			"[q] Back",
+			"[Esc] Back",
 		}
 	}
 

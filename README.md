@@ -212,14 +212,14 @@ The `dw ui` command launches an interactive terminal UI for browsing and managin
 - `↑/↓` - Navigate sessions
 - `Enter` - View session details
 - `r` - Refresh session list
-- `q` - Quit
+- `Esc` - Quit
 
 *Session Detail:*
 - `a` - Analyze session (run new analysis)
 - `r` - Re-analyze session (refresh existing analysis)
 - `s` - Save analysis to markdown file
 - `v` - View full analysis
-- `Esc/q` - Back to list
+- `Esc` - Back to list
 
 **Example Workflow:**
 ```bash
@@ -230,7 +230,7 @@ dw ui
 # View analysis status and previews
 # Press 'a' to analyze if not analyzed
 # Press 's' to save analysis to markdown
-# Press 'q' to return to list
+# Press Esc to return to list
 ```
 
 Markdown files are saved to the directory configured in `.darwinflow.yaml` (default: `./analysis-outputs/`) with customizable filename templates.

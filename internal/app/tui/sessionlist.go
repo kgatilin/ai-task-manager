@@ -106,7 +106,7 @@ func (m SessionListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
+		case "esc":
 			return m, tea.Quit
 
 		case "enter":
