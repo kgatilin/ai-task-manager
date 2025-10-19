@@ -136,7 +136,7 @@ func (m AnalysisViewerModel) renderContent() string {
 
 	// Use glamour to render the markdown with dark style for better visibility
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"), // Use dark style for better header contrast
+		glamour.WithStandardStyle("dark"),
 		glamour.WithWordWrap(m.width-4), // Account for padding
 	)
 
@@ -146,11 +146,11 @@ func (m AnalysisViewerModel) renderContent() string {
 			b.WriteString(renderedMarkdown)
 		} else {
 			// Fallback to raw text if rendering fails
-			b.WriteString(m.analysis.AnalysisResult)
+			b.WriteString(fmt.Sprintf("[Render error: %v]\n%s", err, m.analysis.AnalysisResult))
 		}
 	} else {
 		// Fallback to raw text if renderer creation fails
-		b.WriteString(m.analysis.AnalysisResult)
+		b.WriteString(fmt.Sprintf("[Renderer creation error: %v]\n%s", err, m.analysis.AnalysisResult))
 	}
 
 	b.WriteString("\n")

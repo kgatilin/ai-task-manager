@@ -191,14 +191,10 @@ func (m SessionDetailModel) renderContent() string {
 			analyzedStyle.Render(fmt.Sprintf("✓ %d analysis/analyses found\n", m.session.AnalysisCount))))
 
 		for i, analysis := range m.session.Analyses {
-			b.WriteString(detailContentStyle.Render(
-				fmt.Sprintf("\n%d. Type: %s\n", i+1, analysis.AnalysisType)))
-			b.WriteString(detailContentStyle.Render(
-				fmt.Sprintf("   Prompt: %s\n", analysis.PromptName)))
-			b.WriteString(detailContentStyle.Render(
-				fmt.Sprintf("   Model: %s\n", analysis.ModelUsed)))
-			b.WriteString(detailContentStyle.Render(
-				fmt.Sprintf("   Analyzed: %s\n", analysis.AnalyzedAt.Format("2006-01-02 15:04:05"))))
+			b.WriteString(fmt.Sprintf("\n  %d. Type: %s\n", i+1, analysis.AnalysisType))
+			b.WriteString(fmt.Sprintf("     Prompt: %s\n", analysis.PromptName))
+			b.WriteString(fmt.Sprintf("     Model: %s\n", analysis.ModelUsed))
+			b.WriteString(fmt.Sprintf("     Analyzed: %s\n", analysis.AnalyzedAt.Format("2006-01-02 15:04:05")))
 
 			// Show preview of analysis
 			preview := analysis.AnalysisResult
