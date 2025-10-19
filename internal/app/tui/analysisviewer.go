@@ -134,9 +134,9 @@ func (m AnalysisViewerModel) renderContent() string {
 	// Render analysis content as markdown
 	b.WriteString(detailHeaderStyle.Render("Analysis Result") + "\n\n")
 
-	// Use glamour to render the markdown
+	// Use glamour to render the markdown with dark style for better visibility
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStylePath("dark"), // Use dark style for better header contrast
 		glamour.WithWordWrap(m.width-4), // Account for padding
 	)
 
