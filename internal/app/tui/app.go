@@ -85,6 +85,22 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Only update sub-models if they're initialized
+		if !m.loading && m.currentView == ViewSessionList {
+			var model tea.Model
+			var cmd tea.Cmd
+			model, cmd = m.sessionList.Update(msg)
+			m.sessionList = model.(SessionListModel)
+			return m, cmd
+		}
+		if !m.loading && m.currentView == ViewSessionDetail {
+			var model tea.Model
+			var cmd tea.Cmd
+			model, cmd = m.sessionDetail.Update(msg)
+			m.sessionDetail = model.(SessionDetailModel)
+			return m, cmd
+		}
+		return m, nil
 
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
@@ -100,6 +116,12 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessions = msg.Sessions
 		m.sessionList = NewSessionListModel(msg.Sessions)
 		m.currentView = ViewSessionList
+		// Send initial window size to the newly created list
+		if m.width > 0 && m.height > 0 {
+			return m, func() tea.Msg {
+				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+			}
+		}
 		return m, nil
 
 	case SelectedSessionMsg:
@@ -159,6 +181,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *AppModel) updateCurrentView(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Don't route to sub-models if we're still loading
+	if m.loading {
+		return m, nil
+	}
+
 	var cmd tea.Cmd
 
 	switch m.currentView {
