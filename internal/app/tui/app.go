@@ -128,10 +128,22 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedSession = msg.Session
 		m.sessionDetail = NewSessionDetailModel(msg.Session)
 		m.currentView = ViewSessionDetail
+		// Send initial window size to the newly created detail view
+		if m.width > 0 && m.height > 0 {
+			return m, func() tea.Msg {
+				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+			}
+		}
 		return m, nil
 
 	case BackToListMsg:
 		m.currentView = ViewSessionList
+		// Send window size when returning to list view
+		if m.width > 0 && m.height > 0 {
+			return m, func() tea.Msg {
+				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+			}
+		}
 		return m, nil
 
 	case RefreshRequestMsg:
