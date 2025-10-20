@@ -51,7 +51,7 @@ func handleLogs(args []string) {
 
 	// Show help if requested
 	if opts.Help {
-		printLogsHelp()
+		PrintLogsHelp()
 		return
 	}
 
@@ -116,7 +116,8 @@ func printLogsUsage() {
 	fmt.Println()
 }
 
-func printLogsHelp() {
+// PrintLogsHelp displays detailed help for the logs command
+func PrintLogsHelp() {
 	fmt.Println("DarwinFlow Logs - Database Schema")
 	fmt.Println()
 	fmt.Println("DATABASE STRUCTURE:")
