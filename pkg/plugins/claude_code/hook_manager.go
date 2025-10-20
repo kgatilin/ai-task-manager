@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+)
 
-	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
+// Claude Code trigger types (from Claude Code settings.json)
+const (
+	TriggerBeforeToolUse = "trigger.tool.before"
+	TriggerUserInput     = "trigger.user.input"
+	TriggerSessionEnd    = "trigger.session.end"
 )
 
 // HookConfig represents the hooks configuration for Claude Code
@@ -74,7 +79,7 @@ func findSettingsFile() (string, error) {
 func DefaultDarwinFlowConfig() HookConfig {
 	return HookConfig{
 		Hooks: map[string][]HookMatcher{
-			string(pluginsdk.TriggerBeforeToolUse): {
+			TriggerBeforeToolUse: {
 				{
 					Matcher: "*", // Match all tools
 					Hooks: []HookAction{
@@ -86,7 +91,7 @@ func DefaultDarwinFlowConfig() HookConfig {
 					},
 				},
 			},
-			string(pluginsdk.TriggerUserInput): {
+			TriggerUserInput: {
 				{
 					Hooks: []HookAction{
 						{
@@ -97,7 +102,7 @@ func DefaultDarwinFlowConfig() HookConfig {
 					},
 				},
 			},
-			string(pluginsdk.TriggerSessionEnd): {
+			TriggerSessionEnd: {
 				{
 					Hooks: []HookAction{
 						{

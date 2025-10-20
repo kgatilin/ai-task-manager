@@ -9,11 +9,11 @@ import (
 	"github.com/kgatilin/darwinflow-pub/internal/infra"
 )
 
-// handleRefresh updates DarwinFlow to the latest version
+// handleRefresh updates DarwinFlow framework to the latest version
 // This includes:
 // - Updating database schema (adding new columns, indexes, etc.)
-// - Refreshing hooks for all plugins
 // - Updating configuration if needed
+// Plugin-specific refresh (hooks, etc.) is handled by plugin init commands
 func handleRefresh(args []string) {
 	dbPath := app.DefaultDBPath
 
@@ -34,12 +34,10 @@ func handleRefresh(args []string) {
 
 	logger := services.Logger
 	configLoader := services.ConfigLoader
-	pluginRegistry := services.PluginRegistry
 
-	// Create handler with plugin registry
+	// Create handler (framework-level refresh only)
 	handler := app.NewRefreshCommandHandler(
 		repo,
-		pluginRegistry,
 		configLoader,
 		logger,
 		os.Stdout,

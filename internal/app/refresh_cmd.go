@@ -4,21 +4,18 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
-	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // RefreshCommandHandler handles the refresh command logic.
-// This handler is plugin-agnostic: it queries all plugins for IHookProvider capability
-// and refreshes hooks for each one that provides them.
+// This performs framework-level refresh (database schema, config).
+// Plugin-specific refresh is handled by each plugin's refresh command.
 type RefreshCommandHandler struct {
-	repo          domain.EventRepository
-	pluginRegistry *PluginRegistry
-	configLoader  ConfigLoader
-	logger        Logger
-	out           io.Writer
+	repo         domain.EventRepository
+	configLoader ConfigLoader
+	logger       Logger
+	out          io.Writer
 }
 
 // ConfigLoader interface for config loading
@@ -30,23 +27,21 @@ type ConfigLoader interface {
 // NewRefreshCommandHandler creates a new refresh command handler
 func NewRefreshCommandHandler(
 	repo domain.EventRepository,
-	pluginRegistry *PluginRegistry,
 	configLoader ConfigLoader,
 	logger Logger,
 	out io.Writer,
 ) *RefreshCommandHandler {
 	return &RefreshCommandHandler{
-		repo:          repo,
-		pluginRegistry: pluginRegistry,
-		configLoader:  configLoader,
-		logger:        logger,
-		out:           out,
+		repo:         repo,
+		configLoader: configLoader,
+		logger:       logger,
+		out:          out,
 	}
 }
 
-// Execute runs the refresh operation
+// Execute runs the framework-level refresh operation
 func (h *RefreshCommandHandler) Execute(ctx context.Context, dbPath string) error {
-	fmt.Fprintln(h.out, "Refreshing DarwinFlow to latest version...")
+	fmt.Fprintln(h.out, "Refreshing DarwinFlow framework...")
 	fmt.Fprintln(h.out)
 
 	// Step 1: Update database schema
@@ -56,41 +51,7 @@ func (h *RefreshCommandHandler) Execute(ctx context.Context, dbPath string) erro
 	}
 	fmt.Fprintf(h.out, "✓ Database schema updated: %s\n", dbPath)
 
-	// Step 2: Update hooks from all plugins
-	fmt.Fprintln(h.out)
-	fmt.Fprintln(h.out, "Updating hooks for all plugins...")
-
-	// Get current working directory
-	workingDir, err := os.Getwd()
-	if err != nil {
-		workingDir = "."
-	}
-
-	// Get all registered plugins
-	plugins := h.pluginRegistry.GetAllPlugins()
-	hasPluginErrors := false
-
-	for _, plugin := range plugins {
-		// Check if plugin implements IHookProvider capability
-		hookProvider, ok := plugin.(pluginsdk.IHookProvider)
-		if !ok {
-			// Plugin doesn't provide hooks, skip it
-			continue
-		}
-
-		// Refresh hooks for this plugin
-		fmt.Fprintf(h.out, "  → Refreshing hooks for plugin: %s\n", plugin.GetInfo().Name)
-		if err := hookProvider.RefreshHooks(workingDir); err != nil {
-			fmt.Fprintf(h.out, "    ⚠️  Hook refresh failed for %s: %v\n", plugin.GetInfo().Name, err)
-			h.logger.Warn("Hook refresh failed for plugin %s: %v", plugin.GetInfo().Name, err)
-			hasPluginErrors = true
-			// Continue to other plugins, don't fail completely
-		} else {
-			fmt.Fprintf(h.out, "    ✓ Hooks refreshed for %s\n", plugin.GetInfo().Name)
-		}
-	}
-
-	// Step 3: Initialize config if needed
+	// Step 2: Initialize config if needed
 	fmt.Fprintln(h.out)
 	fmt.Fprintln(h.out, "Checking configuration...")
 
@@ -111,18 +72,15 @@ func (h *RefreshCommandHandler) Execute(ctx context.Context, dbPath string) erro
 
 	// Done
 	fmt.Fprintln(h.out)
-	fmt.Fprintln(h.out, "DarwinFlow has been refreshed successfully!")
+	fmt.Fprintln(h.out, "✓ Framework refreshed successfully!")
 	fmt.Fprintln(h.out)
-	fmt.Fprintln(h.out, "Changes applied:")
+	fmt.Fprintln(h.out, "Framework changes applied:")
 	fmt.Fprintln(h.out, "  • Database schema updated with latest migrations")
-	fmt.Fprintln(h.out, "  • Hooks refreshed for all plugins")
 	fmt.Fprintln(h.out, "  • Configuration verified")
 	fmt.Fprintln(h.out)
-
-	if hasPluginErrors {
-		fmt.Fprintln(h.out, "Note: Some plugins had errors during hook refresh. See output above.")
-	}
-
+	fmt.Fprintln(h.out, "To refresh plugin-specific configuration (hooks, etc.), run:")
+	fmt.Fprintln(h.out, "  dw claude-code init")
+	fmt.Fprintln(h.out)
 	fmt.Fprintln(h.out, "You may need to restart Claude Code for changes to take effect.")
 
 	return nil

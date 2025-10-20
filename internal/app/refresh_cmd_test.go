@@ -70,13 +70,11 @@ func (m *mockConfigLoader) InitializeDefaultConfig(path string) (string, error) 
 func TestRefreshCommandHandler_Execute(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := &mockEventRepository{}
-	// Create a minimal plugin registry with no plugins for testing
-	registry := app.NewPluginRegistry(&mockLogger{})
 	mockConfigLdr := &mockConfigLoader{}
 	logger := &mockLogger{}
 	out := &bytes.Buffer{}
 
-	handler := app.NewRefreshCommandHandler(mockRepo, registry, mockConfigLdr, logger, out)
+	handler := app.NewRefreshCommandHandler(mockRepo, mockConfigLdr, logger, out)
 
 	err := handler.Execute(ctx, "/test/db/path.db")
 	if err != nil {
@@ -90,9 +88,6 @@ func TestRefreshCommandHandler_Execute(t *testing.T) {
 	if !strings.Contains(output, "Database schema updated") {
 		t.Errorf("Output should confirm database update, got: %s", output)
 	}
-	if !strings.Contains(output, "Updating hooks for all plugins") {
-		t.Errorf("Output should confirm hooks update, got: %s", output)
-	}
 	if !strings.Contains(output, "refreshed successfully") {
 		t.Errorf("Output should indicate success, got: %s", output)
 	}
@@ -101,7 +96,6 @@ func TestRefreshCommandHandler_Execute(t *testing.T) {
 func TestRefreshCommandHandler_Execute_WithMissingConfig(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := &mockEventRepository{}
-	registry := app.NewPluginRegistry(&mockLogger{})
 	mockConfigLdr := &mockConfigLoader{
 		loadConfigFunc: func(path string) (*domain.Config, error) {
 			return nil, nil // Config doesn't exist
@@ -110,7 +104,7 @@ func TestRefreshCommandHandler_Execute_WithMissingConfig(t *testing.T) {
 	logger := &mockLogger{}
 	out := &bytes.Buffer{}
 
-	handler := app.NewRefreshCommandHandler(mockRepo, registry, mockConfigLdr, logger, out)
+	handler := app.NewRefreshCommandHandler(mockRepo, mockConfigLdr, logger, out)
 
 	err := handler.Execute(ctx, "/test/db/path.db")
 	if err != nil {
@@ -130,12 +124,11 @@ func TestRefreshCommandHandler_Execute_RepositoryError(t *testing.T) {
 			return fmt.Errorf("database initialization failed")
 		},
 	}
-	registry := app.NewPluginRegistry(&mockLogger{})
 	mockConfigLdr := &mockConfigLoader{}
 	logger := &mockLogger{}
 	out := &bytes.Buffer{}
 
-	handler := app.NewRefreshCommandHandler(mockRepo, registry, mockConfigLdr, logger, out)
+	handler := app.NewRefreshCommandHandler(mockRepo, mockConfigLdr, logger, out)
 
 	err := handler.Execute(ctx, "/test/db/path.db")
 	if err == nil {
@@ -149,13 +142,11 @@ func TestRefreshCommandHandler_Execute_RepositoryError(t *testing.T) {
 func TestRefreshCommandHandler_Execute_WithPlugins(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := &mockEventRepository{}
-	registry := app.NewPluginRegistry(&mockLogger{})
-	// Add no plugins to test the empty plugin case
 	mockConfigLdr := &mockConfigLoader{}
 	logger := &mockLogger{}
 	out := &bytes.Buffer{}
 
-	handler := app.NewRefreshCommandHandler(mockRepo, registry, mockConfigLdr, logger, out)
+	handler := app.NewRefreshCommandHandler(mockRepo, mockConfigLdr, logger, out)
 
 	err := handler.Execute(ctx, "/test/db/path.db")
 	if err != nil {
@@ -163,7 +154,10 @@ func TestRefreshCommandHandler_Execute_WithPlugins(t *testing.T) {
 	}
 
 	output := out.String()
-	if !strings.Contains(output, "Updating hooks for all plugins") {
-		t.Errorf("Output should mention updating hooks, got: %s", output)
+	if !strings.Contains(output, "Framework refreshed successfully") {
+		t.Errorf("Output should indicate framework refresh success, got: %s", output)
+	}
+	if !strings.Contains(output, "To refresh plugin-specific configuration") {
+		t.Errorf("Output should suggest plugin-specific refresh, got: %s", output)
 	}
 }

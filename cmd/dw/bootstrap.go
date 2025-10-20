@@ -60,8 +60,9 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
 	analysisService := app.NewAnalysisService(repo, repo, logsService, llmExecutor, logger, config)
 
-	// 6. Create setup service (for init command)
-	// SetupService is now plugin-agnostic - it queries plugins for IHookProvider capability
+	// 6. Create setup service (for framework-level initialization)
+	// SetupService handles framework infrastructure only (database, schema, etc.)
+	// Plugin-specific setup (hooks, etc.) is handled by plugin init commands
 	setupService := app.NewSetupService(repo, logger)
 
 	// 7. Get working directory

@@ -56,7 +56,7 @@ func (p *ClaudeCodePlugin) GetInfo() pluginsdk.PluginInfo {
 
 // GetCapabilities returns the capability interfaces this plugin implements (SDK interface)
 func (p *ClaudeCodePlugin) GetCapabilities() []string {
-	return []string{"IEntityProvider", "IEntityUpdater", "ICommandProvider", "IHookProvider"}
+	return []string{"IEntityProvider", "IEntityUpdater", "ICommandProvider"}
 }
 
 // GetEntityTypes returns the entity types this plugin provides (SDK interface)
@@ -215,50 +215,4 @@ func (p *ClaudeCodePlugin) matchesFilters(entity pluginsdk.IExtensible, filters 
 	}
 
 	return true
-}
-
-// GetHooks returns the hook configurations this plugin provides (SDK interface)
-// Implements pluginsdk.IHookProvider interface
-func (p *ClaudeCodePlugin) GetHooks() []pluginsdk.HookConfiguration {
-	return []pluginsdk.HookConfiguration{
-		{
-			TriggerType: string(pluginsdk.TriggerBeforeToolUse),
-			Name:        "PreToolUse",
-			Description: "Triggered before any tool invocation",
-			Command:     "dw claude-code emit-event",
-			Timeout:     5,
-		},
-		{
-			TriggerType: string(pluginsdk.TriggerUserInput),
-			Name:        "UserPromptSubmit",
-			Description: "Triggered when user submits a prompt",
-			Command:     "dw claude-code emit-event",
-			Timeout:     5,
-		},
-		{
-			TriggerType: string(pluginsdk.TriggerSessionEnd),
-			Name:        "SessionEnd",
-			Description: "Triggered at the end of a session",
-			Command:     "dw claude-code auto-summary",
-			Timeout:     0, // No timeout for background analysis
-		},
-	}
-}
-
-// InstallHooks installs the plugin's hooks into the system (SDK interface)
-// Implements pluginsdk.IHookProvider interface
-func (p *ClaudeCodePlugin) InstallHooks(workingDir string) error {
-	hookMgr, err := NewHookConfigManager()
-	if err != nil {
-		return fmt.Errorf("failed to create hook config manager: %w", err)
-	}
-	return hookMgr.InstallDarwinFlowHooks()
-}
-
-// RefreshHooks updates existing hooks after plugin upgrade (SDK interface)
-// Implements pluginsdk.IHookProvider interface
-func (p *ClaudeCodePlugin) RefreshHooks(workingDir string) error {
-	// Refresh is similar to install - re-install hooks to pick up any changes
-	// This handles case where hook command paths may have changed
-	return p.InstallHooks(workingDir)
 }

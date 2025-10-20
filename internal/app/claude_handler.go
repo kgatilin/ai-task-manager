@@ -65,14 +65,12 @@ func (h *ClaudeCommandHandler) Init(ctx context.Context, dbPath string) error {
 		return fmt.Errorf("error creating database directory: %w", err)
 	}
 
-	// Initialize logging infrastructure with all plugins that provide hooks
-	plugins := h.pluginRegistry.GetAllPlugins()
-	if err := h.setupService.Initialize(ctx, dbPath, plugins); err != nil {
+	// Initialize framework infrastructure (database, schema)
+	if err := h.setupService.Initialize(ctx, dbPath); err != nil {
 		return err
 	}
 
 	fmt.Fprintln(h.output, "✓ Created logging database:", dbPath)
-	fmt.Fprintln(h.output, "✓ Added hooks for all plugins")
 	fmt.Fprintln(h.output)
 	fmt.Fprintln(h.output, "DarwinFlow logging is now active for all Claude Code sessions.")
 	fmt.Fprintln(h.output)

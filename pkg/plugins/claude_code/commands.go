@@ -48,8 +48,26 @@ func (c *InitCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandConte
 		return fmt.Errorf("handler not initialized")
 	}
 
-	// Use the default database path
-	return c.plugin.handler.Init(ctx, c.plugin.dbPath)
+	// Initialize the database/repository
+	if err := c.plugin.handler.Init(ctx, c.plugin.dbPath); err != nil {
+		return fmt.Errorf("failed to initialize handler: %w", err)
+	}
+
+	// Install Claude Code hooks (plugin's responsibility, not framework's)
+	hookMgr, err := NewHookConfigManager()
+	if err != nil {
+		// Log warning but don't fail - hooks are optional
+		c.plugin.logger.Warn("Failed to create hook config manager: %v", err)
+		return nil
+	}
+
+	if err := hookMgr.InstallDarwinFlowHooks(); err != nil {
+		// Log warning but don't fail - hooks are optional
+		c.plugin.logger.Warn("Failed to install hooks: %v", err)
+		return nil
+	}
+
+	return nil
 }
 
 // EmitEventCommand emits an event via the plugin SDK context

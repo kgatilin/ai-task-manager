@@ -11,22 +11,22 @@ import (
 
 // handleInit orchestrates the initialization of DarwinFlow:
 // 1. Creates the event database
-// 2. Initializes repositories
+// 2. Initializes framework infrastructure (database schema)
 // 3. Discovers and registers plugins
-// 4. Calls each plugin's init command (if they provide one)
+// 4. Calls each plugin's init command (which handles plugin-specific setup like hooks)
 func handleInit(args []string) {
 	ctx := context.Background()
 
 	fmt.Println("Initializing DarwinFlow...")
 	fmt.Println()
 
-	// 1. Create event database
+	// 1. Create event database directory
 	dbPath := app.DefaultDBPath
 	if err := createEventDatabase(dbPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error creating database: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Printf("✓ Created event database: %s\n", dbPath)
+	fmt.Printf("✓ Created database directory\n")
 
 	// 2. Initialize app services (which creates repository and registers plugins)
 	services, err := InitializeApp(dbPath, "", false)
@@ -34,9 +34,15 @@ func handleInit(args []string) {
 		fmt.Fprintf(os.Stderr, "Error initializing app: %v\n", err)
 		os.Exit(1)
 	}
-	fmt.Println("✓ Initialized event repository")
 
-	// 3. Display discovered plugins
+	// 3. Initialize framework infrastructure (database schema, etc.)
+	if err := services.SetupService.Initialize(ctx, dbPath); err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing framework: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("✓ Initialized framework infrastructure: %s\n", dbPath)
+
+	// 4. Display discovered plugins
 	pluginInfos := services.PluginRegistry.GetPluginInfos()
 	fmt.Println()
 	fmt.Println("Discovered plugins:")
@@ -48,16 +54,7 @@ func handleInit(args []string) {
 		fmt.Printf("  - %s v%s%s\n", info.Name, info.Version, coreLabel)
 	}
 
-	// 4. Install hooks for all plugins that provide them
-	fmt.Println()
-	fmt.Println("Installing plugin hooks...")
-	if err := installPluginHooks(ctx, services, dbPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error installing plugin hooks: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Println("✓ Plugin hooks installed")
-
-	// 5. Initialize each plugin
+	// 5. Initialize each plugin (via their init commands)
 	fmt.Println()
 	fmt.Println("Initializing plugins...")
 	for _, info := range pluginInfos {
@@ -122,20 +119,4 @@ func initializePlugin(ctx context.Context, services *AppServices, pluginName str
 	}
 
 	return nil
-}
-
-// installPluginHooks installs hooks for all plugins that provide them
-func installPluginHooks(ctx context.Context, services *AppServices, dbPath string) error {
-	plugins := services.PluginRegistry.GetAllPlugins()
-	return services.SetupService.Initialize(ctx, dbPath, plugins)
-}
-
-// contains checks if a string slice contains a value
-func contains(slice []string, value string) bool {
-	for _, item := range slice {
-		if item == value {
-			return true
-		}
-	}
-	return false
 }

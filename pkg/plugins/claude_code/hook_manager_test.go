@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/claude_code"
-	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 func TestNewHookConfigManager(t *testing.T) {
@@ -126,11 +125,11 @@ func TestWriteSettings(t *testing.T) {
 func TestDefaultDarwinFlowConfig(t *testing.T) {
 	config := claude_code.DefaultDarwinFlowConfig()
 
-	// Use SDK trigger types from pluginsdk
+	// Use trigger types from claude_code (plugin-specific, not SDK)
 	expectedEvents := []string{
-		string(pluginsdk.TriggerBeforeToolUse),
-		string(pluginsdk.TriggerUserInput),
-		string(pluginsdk.TriggerSessionEnd),
+		claude_code.TriggerBeforeToolUse,
+		claude_code.TriggerUserInput,
+		claude_code.TriggerSessionEnd,
 	}
 	for _, event := range expectedEvents {
 		if _, ok := config.Hooks[event]; !ok {
@@ -139,7 +138,7 @@ func TestDefaultDarwinFlowConfig(t *testing.T) {
 	}
 
 	// Verify hook structure for PreToolUse
-	preToolUseKey := string(pluginsdk.TriggerBeforeToolUse)
+	preToolUseKey := claude_code.TriggerBeforeToolUse
 	if len(config.Hooks[preToolUseKey]) == 0 {
 		t.Fatal("PreToolUse hooks should not be empty")
 	}
