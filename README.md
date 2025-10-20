@@ -13,9 +13,11 @@ DarwinFlow is a lightweight logging system that automatically captures all Claud
   - **Parallel Execution**: Concurrent analysis with semaphore-based concurrency control
   - **Token-Aware Selection**: Smart session selection based on token limits
 - **Interactive TUI**: Browse sessions, view analyses, and manage workflows with a keyboard-driven interface
-- **Plugin System**: Extensible architecture supporting multiple entity types and workflow domains
+- **Plugin System**: Extensible architecture with public SDK for building plugins
+  - **Public SDK**: `pkg/pluginsdk` provides contracts for plugin development
+  - **Bounded Context**: Framework is plugin-agnostic, zero knowledge of specific plugins
+  - **Self-Contained Plugins**: All plugin logic isolated in plugin packages
   - **Capability-Driven**: Entities implement capabilities (IExtensible, ITrackable, IHasContext, etc.)
-  - **Multi-Domain Support**: Use for coding workflows, project management, research notes, and more
   - **Core Plugins**: Claude Code sessions built-in, extensible for custom entity types
 - **Log Viewer**: Query and explore captured events with `dw logs` command
 - **Event Sourcing**: Immutable event log enabling replay and analysis
@@ -49,8 +51,8 @@ dw claude-code init    # Or 'dw claude init' for backward compatibility
 
 This will:
 - Create the SQLite database at `.darwinflow/logs/events.db` (project-relative)
-- Add hooks to your Claude Code settings (`.claude/settings.json`)
-- Configure automatic event capture for PreToolUse, UserPromptSubmit, and SessionEnd hooks
+- Configure Claude Code hooks in `.claude/settings.json` (plugin-managed)
+- Enable automatic event capture via PreToolUse, UserPromptSubmit, and SessionEnd hooks
 
 ### Start Using Claude Code
 
@@ -98,21 +100,28 @@ cmd → internal/app + internal/infra → internal/domain
 
 ### Plugin System
 
+**Architecture:**
+- **Public SDK** (`pkg/pluginsdk`): Self-contained plugin API with zero internal dependencies
+- **Plugins** (`pkg/plugins/`): Isolated packages implementing SDK interfaces
+- **Bounded Context**: Framework layers have zero knowledge of specific plugins
+- **Adaptation Layer**: cmd/app layers convert SDK ↔ domain types at boundaries
+
 **Core Concepts:**
-- **Capabilities**: Interfaces defining entity behaviors (IExtensible, ITrackable, IHasContext, etc.)
-- **Plugins**: Providers of entities and tools (`internal/app/plugins/claude_code/`)
-- **Plugin Registry**: Routes queries to appropriate plugins based on entity type
-- **Tool Registry**: Discovers and executes CLI tools provided by plugins
-- **Entity Types**: Concrete implementations (sessions, tasks, roadmaps, etc.)
+- **Plugin Capabilities**: IEntityProvider, ICommandProvider, IEventEmitter (defined in SDK)
+- **Entity Capabilities**: IExtensible (required), ITrackable, IHasContext (optional)
+- **Plugin Registry**: Routes queries to appropriate plugins based on capabilities
+- **Command Registry**: Discovers and executes commands from registered plugins
+- **Self-Contained Commands**: Plugins manage all their own logic (e.g., hooks, config)
 
 **Current Plugins:**
-- **claude-code** (core): Provides Claude Code sessions with tracking and context
+- **claude-code** (`pkg/plugins/claude_code`): Claude Code session tracking
   - Entity: `session` (IExtensible + IHasContext + ITrackable)
-  - Commands: `init`, `log` (for hooks)
-  - Tools: `session-summary` (via `dw project session-summary`)
+  - Commands: `init`, `emit-event` (for hook integration)
+  - CLI: `dw claude-code <command>` or `dw claude <command>` (backward compat)
 
 **Architecture Documentation:**
 - See `docs/arch-generated.md` for complete dependency graph
+- See `CLAUDE.md` for plugin development guide
 - Run `go-arch-lint docs` to regenerate after changes
 
 ## Usage
@@ -359,33 +368,45 @@ This generates `docs/arch-generated.md` with the complete dependency graph, publ
 
 ```
 darwinflow-pub/
-├── cmd/dw/                    # CLI entry points
-│   ├── main.go                # Main command router
-│   ├── claude.go              # Claude subcommand handlers
-│   ├── logs.go                # Logs command handlers
-│   ├── analyze.go             # Analysis command handlers
-│   └── logs_test.go           # Logs command tests
-├── internal/                  # Domain primitives
-│   ├── domain/                # Core domain types
-│   │   ├── event.go           # Event definitions
-│   │   ├── analysis.go        # Analysis domain types
-│   │   └── repository.go      # Repository interfaces
-│   ├── app/                   # Application services
-│   │   ├── logger.go          # Event logging service
-│   │   ├── logs.go            # Logs query service
-│   │   ├── analysis.go        # Analysis service
-│   │   ├── analysis_prompt.go # Analysis prompt template
-│   │   └── setup.go           # Initialization service
-│   └── infra/                 # Infrastructure implementations
-│       ├── sqlite_repository.go       # SQLite event & analysis storage
-│       ├── hook_config.go             # Hook configuration management
-│       ├── transcript.go              # Transcript parsing
-│       └── context.go                 # Context detection
-├── docs/                      # Generated documentation
-│   ├── arch-generated.md      # Dependency graph
-│   └── public-api-generated.md # Public API reference
-├── CLAUDE.md                  # AI agent instructions
-└── README.md                  # This file
+├── cmd/dw/                           # CLI entry points
+│   ├── main.go                       # Main command router
+│   ├── bootstrap.go                  # Dependency injection
+│   ├── plugin_registration.go        # Plugin registration & adapters
+│   ├── logs.go                       # Logs command handlers
+│   └── analyze.go                    # Analysis command handlers
+├── pkg/                              # Public APIs
+│   ├── pluginsdk/                    # Plugin SDK (public contract)
+│   │   ├── plugin.go                 # Plugin interface
+│   │   ├── capability.go             # Capability interfaces
+│   │   ├── entity.go                 # Entity interfaces
+│   │   ├── event.go                  # Event types
+│   │   └── context.go                # Plugin context
+│   └── plugins/                      # Plugin implementations
+│       └── claude_code/              # Claude Code plugin
+│           ├── plugin.go             # Plugin implementation
+│           ├── commands.go           # InitCommand, EmitEventCommand
+│           └── session_entity.go     # Session entity
+├── internal/                         # Internal packages
+│   ├── domain/                       # Core domain types
+│   │   ├── event.go                  # Domain event definitions
+│   │   ├── analysis.go               # Analysis domain types
+│   │   └── plugin.go                 # Domain plugin interfaces
+│   ├── app/                          # Application services
+│   │   ├── plugin_registry.go        # Plugin routing
+│   │   ├── command_registry.go       # Command routing
+│   │   ├── plugin_context.go         # SDK context implementation
+│   │   ├── logs.go                   # Logs query service
+│   │   └── analysis.go               # Analysis service
+│   └── infra/                        # Infrastructure implementations
+│       ├── sqlite_repository.go      # SQLite storage
+│       ├── hook_config.go            # Hook configuration (plugin use)
+│       ├── transcript.go             # Transcript parsing
+│       └── context.go                # Context detection
+├── docs/                             # Generated documentation
+│   ├── arch-index.md                 # Architecture index
+│   └── arch-generated.md             # Dependency graph
+├── CLAUDE.md                         # AI agent instructions
+└── README.md                         # This file
 ```
 
 ## Roadmap
