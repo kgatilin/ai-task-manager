@@ -203,6 +203,42 @@ For detailed architecture and API information, see:
 - `chat.message.user`, `chat.message.assistant`
 - `chat.started`, `file.read`, `file.written`, etc.
 
+**Phase 3: Plugin SDK Event Integration** ✅
+Hooks now emit events through the plugin SDK rather than direct command-line logging:
+
+- **Event Emission Flow**:
+  - Hook scripts → JSON event on stdin
+  - `dw claude emit-event` command → parses JSON
+  - EmitEventCommand.Execute() → calls PluginContext.EmitEvent()
+  - PluginContext.EmitEvent() → converts SDK Event to domain Event
+  - EventRepository.Save() → stores in SQLite
+
+- **Hook Command**: `dw claude emit-event` accepts JSON event on stdin
+  - Replaces deprecated `dw claude log` (still supported for backward compatibility)
+  - Type-safe via pluginsdk.Event struct with validation
+  - Graceful error handling: invalid events silently ignored (non-blocking)
+  - 5-second timeout for hook execution to prevent blocking Claude Code
+
+- **Event Schema Versioning**:
+  - Events have optional `Version` field (default: "1.0")
+  - Supports schema evolution without breaking backward compatibility
+  - Current version stores events with version metadata for future migration support
+
+- **Event Sourcing Pattern**:
+  - All events stored sequentially in SQLite with timestamps
+  - Full audit trail of Claude Code interactions
+  - Enable analytics, pattern detection, and workflow optimization
+
+- **Migration Path**:
+  - Old `dw claude log` command still works (deprecated)
+  - `dw refresh` updates hooks to new `emit-event` format automatically
+  - Both commands coexist during transition period for smooth upgrades
+
+- **Backward Compatibility**:
+  - Existing hooks with `dw claude log` continue to work
+  - EventRepository queries work identically regardless of command source
+  - No breaking changes to event storage or schema
+
 **Analysis Features**:
 - **Multi-Prompt Analysis System**: Support for multiple analysis types with different prompts
   - **Session Summary** (`session_summary`): Auto-triggered summaries capturing user intent, outcomes, and session quality

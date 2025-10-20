@@ -39,6 +39,7 @@ type Event struct {
 	SessionID string      // Claude Code session identifier
 	Payload   interface{}
 	Content   string // Normalized text for full-text search
+	Version   string // Schema version for event (default: "1.0")
 }
 
 // NewEvent creates a new event with generated ID and current timestamp (domain service)
@@ -50,6 +51,7 @@ func NewEvent(eventType EventType, sessionID string, payload interface{}, conten
 		SessionID: sessionID,
 		Payload:   payload,
 		Content:   content,
+		Version:   "1.0",
 	}
 }
 

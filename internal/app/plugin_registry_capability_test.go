@@ -6,6 +6,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 func TestPluginRegistry_CapabilityBasedRouting(t *testing.T) {
@@ -164,8 +165,8 @@ type MockCommandPlugin struct {
 	capabilities []string
 }
 
-func (p *MockCommandPlugin) GetInfo() domain.PluginInfo {
-	return domain.PluginInfo{
+func (p *MockCommandPlugin) GetInfo() pluginsdk.PluginInfo {
+	return pluginsdk.PluginInfo{
 		Name:        p.name,
 		Version:     p.version,
 		Description: "Mock command plugin",
@@ -177,8 +178,8 @@ func (p *MockCommandPlugin) GetCapabilities() []string {
 	return p.capabilities
 }
 
-func (p *MockCommandPlugin) GetCommands() []domain.Command {
-	return []domain.Command{}
+func (p *MockCommandPlugin) GetCommands() []pluginsdk.Command {
+	return []pluginsdk.Command{}
 }
 
 // MockBadPlugin declares capabilities but doesn't implement them
@@ -188,8 +189,8 @@ type MockBadPlugin struct {
 	capabilities []string
 }
 
-func (p *MockBadPlugin) GetInfo() domain.PluginInfo {
-	return domain.PluginInfo{
+func (p *MockBadPlugin) GetInfo() pluginsdk.PluginInfo {
+	return pluginsdk.PluginInfo{
 		Name:        p.name,
 		Version:     p.version,
 		Description: "Mock bad plugin",
@@ -208,8 +209,8 @@ type MockEventEmitterPlugin struct {
 	capabilities []string
 }
 
-func (p *MockEventEmitterPlugin) GetInfo() domain.PluginInfo {
-	return domain.PluginInfo{
+func (p *MockEventEmitterPlugin) GetInfo() pluginsdk.PluginInfo {
+	return pluginsdk.PluginInfo{
 		Name:        p.name,
 		Version:     p.version,
 		Description: "Mock event emitter plugin",
@@ -221,6 +222,10 @@ func (p *MockEventEmitterPlugin) GetCapabilities() []string {
 	return p.capabilities
 }
 
+func (p *MockEventEmitterPlugin) EmitEvent(ctx context.Context, event pluginsdk.Event) error {
+	return nil
+}
+
 // MockMultiCapabilityPlugin implements multiple capabilities
 type MockMultiCapabilityPlugin struct {
 	name         string
@@ -229,8 +234,8 @@ type MockMultiCapabilityPlugin struct {
 	entityTypes  []domain.EntityTypeInfo
 }
 
-func (p *MockMultiCapabilityPlugin) GetInfo() domain.PluginInfo {
-	return domain.PluginInfo{
+func (p *MockMultiCapabilityPlugin) GetInfo() pluginsdk.PluginInfo {
+	return pluginsdk.PluginInfo{
 		Name:        p.name,
 		Version:     p.version,
 		Description: "Mock multi-capability plugin",
@@ -242,20 +247,36 @@ func (p *MockMultiCapabilityPlugin) GetCapabilities() []string {
 	return p.capabilities
 }
 
-func (p *MockMultiCapabilityPlugin) GetEntityTypes() []domain.EntityTypeInfo {
-	return p.entityTypes
+func (p *MockMultiCapabilityPlugin) GetEntityTypes() []pluginsdk.EntityTypeInfo {
+	result := make([]pluginsdk.EntityTypeInfo, len(p.entityTypes))
+	for i, et := range p.entityTypes {
+		result[i] = pluginsdk.EntityTypeInfo{
+			Type:         et.Type,
+			DisplayName:  et.DisplayName,
+			Capabilities: et.Capabilities,
+		}
+	}
+	return result
 }
 
-func (p *MockMultiCapabilityPlugin) Query(ctx context.Context, query domain.EntityQuery) ([]domain.IExtensible, error) {
-	return []domain.IExtensible{}, nil
+func (p *MockMultiCapabilityPlugin) Query(ctx context.Context, query pluginsdk.EntityQuery) ([]pluginsdk.IExtensible, error) {
+	return []pluginsdk.IExtensible{}, nil
 }
 
-func (p *MockMultiCapabilityPlugin) GetEntity(ctx context.Context, entityID string) (domain.IExtensible, error) {
-	return nil, domain.ErrNotFound
+func (p *MockMultiCapabilityPlugin) GetEntity(ctx context.Context, entityID string) (pluginsdk.IExtensible, error) {
+	return nil, pluginsdk.ErrNotFound
 }
 
-func (p *MockMultiCapabilityPlugin) GetCommands() []domain.Command {
-	return []domain.Command{}
+func (p *MockMultiCapabilityPlugin) GetCommands() []pluginsdk.Command {
+	return []pluginsdk.Command{}
+}
+
+func (p *MockMultiCapabilityPlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (pluginsdk.IExtensible, error) {
+	return nil, nil
+}
+
+func (p *MockMultiCapabilityPlugin) EmitEvent(ctx context.Context, event pluginsdk.Event) error {
+	return nil
 }
 
 // Helper function for tests

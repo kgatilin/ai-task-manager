@@ -35,7 +35,7 @@ func DefaultDarwinFlowConfig() HookConfig {
 					Hooks: []HookAction{
 						{
 							Type:    "command",
-							Command: "dw claude log tool.invoked",
+							Command: "dw claude emit-event",
 							Timeout: 5,
 						},
 					},
@@ -46,7 +46,7 @@ func DefaultDarwinFlowConfig() HookConfig {
 					Hooks: []HookAction{
 						{
 							Type:    "command",
-							Command: "dw claude log chat.message.user",
+							Command: "dw claude emit-event",
 							Timeout: 5,
 						},
 					},

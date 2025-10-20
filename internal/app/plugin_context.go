@@ -58,8 +58,8 @@ func (p *pluginContextAdapter) GetWorkingDir() string {
 
 func (p *pluginContextAdapter) EmitEvent(ctx context.Context, event pluginsdk.Event) error {
 	// Convert SDK event to domain event
-	// SDK Event has: Type, Source, Timestamp, Payload (map[string]interface{}), Metadata (map[string]string)
-	// Domain Event has: ID, Timestamp, Type (EventType), SessionID, Payload (interface{}), Content (string)
+	// SDK Event has: Type, Source, Timestamp, Payload (map[string]interface{}), Metadata (map[string]string), Version (string)
+	// Domain Event has: ID, Timestamp, Type (EventType), SessionID, Payload (interface{}), Content (string), Version (string)
 
 	// Extract session ID from metadata if present
 	sessionID := ""
@@ -90,6 +90,13 @@ func (p *pluginContextAdapter) EmitEvent(ctx context.Context, event pluginsdk.Ev
 
 	// Create domain event
 	domainEvent := domain.NewEvent(eventType, sessionID, payload, content)
+
+	// Set version from SDK event, default to "1.0" if empty
+	if event.Version != "" {
+		domainEvent.Version = event.Version
+	} else {
+		domainEvent.Version = "1.0"
+	}
 
 	// Save to repository
 	if err := p.eventRepo.Save(ctx, domainEvent); err != nil {

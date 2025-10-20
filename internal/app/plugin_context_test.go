@@ -8,6 +8,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // mockEventRepo is a mock implementation of domain.EventRepository for testing
@@ -73,7 +74,7 @@ func TestPluginContext_EmitEvent(t *testing.T) {
 
 	pluginCtx := app.NewPluginContext(logger, "/test/db", "/test/dir", eventRepo)
 
-	event := domain.PluginEvent{
+	event := pluginsdk.Event{
 		Type:      "test.event",
 		Source:    "test-plugin",
 		Timestamp: time.Now(),
@@ -131,7 +132,7 @@ func TestPluginContext_EmitEvent_NoMetadata(t *testing.T) {
 
 	pluginCtx := app.NewPluginContext(logger, "/test/db", "/test/dir", eventRepo)
 
-	event := domain.PluginEvent{
+	event := pluginsdk.Event{
 		Type:      "test.event",
 		Source:    "test-plugin",
 		Timestamp: time.Now(),
@@ -167,7 +168,7 @@ func TestPluginContext_EmitEvent_RepositoryError(t *testing.T) {
 
 	pluginCtx := app.NewPluginContext(logger, "/test/db", "/test/dir", eventRepo)
 
-	event := domain.PluginEvent{
+	event := pluginsdk.Event{
 		Type:      "test.event",
 		Source:    "test-plugin",
 		Timestamp: time.Now(),
@@ -229,7 +230,7 @@ func TestCommandContext_InheritsPluginContext(t *testing.T) {
 	}
 
 	// Test event emission through CommandContext
-	event := domain.PluginEvent{
+	event := pluginsdk.Event{
 		Type:      "cmd.test",
 		Source:    "test",
 		Timestamp: time.Now(),
@@ -260,4 +261,76 @@ func TestLoggerAdapter_Methods(t *testing.T) {
 	sdkLogger.Info("info message")
 	sdkLogger.Warn("warn message")
 	sdkLogger.Error("error message")
+}
+
+func TestPluginContext_EmitEvent_DefaultVersion(t *testing.T) {
+	logger := &mockPluginContextLogger{}
+	eventRepo := &mockEventRepo{}
+
+	pluginCtx := app.NewPluginContext(logger, "/test/db", "/test/dir", eventRepo)
+
+	event := pluginsdk.Event{
+		Type:      "test.event",
+		Source:    "test-plugin",
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"key": "value",
+		},
+		Metadata: map[string]string{
+			"session_id": "test-session-123",
+		},
+		// Version is empty - should default to "1.0"
+	}
+
+	ctx := context.Background()
+	err := pluginCtx.EmitEvent(ctx, event)
+	if err != nil {
+		t.Fatalf("EmitEvent() error = %v", err)
+	}
+
+	// Verify event was stored with default version
+	if len(eventRepo.events) != 1 {
+		t.Fatalf("Expected 1 event stored, got %d", len(eventRepo.events))
+	}
+
+	stored := eventRepo.events[0]
+	if stored.Version != "1.0" {
+		t.Errorf("Event version = %q, want %q", stored.Version, "1.0")
+	}
+}
+
+func TestPluginContext_EmitEvent_ExplicitVersion(t *testing.T) {
+	logger := &mockPluginContextLogger{}
+	eventRepo := &mockEventRepo{}
+
+	pluginCtx := app.NewPluginContext(logger, "/test/db", "/test/dir", eventRepo)
+
+	event := pluginsdk.Event{
+		Type:      "test.event",
+		Source:    "test-plugin",
+		Timestamp: time.Now(),
+		Payload: map[string]interface{}{
+			"key": "value",
+		},
+		Metadata: map[string]string{
+			"session_id": "test-session-456",
+		},
+		Version: "2.0",
+	}
+
+	ctx := context.Background()
+	err := pluginCtx.EmitEvent(ctx, event)
+	if err != nil {
+		t.Fatalf("EmitEvent() error = %v", err)
+	}
+
+	// Verify event was stored with explicit version
+	if len(eventRepo.events) != 1 {
+		t.Fatalf("Expected 1 event stored, got %d", len(eventRepo.events))
+	}
+
+	stored := eventRepo.events[0]
+	if stored.Version != "2.0" {
+		t.Errorf("Event version = %q, want %q", stored.Version, "2.0")
+	}
 }

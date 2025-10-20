@@ -72,7 +72,18 @@ func (p *ClaudeCodePlugin) GetEntityTypes() []pluginsdk.EntityTypeInfo {
 	}
 }
 
-// Query returns entities matching the given query (SDK interface)
+// Query returns entities matching the given query (SDK interface).
+//
+// This method implements event sourcing principles: sessions are derived entities
+// reconstructed from historical events stored in the event repository. Each call
+// to Query rebuilds the current session state by:
+//   1. Fetching all session IDs from the analysis service
+//   2. For each session ID, calling buildSessionEntity to reconstruct the session
+//      from its event history
+//   3. Applying filters and pagination to the reconstructed sessions
+//
+// The query never returns stale data because sessions are always rebuilt from
+// the event store, ensuring consistency with the authoritative event history.
 func (p *ClaudeCodePlugin) Query(ctx context.Context, query pluginsdk.EntityQuery) ([]pluginsdk.IExtensible, error) {
 	// Get all session IDs
 	sessionIDs, err := p.analysisService.GetAllSessionIDs(ctx, query.Limit)
@@ -120,9 +131,26 @@ func (p *ClaudeCodePlugin) UpdateEntity(ctx context.Context, entityID string, fi
 	return nil, pluginsdk.ErrReadOnly
 }
 
-// buildSessionEntity constructs a SessionEntity from a session ID
+// buildSessionEntity constructs a SessionEntity from a session ID.
+//
+// This is the core of event sourcing in the plugin: it reconstructs session state
+// from the authoritative event repository. The method:
+//
+//   1. Queries the event repository via LogsService.ListRecentLogs() to fetch all
+//      events for this session, ordered chronologically
+//   2. Extracts session metadata from the event stream:
+//      - Session ID (first and last events bound the session lifetime)
+//      - Event timestamps (first and last event times)
+//      - Event count (total number of events)
+//   3. Fetches any analyses associated with this session
+//   4. Constructs a SessionEntity representing the current derived state
+//
+// The session is read-only from the plugin perspective - all state flows from events.
+// Any attempt to update a session is rejected (see UpdateEntity).
 func (p *ClaudeCodePlugin) buildSessionEntity(ctx context.Context, sessionID string) (*SessionEntity, error) {
-	// Get session logs to extract metadata
+	// Query the event repository to get all events for this session
+	// This is the defining characteristic of event sourcing: the session state
+	// is reconstructed from historical events
 	logs, err := p.logsService.ListRecentLogs(ctx, 0, 0, sessionID, true)
 	if err != nil || len(logs) == 0 {
 		return nil, fmt.Errorf("failed to get logs for session %s: %w", sessionID, err)

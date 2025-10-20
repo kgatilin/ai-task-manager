@@ -8,8 +8,8 @@
 
 - **Module**: (detected from go.mod)
 - **Status**: ✓ 0 violations
-- **Packages**: 14
-- **Files**: 86
+- **Packages**: 13
+- **Files**: 87
 
 ## Architecture Summary
 
@@ -25,7 +25,7 @@
 ### cmd (Application Entry Points)
 
 - **main** (`cmd/dw`)
-  - Files: 9 | Exports: 5
+  - Files: 10 | Exports: 6
   - Key exports: AppServices, InitializeApp, LogsOptions
   - **Details**: `go-arch-lint -format=package cmd/dw`
 
@@ -33,12 +33,12 @@
 ### pkg (Public APIs)
 
 - **claude_code** (`pkg/plugins/claude_code`)
-  - Files: 4 | Exports: 55
+  - Files: 4 | Exports: 62
   - Key exports: GetCommands, InitCommand, GetName
   - **Details**: `go-arch-lint -format=package pkg/plugins/claude_code`
 
 - **pluginsdk** (`pkg/pluginsdk`)
-  - Files: 9 | Exports: 25
+  - Files: 7 | Exports: 27
   - Key exports: IEntityProvider, IEntityUpdater, ICommandProvider
   - **Details**: `go-arch-lint -format=package pkg/pluginsdk`
 
@@ -46,7 +46,7 @@
 ### internal (Isolated Primitives)
 
 - **app** (`internal/app`)
-  - Files: 15 | Exports: 108
+  - Files: 14 | Exports: 106
   - Key exports: NoOpLogger, Debug, Info
   - **Details**: `go-arch-lint -format=package internal/app`
 
@@ -56,7 +56,7 @@
   - **Details**: `go-arch-lint -format=package internal/app/tui`
 
 - **domain** (`internal/domain`)
-  - Files: 7 | Exports: 61
+  - Files: 8 | Exports: 75
   - Key exports: SessionAnalysis, NewSessionAnalysis, NewSessionAnalysisWithType
   - **Details**: `go-arch-lint -format=package internal/domain`
 
@@ -88,8 +88,8 @@ To get detailed information about specific packages:
 
 ## Statistics
 
-- **Total Files**: 86
-- **Total Packages**: 14
+- **Total Files**: 87
+- **Total Packages**: 13
 - **Violations**: 0
 - **External Dependencies**: 28
 

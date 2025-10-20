@@ -22,4 +22,9 @@ type Event struct {
 	// Metadata contains additional context about the event.
 	// Common fields: session_id, user_id, environment, etc.
 	Metadata map[string]string
+
+	// Version is the schema version for this event (for future schema evolution).
+	// Default value: "1.0"
+	// Used to handle backward compatibility when event schemas change.
+	Version string
 }

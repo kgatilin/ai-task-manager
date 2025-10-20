@@ -2,9 +2,11 @@ package claude_code
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
@@ -16,6 +18,7 @@ var _ pluginsdk.ICommandProvider = (*ClaudeCodePlugin)(nil)
 func (p *ClaudeCodePlugin) GetCommands() []pluginsdk.Command {
 	return []pluginsdk.Command{
 		&InitCommand{plugin: p},
+		&EmitEventCommand{plugin: p},
 		&LogCommand{plugin: p},
 		&AutoSummaryCommand{plugin: p},
 		&AutoSummaryExecCommand{plugin: p},
@@ -49,7 +52,123 @@ func (c *InitCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandConte
 	return c.plugin.handler.Init(ctx, c.plugin.dbPath)
 }
 
+// EmitEventCommand emits an event via the plugin SDK context
+// This command reads a structured event from stdin and emits it through the plugin context.
+// All errors are logged but never propagated - this ensures hook execution is never disrupted.
+//
+// Input format (JSON from stdin):
+//
+//	{
+//	  "type": "tool.invoked",
+//	  "source": "claude-code",
+//	  "timestamp": "2025-10-20T10:30:00Z",
+//	  "payload": { "tool": "Read", "parameters": {...} },
+//	  "metadata": { "session_id": "abc123", "cwd": "/workspace" },
+//	  "version": "1.0"
+//	}
+//
+// Required fields: type, source, metadata.session_id
+// The command validates input and emits to the framework's event store.
+type EmitEventCommand struct {
+	plugin *ClaudeCodePlugin
+}
+
+func NewEmitEventCommand(plugin *ClaudeCodePlugin) *EmitEventCommand {
+	return &EmitEventCommand{
+		plugin: plugin,
+	}
+}
+
+func (c *EmitEventCommand) GetName() string {
+	return "emit-event"
+}
+
+func (c *EmitEventCommand) GetDescription() string {
+	return "Emit an event via plugin context (reads JSON from stdin)"
+}
+
+func (c *EmitEventCommand) GetUsage() string {
+	return "emit-event"
+}
+
+func (c *EmitEventCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
+	// Add timeout to prevent infinite hangs
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Safely recover from panics
+	defer func() {
+		if r := recover(); r != nil {
+			c.plugin.logger.Error("emit-event: panic recovered: %v", r)
+		}
+	}()
+
+	// Read stdin
+	stdinData, err := io.ReadAll(cmdCtx.GetStdin())
+	if err != nil {
+		c.plugin.logger.Debug("emit-event: failed to read stdin: %v", err)
+		return nil // Silently fail - don't disrupt Claude Code
+	}
+
+	if len(stdinData) == 0 {
+		c.plugin.logger.Debug("emit-event: empty stdin")
+		return nil // Silently fail - don't disrupt Claude Code
+	}
+
+	// Parse JSON into pluginsdk.Event
+	var event pluginsdk.Event
+	if err := json.Unmarshal(stdinData, &event); err != nil {
+		c.plugin.logger.Debug("emit-event: invalid JSON: %v", err)
+		return nil // Silently fail - don't disrupt Claude Code
+	}
+
+	// Validate required fields
+	if event.Type == "" {
+		c.plugin.logger.Debug("emit-event: missing required field: type")
+		return nil
+	}
+
+	if event.Source == "" {
+		c.plugin.logger.Debug("emit-event: missing required field: source")
+		return nil
+	}
+
+	if event.Metadata == nil {
+		event.Metadata = make(map[string]string)
+	}
+
+	sessionID, ok := event.Metadata["session_id"]
+	if !ok || sessionID == "" {
+		c.plugin.logger.Debug("emit-event: missing required field: metadata.session_id")
+		return nil
+	}
+
+	// Set default timestamp if missing
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+
+	// Set default version if missing
+	if event.Version == "" {
+		event.Version = "1.0"
+	}
+
+	// Initialize empty payload if nil
+	if event.Payload == nil {
+		event.Payload = make(map[string]interface{})
+	}
+
+	// Emit event via plugin context (silently fail if DB error)
+	if err := cmdCtx.EmitEvent(ctxWithTimeout, event); err != nil {
+		c.plugin.logger.Debug("emit-event: failed to emit event: %v", err)
+		return nil // Silently fail - don't disrupt Claude Code
+	}
+
+	return nil
+}
+
 // LogCommand logs a Claude Code event from hook input
+// DEPRECATED: Use EmitEventCommand instead (will be removed in v2.0)
 type LogCommand struct {
 	plugin *ClaudeCodePlugin
 }

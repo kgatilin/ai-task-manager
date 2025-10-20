@@ -37,7 +37,21 @@ type AnalysisService interface {
 	GetLastSession(ctx context.Context) (string, error)
 }
 
-// LogsService provides access to event logs
+// LogsService provides access to event logs from the event repository.
+//
+// This interface is critical to the event sourcing pattern: it abstracts access
+// to the authoritative event store. Implementations query the event repository
+// to fetch events, which are the source of truth for all derived state.
+//
+// Key characteristics:
+//   - ListRecentLogs queries the event repository to retrieve events for a session
+//   - Events are ordered chronologically when ordered=true
+//   - Sessions are reconstructed from events, not stored directly
+//   - The event stream is append-only (events are never modified or deleted)
+//
+// Implementation note: The app layer provides concrete implementation via
+// app.LogsService which wraps domain.EventRepository. See cmd/dw/plugin_registration.go
+// for the adapter pattern that wires LogsService into the plugin.
 type LogsService interface {
 	ListRecentLogs(ctx context.Context, limit, offset int, sessionID string, ordered bool) ([]*LogRecord, error)
 }

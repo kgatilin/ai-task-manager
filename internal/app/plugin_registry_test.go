@@ -6,6 +6,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // MockPlugin is a test plugin implementing SDK interfaces
@@ -30,8 +31,8 @@ func NewMockPlugin(name string, entityTypes []domain.EntityTypeInfo) *MockPlugin
 	}
 }
 
-func (p *MockPlugin) GetInfo() domain.PluginInfo {
-	return domain.PluginInfo{
+func (p *MockPlugin) GetInfo() pluginsdk.PluginInfo {
+	return pluginsdk.PluginInfo{
 		Name:        p.name,
 		Version:     p.version,
 		Description: "Mock plugin for testing",
@@ -43,32 +44,44 @@ func (p *MockPlugin) GetCapabilities() []string {
 	return p.capabilities
 }
 
-func (p *MockPlugin) GetEntityTypes() []domain.EntityTypeInfo {
-	return p.entityTypes
+func (p *MockPlugin) GetEntityTypes() []pluginsdk.EntityTypeInfo {
+	result := make([]pluginsdk.EntityTypeInfo, len(p.entityTypes))
+	for i, et := range p.entityTypes {
+		result[i] = pluginsdk.EntityTypeInfo{
+			Type:         et.Type,
+			DisplayName:  et.DisplayName,
+			Capabilities: et.Capabilities,
+		}
+	}
+	return result
 }
 
-func (p *MockPlugin) Query(ctx context.Context, query domain.EntityQuery) ([]domain.IExtensible, error) {
+func (p *MockPlugin) Query(ctx context.Context, query pluginsdk.EntityQuery) ([]pluginsdk.IExtensible, error) {
 	if p.queryError != nil {
 		return nil, p.queryError
 	}
-	return p.entities, nil
+	sdkEntities := make([]pluginsdk.IExtensible, len(p.entities))
+	for i, e := range p.entities {
+		sdkEntities[i] = e.(pluginsdk.IExtensible)
+	}
+	return sdkEntities, nil
 }
 
-func (p *MockPlugin) GetEntity(ctx context.Context, entityID string) (domain.IExtensible, error) {
+func (p *MockPlugin) GetEntity(ctx context.Context, entityID string) (pluginsdk.IExtensible, error) {
 	if p.getError != nil {
 		return nil, p.getError
 	}
 
 	for _, e := range p.entities {
 		if e.GetID() == entityID {
-			return e, nil
+			return e.(pluginsdk.IExtensible), nil
 		}
 	}
 
-	return nil, domain.ErrNotFound
+	return nil, pluginsdk.ErrNotFound
 }
 
-func (p *MockPlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (domain.IExtensible, error) {
+func (p *MockPlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (pluginsdk.IExtensible, error) {
 	if p.updateError != nil {
 		return nil, p.updateError
 	}

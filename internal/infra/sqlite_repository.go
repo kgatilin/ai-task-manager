@@ -75,6 +75,10 @@ func (r *SQLiteEventRepository) Initialize(ctx context.Context) error {
 	migrationSQL2 := `ALTER TABLE session_analyses ADD COLUMN prompt_name TEXT DEFAULT 'analysis';`
 	_, _ = r.db.ExecContext(ctx, migrationSQL2)
 
+	// Add version column to events table for schema evolution support
+	migrationSQL3 := `ALTER TABLE events ADD COLUMN version TEXT DEFAULT '1.0';`
+	_, _ = r.db.ExecContext(ctx, migrationSQL3)
+
 	// Step 3: Clean up duplicate analyses (keep only the most recent one per session_id/analysis_type)
 	// This handles the case where old databases have multiple analyses with the same analysis_type
 	cleanupSQL := `
@@ -165,8 +169,8 @@ func (r *SQLiteEventRepository) Save(ctx context.Context, event *domain.Event) e
 	}
 
 	query := `
-		INSERT INTO events (id, timestamp, event_type, session_id, payload, content)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO events (id, timestamp, event_type, session_id, payload, content, version)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	_, err = r.db.ExecContext(ctx, query,
@@ -176,6 +180,7 @@ func (r *SQLiteEventRepository) Save(ctx context.Context, event *domain.Event) e
 		event.SessionID,
 		string(payloadJSON),
 		event.Content,
+		event.Version,
 	)
 
 	if err != nil {
@@ -216,12 +221,12 @@ func (r *SQLiteEventRepository) FindByQuery(ctx context.Context, query domain.Ev
 	}
 
 	// Build SQL query
-	sqlQuery := "SELECT id, timestamp, event_type, session_id, payload, content FROM events"
+	sqlQuery := "SELECT id, timestamp, event_type, session_id, payload, content, COALESCE(version, '1.0') as version FROM events"
 
 	if query.SearchText != "" {
 		// Try FTS search first, fall back to LIKE if FTS not available
 		ftsQuery := `
-			SELECT e.id, e.timestamp, e.event_type, e.session_id, e.payload, e.content
+			SELECT e.id, e.timestamp, e.event_type, e.session_id, e.payload, e.content, COALESCE(e.version, '1.0') as version
 			FROM events e
 			JOIN events_fts fts ON fts.rowid = e.rowid
 			WHERE fts.content MATCH ?
@@ -275,11 +280,11 @@ func (r *SQLiteEventRepository) FindByQuery(ctx context.Context, query domain.Ev
 
 	var events []*domain.Event
 	for rows.Next() {
-		var id, eventType, payloadStr, content string
+		var id, eventType, payloadStr, content, version string
 		var sessionID sql.NullString
 		var timestampMs int64
 
-		if err := rows.Scan(&id, &timestampMs, &eventType, &sessionID, &payloadStr, &content); err != nil {
+		if err := rows.Scan(&id, &timestampMs, &eventType, &sessionID, &payloadStr, &content, &version); err != nil {
 			return nil, fmt.Errorf("failed to scan row: %w", err)
 		}
 
@@ -297,6 +302,7 @@ func (r *SQLiteEventRepository) FindByQuery(ctx context.Context, query domain.Ev
 			SessionID: sessionID.String,
 			Payload:   payload,
 			Content:   content,
+			Version:   version,
 		}
 
 		events = append(events, event)
