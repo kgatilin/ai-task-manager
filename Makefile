@@ -1,4 +1,4 @@
-.PHONY: build install test help
+.PHONY: build build-stable install test help
 
 INSTALL_PATH := $(shell go env GOPATH)/bin
 
@@ -10,6 +10,9 @@ help: ## Show this help message
 
 build: ## Build binary to ./dw
 	go build -o dw ./cmd/dw
+
+build-stable: ## Build stable binary to ./dw-stable
+	go build -o dw-stable ./cmd/dw
 
 install: ## Install binary to GOPATH/bin
 	go install ./cmd/dw
