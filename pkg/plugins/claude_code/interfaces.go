@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"time"
-
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
 )
 
 // Service interfaces that the plugin requires.
@@ -21,10 +19,20 @@ type LogRecord struct {
 	Content   string
 }
 
+// SessionAnalysis represents a session analysis result (SDK-native type)
+type SessionAnalysis struct {
+	ID              string
+	SessionID       string
+	PromptName      string
+	ModelUsed       string
+	PatternsSummary string
+	AnalyzedAt      time.Time
+}
+
 // AnalysisService provides access to session analysis data
 type AnalysisService interface {
 	GetAllSessionIDs(ctx context.Context, limit int) ([]string, error)
-	GetAnalysesBySessionID(ctx context.Context, sessionID string) ([]*domain.SessionAnalysis, error)
+	GetAnalysesBySessionID(ctx context.Context, sessionID string) ([]*SessionAnalysis, error)
 	EstimateTokenCount(ctx context.Context, sessionID string) (int, error)
 	GetLastSession(ctx context.Context) (string, error)
 }

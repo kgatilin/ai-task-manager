@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // ClaudeCodePlugin provides Claude Code sessions as entities.
@@ -16,7 +16,7 @@ type ClaudeCodePlugin struct {
 	// Service interfaces (injected by app layer for built-in plugins)
 	analysisService AnalysisService
 	logsService     LogsService
-	logger          domain.Logger // Use SDK logger
+	logger          pluginsdk.Logger
 	setupService    SetupService
 	handler         ClaudeCommandHandler
 	dbPath          string
@@ -29,7 +29,7 @@ type ClaudeCodePlugin struct {
 func NewClaudeCodePlugin(
 	analysisService AnalysisService,
 	logsService LogsService,
-	logger domain.Logger,
+	logger pluginsdk.Logger,
 	setupService SetupService,
 	handler ClaudeCommandHandler,
 	dbPath string,
@@ -45,8 +45,8 @@ func NewClaudeCodePlugin(
 }
 
 // GetInfo returns metadata about this plugin (SDK interface)
-func (p *ClaudeCodePlugin) GetInfo() domain.PluginInfo {
-	return domain.PluginInfo{
+func (p *ClaudeCodePlugin) GetInfo() pluginsdk.PluginInfo {
+	return pluginsdk.PluginInfo{
 		Name:        "claude-code",
 		Version:     "1.0.0",
 		Description: "Claude Code session tracking and analysis",
@@ -60,8 +60,8 @@ func (p *ClaudeCodePlugin) GetCapabilities() []string {
 }
 
 // GetEntityTypes returns the entity types this plugin provides (SDK interface)
-func (p *ClaudeCodePlugin) GetEntityTypes() []domain.EntityTypeInfo {
-	return []domain.EntityTypeInfo{
+func (p *ClaudeCodePlugin) GetEntityTypes() []pluginsdk.EntityTypeInfo {
+	return []pluginsdk.EntityTypeInfo{
 		{
 			Type:              "session",
 			DisplayName:       "Claude Session",
@@ -73,7 +73,7 @@ func (p *ClaudeCodePlugin) GetEntityTypes() []domain.EntityTypeInfo {
 }
 
 // Query returns entities matching the given query (SDK interface)
-func (p *ClaudeCodePlugin) Query(ctx context.Context, query domain.EntityQuery) ([]domain.IExtensible, error) {
+func (p *ClaudeCodePlugin) Query(ctx context.Context, query pluginsdk.EntityQuery) ([]pluginsdk.IExtensible, error) {
 	// Get all session IDs
 	sessionIDs, err := p.analysisService.GetAllSessionIDs(ctx, query.Limit)
 	if err != nil {
@@ -83,13 +83,13 @@ func (p *ClaudeCodePlugin) Query(ctx context.Context, query domain.EntityQuery) 
 	// Apply offset if specified
 	if query.Offset > 0 {
 		if query.Offset >= len(sessionIDs) {
-			return []domain.IExtensible{}, nil
+			return []pluginsdk.IExtensible{}, nil
 		}
 		sessionIDs = sessionIDs[query.Offset:]
 	}
 
 	// Build entities
-	entities := make([]domain.IExtensible, 0, len(sessionIDs))
+	entities := make([]pluginsdk.IExtensible, 0, len(sessionIDs))
 
 	for _, sessionID := range sessionIDs {
 		entity, err := p.buildSessionEntity(ctx, sessionID)
@@ -110,14 +110,14 @@ func (p *ClaudeCodePlugin) Query(ctx context.Context, query domain.EntityQuery) 
 }
 
 // GetEntity retrieves a single entity by ID (SDK interface)
-func (p *ClaudeCodePlugin) GetEntity(ctx context.Context, entityID string) (domain.IExtensible, error) {
+func (p *ClaudeCodePlugin) GetEntity(ctx context.Context, entityID string) (pluginsdk.IExtensible, error) {
 	return p.buildSessionEntity(ctx, entityID)
 }
 
 // UpdateEntity updates an entity's fields (SDK interface)
 // For sessions, this is currently not supported (read-only)
-func (p *ClaudeCodePlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (domain.IExtensible, error) {
-	return nil, domain.ErrReadOnly
+func (p *ClaudeCodePlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (pluginsdk.IExtensible, error) {
+	return nil, pluginsdk.ErrReadOnly
 }
 
 // buildSessionEntity constructs a SessionEntity from a session ID
@@ -129,13 +129,13 @@ func (p *ClaudeCodePlugin) buildSessionEntity(ctx context.Context, sessionID str
 	}
 
 	// Get analyses for this session
-	domainAnalyses, err := p.analysisService.GetAnalysesBySessionID(ctx, sessionID)
+	analyses, err := p.analysisService.GetAnalysesBySessionID(ctx, sessionID)
 	if err != nil {
-		domainAnalyses = []*domain.SessionAnalysis{}
+		analyses = []*SessionAnalysis{}
 	}
 
-	// Convert domain analyses to SDK analyses
-	analyses := convertAnalyses(domainAnalyses)
+	// Convert to SessionAnalysisData
+	analysisData := convertAnalyses(analyses)
 
 	// Estimate token count for the session
 	tokenCount, err := p.analysisService.EstimateTokenCount(ctx, sessionID)
@@ -148,33 +148,33 @@ func (p *ClaudeCodePlugin) buildSessionEntity(ctx context.Context, sessionID str
 		logs[0].Timestamp,
 		logs[len(logs)-1].Timestamp,
 		len(logs),
-		analyses,
+		analysisData,
 		tokenCount,
 	), nil
 }
 
-// convertAnalyses converts domain SessionAnalysis to SDK SessionAnalysisData
-func convertAnalyses(domainAnalyses []*domain.SessionAnalysis) []SessionAnalysisData {
-	if domainAnalyses == nil {
+// convertAnalyses converts SessionAnalysis to SessionAnalysisData
+func convertAnalyses(analyses []*SessionAnalysis) []SessionAnalysisData {
+	if analyses == nil {
 		return []SessionAnalysisData{}
 	}
 
-	analyses := make([]SessionAnalysisData, len(domainAnalyses))
-	for i, da := range domainAnalyses {
-		analyses[i] = SessionAnalysisData{
-			ID:              da.ID,
-			SessionID:       da.SessionID,
-			PromptName:      da.PromptName,
-			ModelUsed:       da.ModelUsed,
-			PatternsSummary: da.PatternsSummary,
-			CreatedAt:       da.AnalyzedAt, // Field is called AnalyzedAt in domain
+	data := make([]SessionAnalysisData, len(analyses))
+	for i, a := range analyses {
+		data[i] = SessionAnalysisData{
+			ID:              a.ID,
+			SessionID:       a.SessionID,
+			PromptName:      a.PromptName,
+			ModelUsed:       a.ModelUsed,
+			PatternsSummary: a.PatternsSummary,
+			CreatedAt:       a.AnalyzedAt,
 		}
 	}
-	return analyses
+	return data
 }
 
 // matchesFilters checks if an entity matches the given filters
-func (p *ClaudeCodePlugin) matchesFilters(entity domain.IExtensible, filters map[string]interface{}) bool {
+func (p *ClaudeCodePlugin) matchesFilters(entity pluginsdk.IExtensible, filters map[string]interface{}) bool {
 	if len(filters) == 0 {
 		return true
 	}

@@ -6,17 +6,18 @@ import (
 	"sync"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // PluginRegistry manages all registered plugins and routes operations to them.
 // It uses SDK plugin interfaces and adapts between SDK and domain types.
 // Routing is capability-based: plugins declare capabilities, registry routes accordingly.
 type PluginRegistry struct {
-	plugins          map[string]domain.Plugin       // key: plugin name (uses SDK interface)
-	entityProviders  map[string]domain.IEntityProvider  // key: entity type, value: provider
-	commandProviders map[string]domain.ICommandProvider // key: plugin name, value: provider
-	eventEmitters    []domain.IEventEmitter
-	entityUpdaters   map[string]domain.IEntityUpdater // key: entity type, value: updater
+	plugins          map[string]pluginsdk.Plugin            // key: plugin name (uses SDK interface)
+	entityProviders  map[string]pluginsdk.IEntityProvider   // key: entity type, value: provider
+	commandProviders map[string]pluginsdk.ICommandProvider  // key: plugin name, value: provider
+	eventEmitters    []pluginsdk.IEventEmitter
+	entityUpdaters   map[string]pluginsdk.IEntityUpdater // key: entity type, value: updater
 	logger           Logger
 	mu               sync.RWMutex
 }
@@ -24,11 +25,11 @@ type PluginRegistry struct {
 // NewPluginRegistry creates a new plugin registry
 func NewPluginRegistry(logger Logger) *PluginRegistry {
 	return &PluginRegistry{
-		plugins:          make(map[string]domain.Plugin),
-		entityProviders:  make(map[string]domain.IEntityProvider),
-		commandProviders: make(map[string]domain.ICommandProvider),
-		eventEmitters:    make([]domain.IEventEmitter, 0),
-		entityUpdaters:   make(map[string]domain.IEntityUpdater),
+		plugins:          make(map[string]pluginsdk.Plugin),
+		entityProviders:  make(map[string]pluginsdk.IEntityProvider),
+		commandProviders: make(map[string]pluginsdk.ICommandProvider),
+		eventEmitters:    make([]pluginsdk.IEventEmitter, 0),
+		entityUpdaters:   make(map[string]pluginsdk.IEntityUpdater),
 		logger:           logger,
 	}
 }
@@ -37,7 +38,7 @@ func NewPluginRegistry(logger Logger) *PluginRegistry {
 // Accepts plugins implementing the SDK Plugin interface.
 // Returns error if plugin name already exists or entity type conflicts.
 // Uses capability-based routing to map plugins to their provided capabilities.
-func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
+func (r *PluginRegistry) RegisterPlugin(plugin pluginsdk.Plugin) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -53,7 +54,7 @@ func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
 
 	// Route based on capabilities
 	if contains(capabilities, "IEntityProvider") {
-		entityProvider, ok := plugin.(domain.IEntityProvider)
+		entityProvider, ok := plugin.(pluginsdk.IEntityProvider)
 		if !ok {
 			return fmt.Errorf("plugin %s declares IEntityProvider capability but doesn't implement it", info.Name)
 		}
@@ -62,7 +63,7 @@ func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
 		// Check for entity type conflicts
 		for _, et := range entityTypes {
 			if existingProvider, exists := r.entityProviders[et.Type]; exists {
-				existingInfo := existingProvider.(domain.Plugin).GetInfo()
+				existingInfo := existingProvider.(pluginsdk.Plugin).GetInfo()
 				return fmt.Errorf("entity type %s already provided by plugin %s", et.Type, existingInfo.Name)
 			}
 		}
@@ -75,7 +76,7 @@ func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
 	}
 
 	if contains(capabilities, "ICommandProvider") {
-		commandProvider, ok := plugin.(domain.ICommandProvider)
+		commandProvider, ok := plugin.(pluginsdk.ICommandProvider)
 		if !ok {
 			return fmt.Errorf("plugin %s declares ICommandProvider capability but doesn't implement it", info.Name)
 		}
@@ -83,7 +84,7 @@ func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
 	}
 
 	if contains(capabilities, "IEventEmitter") {
-		eventEmitter, ok := plugin.(domain.IEventEmitter)
+		eventEmitter, ok := plugin.(pluginsdk.IEventEmitter)
 		if !ok {
 			return fmt.Errorf("plugin %s declares IEventEmitter capability but doesn't implement it", info.Name)
 		}
@@ -91,7 +92,7 @@ func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
 	}
 
 	if contains(capabilities, "IEntityUpdater") {
-		entityUpdater, ok := plugin.(domain.IEntityUpdater)
+		entityUpdater, ok := plugin.(pluginsdk.IEntityUpdater)
 		if !ok {
 			return fmt.Errorf("plugin %s declares IEntityUpdater capability but doesn't implement it", info.Name)
 		}
@@ -111,7 +112,7 @@ func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
 }
 
 // GetPlugin retrieves a plugin by name (returns SDK plugin)
-func (r *PluginRegistry) GetPlugin(name string) (domain.Plugin, error) {
+func (r *PluginRegistry) GetPlugin(name string) (pluginsdk.Plugin, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -124,7 +125,7 @@ func (r *PluginRegistry) GetPlugin(name string) (domain.Plugin, error) {
 }
 
 // GetPluginForEntityType retrieves the plugin that provides a given entity type
-func (r *PluginRegistry) GetPluginForEntityType(entityType string) (domain.Plugin, error) {
+func (r *PluginRegistry) GetPluginForEntityType(entityType string) (pluginsdk.Plugin, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -134,15 +135,15 @@ func (r *PluginRegistry) GetPluginForEntityType(entityType string) (domain.Plugi
 	}
 
 	// IEntityProvider extends Plugin, so we can cast safely
-	return provider.(domain.Plugin), nil
+	return provider.(pluginsdk.Plugin), nil
 }
 
 // GetAllPlugins returns all registered plugins (SDK plugins)
-func (r *PluginRegistry) GetAllPlugins() []domain.Plugin {
+func (r *PluginRegistry) GetAllPlugins() []pluginsdk.Plugin {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	plugins := make([]domain.Plugin, 0, len(r.plugins))
+	plugins := make([]pluginsdk.Plugin, 0, len(r.plugins))
 	for _, plugin := range r.plugins {
 		plugins = append(plugins, plugin)
 	}
@@ -177,7 +178,7 @@ func (r *PluginRegistry) GetAllEntityTypes() []domain.EntityTypeInfo {
 	var entityTypes []domain.EntityTypeInfo
 	for _, plugin := range r.plugins {
 		// Only get entity types from plugins that provide entities
-		if entityProvider, ok := plugin.(domain.IEntityProvider); ok {
+		if entityProvider, ok := plugin.(pluginsdk.IEntityProvider); ok {
 			sdkTypes := entityProvider.GetEntityTypes()
 			entityTypes = append(entityTypes, adaptEntityTypeInfos(sdkTypes)...)
 		}
@@ -215,7 +216,7 @@ func (r *PluginRegistry) Query(ctx context.Context, query domain.EntityQuery) ([
 	for _, provider := range r.entityProviders {
 		sdkEntities, err := provider.Query(ctx, sdkQuery)
 		if err != nil {
-			pluginInfo := provider.(domain.Plugin).GetInfo()
+			pluginInfo := provider.(pluginsdk.Plugin).GetInfo()
 			r.logger.Warn("Plugin %s query failed: %v", pluginInfo.Name, err)
 			continue
 		}
@@ -263,7 +264,7 @@ func (r *PluginRegistry) UpdateEntity(ctx context.Context, entityID string, fiel
 }
 
 // GetCommandProvider retrieves a command provider for a plugin
-func (r *PluginRegistry) GetCommandProvider(pluginName string) (domain.ICommandProvider, error) {
+func (r *PluginRegistry) GetCommandProvider(pluginName string) (pluginsdk.ICommandProvider, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -276,11 +277,11 @@ func (r *PluginRegistry) GetCommandProvider(pluginName string) (domain.ICommandP
 }
 
 // GetAllCommandProviders returns all registered command providers
-func (r *PluginRegistry) GetAllCommandProviders() []domain.ICommandProvider {
+func (r *PluginRegistry) GetAllCommandProviders() []pluginsdk.ICommandProvider {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	providers := make([]domain.ICommandProvider, 0, len(r.commandProviders))
+	providers := make([]pluginsdk.ICommandProvider, 0, len(r.commandProviders))
 	for _, provider := range r.commandProviders {
 		providers = append(providers, provider)
 	}
@@ -289,12 +290,12 @@ func (r *PluginRegistry) GetAllCommandProviders() []domain.ICommandProvider {
 }
 
 // GetEventEmitters returns all registered event emitters
-func (r *PluginRegistry) GetEventEmitters() []domain.IEventEmitter {
+func (r *PluginRegistry) GetEventEmitters() []pluginsdk.IEventEmitter {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	// Return a copy to avoid concurrent modification
-	emitters := make([]domain.IEventEmitter, len(r.eventEmitters))
+	emitters := make([]pluginsdk.IEventEmitter, len(r.eventEmitters))
 	copy(emitters, r.eventEmitters)
 	return emitters
 }

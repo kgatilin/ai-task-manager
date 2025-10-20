@@ -4,16 +4,17 @@ import (
 	"time"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
-// entityAdapter adapts domain.IExtensible to domain.IExtensible
+// entityAdapter adapts pluginsdk.IExtensible to domain.IExtensible
 // This allows plugins using the SDK to provide entities that work with internal app code
 type entityAdapter struct {
-	inner domain.IExtensible
+	inner pluginsdk.IExtensible
 }
 
 // newEntityAdapter wraps an SDK entity to implement domain interfaces
-func newEntityAdapter(sdkEntity domain.IExtensible) domain.IExtensible {
+func newEntityAdapter(sdkEntity pluginsdk.IExtensible) domain.IExtensible {
 	return &entityAdapter{inner: sdkEntity}
 }
 
@@ -39,7 +40,7 @@ func (e *entityAdapter) GetAllFields() map[string]interface{} {
 
 // Check if entity also implements IHasContext
 func (e *entityAdapter) GetContext() *domain.EntityContext {
-	hasContext, ok := e.inner.(domain.IHasContext)
+	hasContext, ok := e.inner.(pluginsdk.IHasContext)
 	if !ok {
 		return nil
 	}
@@ -60,7 +61,7 @@ func (e *entityAdapter) GetContext() *domain.EntityContext {
 
 // Check if entity also implements ITrackable
 func (e *entityAdapter) GetStatus() string {
-	trackable, ok := e.inner.(domain.ITrackable)
+	trackable, ok := e.inner.(pluginsdk.ITrackable)
 	if !ok {
 		return ""
 	}
@@ -68,7 +69,7 @@ func (e *entityAdapter) GetStatus() string {
 }
 
 func (e *entityAdapter) GetProgress() float64 {
-	trackable, ok := e.inner.(domain.ITrackable)
+	trackable, ok := e.inner.(pluginsdk.ITrackable)
 	if !ok {
 		return 0
 	}
@@ -76,7 +77,7 @@ func (e *entityAdapter) GetProgress() float64 {
 }
 
 func (e *entityAdapter) IsBlocked() bool {
-	trackable, ok := e.inner.(domain.ITrackable)
+	trackable, ok := e.inner.(pluginsdk.ITrackable)
 	if !ok {
 		return false
 	}
@@ -84,7 +85,7 @@ func (e *entityAdapter) IsBlocked() bool {
 }
 
 func (e *entityAdapter) GetBlockReason() string {
-	trackable, ok := e.inner.(domain.ITrackable)
+	trackable, ok := e.inner.(pluginsdk.ITrackable)
 	if !ok {
 		return ""
 	}
@@ -124,7 +125,7 @@ func (e *entityAdapter) GetAllRelations() map[string][]string {
 }
 
 // adaptActivityRecords converts SDK activity records to domain activity records
-func adaptActivityRecords(sdkRecords []domain.ActivityRecord) []domain.ActivityRecord {
+func adaptActivityRecords(sdkRecords []pluginsdk.ActivityRecord) []domain.ActivityRecord {
 	if sdkRecords == nil {
 		return nil
 	}
@@ -151,7 +152,7 @@ func adaptActivityRecords(sdkRecords []domain.ActivityRecord) []domain.ActivityR
 }
 
 // adaptEntities wraps SDK entities in domain adapters
-func adaptEntities(sdkEntities []domain.IExtensible) []domain.IExtensible {
+func adaptEntities(sdkEntities []pluginsdk.IExtensible) []domain.IExtensible {
 	if sdkEntities == nil {
 		return nil
 	}
@@ -164,20 +165,19 @@ func adaptEntities(sdkEntities []domain.IExtensible) []domain.IExtensible {
 }
 
 // adaptEntityQuery converts domain EntityQuery to SDK EntityQuery
-func adaptEntityQuery(domainQuery domain.EntityQuery) domain.EntityQuery {
-	return domain.EntityQuery{
+func adaptEntityQuery(domainQuery domain.EntityQuery) pluginsdk.EntityQuery {
+	return pluginsdk.EntityQuery{
 		EntityType: domainQuery.EntityType,
 		Filters:    domainQuery.Filters,
 		Limit:      domainQuery.Limit,
 		Offset:     domainQuery.Offset,
 		SortBy:     domainQuery.SortBy,
 		SortDesc:   domainQuery.SortDesc,
-		// Note: Capabilities filtering is handled in domain layer
 	}
 }
 
 // adaptPluginInfo converts SDK PluginInfo to domain PluginInfo
-func adaptPluginInfo(sdkInfo domain.PluginInfo) domain.PluginInfo {
+func adaptPluginInfo(sdkInfo pluginsdk.PluginInfo) domain.PluginInfo {
 	return domain.PluginInfo{
 		Name:        sdkInfo.Name,
 		Version:     sdkInfo.Version,
@@ -187,7 +187,7 @@ func adaptPluginInfo(sdkInfo domain.PluginInfo) domain.PluginInfo {
 }
 
 // adaptEntityTypeInfo converts SDK EntityTypeInfo to domain EntityTypeInfo
-func adaptEntityTypeInfo(sdkInfo domain.EntityTypeInfo) domain.EntityTypeInfo {
+func adaptEntityTypeInfo(sdkInfo pluginsdk.EntityTypeInfo) domain.EntityTypeInfo {
 	return domain.EntityTypeInfo{
 		Type:              sdkInfo.Type,
 		DisplayName:       sdkInfo.DisplayName,
@@ -198,7 +198,7 @@ func adaptEntityTypeInfo(sdkInfo domain.EntityTypeInfo) domain.EntityTypeInfo {
 }
 
 // adaptEntityTypeInfos converts slice of SDK EntityTypeInfo to domain EntityTypeInfo
-func adaptEntityTypeInfos(sdkInfos []domain.EntityTypeInfo) []domain.EntityTypeInfo {
+func adaptEntityTypeInfos(sdkInfos []pluginsdk.EntityTypeInfo) []domain.EntityTypeInfo {
 	if sdkInfos == nil {
 		return nil
 	}

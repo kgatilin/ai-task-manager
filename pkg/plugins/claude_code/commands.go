@@ -6,15 +6,15 @@ import (
 	"io"
 	"os"
 
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // Ensure plugin implements SDK ICommandProvider
-var _ domain.ICommandProvider = (*ClaudeCodePlugin)(nil)
+var _ pluginsdk.ICommandProvider = (*ClaudeCodePlugin)(nil)
 
 // GetCommands returns the CLI commands provided by this plugin (SDK interface)
-func (p *ClaudeCodePlugin) GetCommands() []domain.Command {
-	return []domain.Command{
+func (p *ClaudeCodePlugin) GetCommands() []pluginsdk.Command {
+	return []pluginsdk.Command{
 		&InitCommand{plugin: p},
 		&LogCommand{plugin: p},
 		&AutoSummaryCommand{plugin: p},
@@ -40,7 +40,7 @@ func (c *InitCommand) GetUsage() string {
 	return "init"
 }
 
-func (c *InitCommand) Execute(ctx context.Context, cmdCtx domain.CommandContext, args []string) error {
+func (c *InitCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
 	if c.plugin.handler == nil {
 		return fmt.Errorf("handler not initialized")
 	}
@@ -66,7 +66,7 @@ func (c *LogCommand) GetUsage() string {
 	return "log <event-type>"
 }
 
-func (c *LogCommand) Execute(ctx context.Context, cmdCtx domain.CommandContext, args []string) error {
+func (c *LogCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
 	if len(args) < 1 {
 		return fmt.Errorf("event type required")
 	}
@@ -114,7 +114,7 @@ func (c *AutoSummaryCommand) GetUsage() string {
 	return "auto-summary"
 }
 
-func (c *AutoSummaryCommand) Execute(ctx context.Context, cmdCtx domain.CommandContext, args []string) error {
+func (c *AutoSummaryCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
 	if c.plugin.handler == nil {
 		return fmt.Errorf("handler not initialized")
 	}
@@ -148,7 +148,7 @@ func (c *AutoSummaryExecCommand) GetUsage() string {
 	return "auto-summary-exec <session-id>"
 }
 
-func (c *AutoSummaryExecCommand) Execute(ctx context.Context, cmdCtx domain.CommandContext, args []string) error {
+func (c *AutoSummaryExecCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
 	if len(args) < 1 {
 		// No session ID provided
 		return nil
@@ -182,7 +182,7 @@ func (c *SessionSummaryCommand) GetUsage() string {
 	return "session-summary --session-id <id> | --last"
 }
 
-func (c *SessionSummaryCommand) Execute(ctx context.Context, cmdCtx domain.CommandContext, args []string) error {
+func (c *SessionSummaryCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
 	// Parse flags
 	sessionID := ""
 	last := false

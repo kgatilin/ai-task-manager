@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // ProjectContext provides access to app-layer services for plugin tools.
@@ -38,7 +39,7 @@ type pluginContextAdapter struct {
 }
 
 // NewPluginContext creates a new plugin context adapter
-func NewPluginContext(logger Logger, dbPath, workingDir string, eventRepo domain.EventRepository) domain.PluginContext {
+func NewPluginContext(logger Logger, dbPath, workingDir string, eventRepo domain.EventRepository) pluginsdk.PluginContext {
 	return &pluginContextAdapter{
 		logger:     logger,
 		dbPath:     dbPath,
@@ -47,7 +48,7 @@ func NewPluginContext(logger Logger, dbPath, workingDir string, eventRepo domain
 	}
 }
 
-func (p *pluginContextAdapter) GetLogger() domain.Logger {
+func (p *pluginContextAdapter) GetLogger() pluginsdk.Logger {
 	return &loggerAdapter{inner: p.logger}
 }
 
@@ -55,7 +56,7 @@ func (p *pluginContextAdapter) GetWorkingDir() string {
 	return p.workingDir
 }
 
-func (p *pluginContextAdapter) EmitEvent(ctx context.Context, event domain.PluginEvent) error {
+func (p *pluginContextAdapter) EmitEvent(ctx context.Context, event pluginsdk.Event) error {
 	// Convert SDK event to domain event
 	// SDK Event has: Type, Source, Timestamp, Payload (map[string]interface{}), Metadata (map[string]string)
 	// Domain Event has: ID, Timestamp, Type (EventType), SessionID, Payload (interface{}), Content (string)
@@ -127,7 +128,7 @@ type commandContextAdapter struct {
 }
 
 // NewCommandContext creates a new command context adapter
-func NewCommandContext(logger Logger, dbPath, workingDir string, eventRepo interface{}, output io.Writer, input io.Reader) domain.CommandContext {
+func NewCommandContext(logger Logger, dbPath, workingDir string, eventRepo interface{}, output io.Writer, input io.Reader) pluginsdk.CommandContext {
 	return &commandContextAdapter{
 		pluginContextAdapter: pluginContextAdapter{
 			logger:     logger,

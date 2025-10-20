@@ -4,10 +4,17 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kgatilin/darwinflow-pub/internal/app"
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/claude_code"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
+
+// mockLogger implements pluginsdk.Logger for testing
+type mockLogger struct{}
+
+func (m *mockLogger) Debug(msg string, keysAndValues ...interface{}) {}
+func (m *mockLogger) Info(msg string, keysAndValues ...interface{})  {}
+func (m *mockLogger) Warn(msg string, keysAndValues ...interface{})  {}
+func (m *mockLogger) Error(msg string, keysAndValues ...interface{}) {}
 
 // Minimal test focusing on what can be tested without complex mocking
 // Full integration tests would require a test database
@@ -15,7 +22,7 @@ import (
 func TestNewClaudeCodePlugin(t *testing.T) {
 	// This test verifies the constructor works
 	// We use nil services since we're only testing construction
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
 
 	if plugin == nil {
 		t.Fatal("NewClaudeCodePlugin returned nil")
@@ -23,7 +30,7 @@ func TestNewClaudeCodePlugin(t *testing.T) {
 }
 
 func TestGetInfo(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
 
 	info := plugin.GetInfo()
 
@@ -42,7 +49,7 @@ func TestGetInfo(t *testing.T) {
 }
 
 func TestGetEntityTypes(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
 
 	entityTypes := plugin.GetEntityTypes()
 
@@ -88,7 +95,7 @@ func TestGetEntityTypes(t *testing.T) {
 }
 
 func TestUpdateEntity_ReadOnly(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
 
 	ctx := context.Background()
 	_, err := plugin.UpdateEntity(ctx, "session-1", map[string]interface{}{})
@@ -96,13 +103,14 @@ func TestUpdateEntity_ReadOnly(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error for read-only update, got nil")
 	}
-	if err.Error() != "entity is read-only" {
-		t.Errorf("Expected 'entity is read-only' error, got: %v", err)
+	// Check against SDK error constant
+	if err != pluginsdk.ErrReadOnly {
+		t.Errorf("Expected pluginsdk.ErrReadOnly, got: %v", err)
 	}
 }
 
 func TestGetCommands(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
 
 	commands := plugin.GetCommands()
 
@@ -146,7 +154,7 @@ func TestGetCommands(t *testing.T) {
 
 func TestCommandProvider_Interface(t *testing.T) {
 	// Verify that ClaudeCodePlugin implements SDK ICommandProvider
-	var _ domain.ICommandProvider = (*claude_code.ClaudeCodePlugin)(nil)
+	var _ pluginsdk.ICommandProvider = (*claude_code.ClaudeCodePlugin)(nil)
 }
 
 // Note: Full Query, GetEntity, and tool execution tests would require:

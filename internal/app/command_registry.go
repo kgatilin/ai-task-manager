@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // CommandRegistry manages command discovery and routing from plugins.
@@ -14,7 +14,7 @@ import (
 type CommandRegistry struct {
 	pluginRegistry *PluginRegistry
 	logger         Logger
-	commandCache   map[string]map[string]domain.Command // pluginName -> commandName -> Command
+	commandCache   map[string]map[string]pluginsdk.Command // pluginName -> commandName -> Command
 	mu             sync.RWMutex
 }
 
@@ -23,12 +23,12 @@ func NewCommandRegistry(pluginRegistry *PluginRegistry, logger Logger) *CommandR
 	return &CommandRegistry{
 		pluginRegistry: pluginRegistry,
 		logger:         logger,
-		commandCache:   make(map[string]map[string]domain.Command),
+		commandCache:   make(map[string]map[string]pluginsdk.Command),
 	}
 }
 
 // GetCommand finds a command by plugin name and command name
-func (r *CommandRegistry) GetCommand(pluginName, commandName string) (domain.Command, error) {
+func (r *CommandRegistry) GetCommand(pluginName, commandName string) (pluginsdk.Command, error) {
 	r.mu.RLock()
 	cached := r.commandCache[pluginName]
 	r.mu.RUnlock()
@@ -46,7 +46,7 @@ func (r *CommandRegistry) GetCommand(pluginName, commandName string) (domain.Com
 		return nil, fmt.Errorf("plugin not found: %s", pluginName)
 	}
 
-	cmdProvider, ok := plugin.(domain.ICommandProvider)
+	cmdProvider, ok := plugin.(pluginsdk.ICommandProvider)
 	if !ok {
 		return nil, fmt.Errorf("plugin %s does not provide commands", pluginName)
 	}
@@ -54,7 +54,7 @@ func (r *CommandRegistry) GetCommand(pluginName, commandName string) (domain.Com
 	// Cache commands for this plugin
 	commands := cmdProvider.GetCommands()
 	r.mu.Lock()
-	r.commandCache[pluginName] = make(map[string]domain.Command)
+	r.commandCache[pluginName] = make(map[string]pluginsdk.Command)
 	for _, cmd := range commands {
 		r.commandCache[pluginName][cmd.GetName()] = cmd
 	}
@@ -73,13 +73,13 @@ func (r *CommandRegistry) GetCommand(pluginName, commandName string) (domain.Com
 }
 
 // GetCommandsForPlugin returns all commands from a specific plugin
-func (r *CommandRegistry) GetCommandsForPlugin(pluginName string) []domain.Command {
+func (r *CommandRegistry) GetCommandsForPlugin(pluginName string) []pluginsdk.Command {
 	r.mu.RLock()
 	cached := r.commandCache[pluginName]
 	r.mu.RUnlock()
 
 	if cached != nil {
-		commands := make([]domain.Command, 0, len(cached))
+		commands := make([]pluginsdk.Command, 0, len(cached))
 		for _, cmd := range cached {
 			commands = append(commands, cmd)
 		}
@@ -93,7 +93,7 @@ func (r *CommandRegistry) GetCommandsForPlugin(pluginName string) []domain.Comma
 		return nil
 	}
 
-	cmdProvider, ok := plugin.(domain.ICommandProvider)
+	cmdProvider, ok := plugin.(pluginsdk.ICommandProvider)
 	if !ok {
 		return nil
 	}
@@ -102,7 +102,7 @@ func (r *CommandRegistry) GetCommandsForPlugin(pluginName string) []domain.Comma
 
 	// Cache commands
 	r.mu.Lock()
-	r.commandCache[pluginName] = make(map[string]domain.Command)
+	r.commandCache[pluginName] = make(map[string]pluginsdk.Command)
 	for _, cmd := range commands {
 		r.commandCache[pluginName][cmd.GetName()] = cmd
 	}
@@ -112,12 +112,12 @@ func (r *CommandRegistry) GetCommandsForPlugin(pluginName string) []domain.Comma
 }
 
 // GetAllCommands returns all commands from all plugins
-func (r *CommandRegistry) GetAllCommands() map[string][]domain.Command {
+func (r *CommandRegistry) GetAllCommands() map[string][]pluginsdk.Command {
 	allPlugins := r.pluginRegistry.GetAllPlugins()
-	result := make(map[string][]domain.Command)
+	result := make(map[string][]pluginsdk.Command)
 
 	for _, plugin := range allPlugins {
-		cmdProvider, ok := plugin.(domain.ICommandProvider)
+		cmdProvider, ok := plugin.(pluginsdk.ICommandProvider)
 		if !ok {
 			continue
 		}
@@ -130,7 +130,7 @@ func (r *CommandRegistry) GetAllCommands() map[string][]domain.Command {
 
 			// Update cache
 			r.mu.Lock()
-			r.commandCache[pluginName] = make(map[string]domain.Command)
+			r.commandCache[pluginName] = make(map[string]pluginsdk.Command)
 			for _, cmd := range commands {
 				r.commandCache[pluginName][cmd.GetName()] = cmd
 			}
@@ -142,7 +142,7 @@ func (r *CommandRegistry) GetAllCommands() map[string][]domain.Command {
 }
 
 // ExecuteCommand executes a command from a plugin
-func (r *CommandRegistry) ExecuteCommand(ctx context.Context, pluginName, commandName string, args []string, cmdCtx domain.CommandContext) error {
+func (r *CommandRegistry) ExecuteCommand(ctx context.Context, pluginName, commandName string, args []string, cmdCtx pluginsdk.CommandContext) error {
 	cmd, err := r.GetCommand(pluginName, commandName)
 	if err != nil {
 		return err

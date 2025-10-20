@@ -56,6 +56,45 @@ func (a *logsServiceAdapter) ListRecentLogs(ctx context.Context, limit, offset i
 	return pluginLogs, nil
 }
 
+// analysisServiceAdapter adapts app.AnalysisService to claude_code.AnalysisService
+type analysisServiceAdapter struct {
+	inner *app.AnalysisService
+}
+
+func (a *analysisServiceAdapter) GetAllSessionIDs(ctx context.Context, limit int) ([]string, error) {
+	return a.inner.GetAllSessionIDs(ctx, limit)
+}
+
+func (a *analysisServiceAdapter) GetAnalysesBySessionID(ctx context.Context, sessionID string) ([]*claude_code.SessionAnalysis, error) {
+	domainAnalyses, err := a.inner.GetAnalysesBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert domain.SessionAnalysis to claude_code.SessionAnalysis
+	pluginAnalyses := make([]*claude_code.SessionAnalysis, len(domainAnalyses))
+	for i, da := range domainAnalyses {
+		pluginAnalyses[i] = &claude_code.SessionAnalysis{
+			ID:              da.ID,
+			SessionID:       da.SessionID,
+			PromptName:      da.PromptName,
+			ModelUsed:       da.ModelUsed,
+			PatternsSummary: da.PatternsSummary,
+			AnalyzedAt:      da.AnalyzedAt,
+		}
+	}
+
+	return pluginAnalyses, nil
+}
+
+func (a *analysisServiceAdapter) EstimateTokenCount(ctx context.Context, sessionID string) (int, error) {
+	return a.inner.EstimateTokenCount(ctx, sessionID)
+}
+
+func (a *analysisServiceAdapter) GetLastSession(ctx context.Context) (string, error) {
+	return a.inner.GetLastSession(ctx)
+}
+
 // RegisterBuiltInPlugins registers all built-in plugins with the registry.
 // This function lives in cmd layer to avoid app layer importing plugins.
 //
@@ -76,12 +115,13 @@ func RegisterBuiltInPlugins(
 
 	// Create service adapters
 	logsAdapter := &logsServiceAdapter{inner: logsService}
+	analysisAdapter := &analysisServiceAdapter{inner: analysisService}
 
 	// Register claude-code plugin
 	// Note: Built-in plugins can receive internal services during construction,
 	// but their public interface uses only SDK types
 	claudePlugin := claude_code.NewClaudeCodePlugin(
-		analysisService,   // Implements claude_code.AnalysisService
+		analysisAdapter,   // Adapter to claude_code.AnalysisService
 		logsAdapter,       // Adapter to claude_code.LogsService
 		sdkLogger,         // SDK logger
 		setupService,      // Implements claude_code.SetupService
