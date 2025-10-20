@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
@@ -44,28 +45,34 @@ func (c *InitCommand) GetUsage() string {
 }
 
 func (c *InitCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
-	if c.plugin.handler == nil {
-		return fmt.Errorf("handler not initialized")
+	out := cmdCtx.GetStdout()
+
+	fmt.Fprintln(out, "Initializing Claude Code logging for DarwinFlow...")
+	fmt.Fprintln(out)
+
+	// Initialize framework infrastructure (database, schema)
+	if err := c.plugin.setupService.Initialize(ctx, c.plugin.dbPath); err != nil {
+		return fmt.Errorf("failed to initialize database: %w", err)
 	}
 
-	// Initialize the database/repository
-	if err := c.plugin.handler.Init(ctx, c.plugin.dbPath); err != nil {
-		return fmt.Errorf("failed to initialize handler: %w", err)
-	}
+	fmt.Fprintln(out, "✓ Created logging database:", c.plugin.dbPath)
 
 	// Install Claude Code hooks (plugin's responsibility, not framework's)
 	hookMgr, err := NewHookConfigManager()
 	if err != nil {
 		// Log warning but don't fail - hooks are optional
 		c.plugin.logger.Warn("Failed to create hook config manager: %v", err)
-		return nil
-	}
-
-	if err := hookMgr.InstallDarwinFlowHooks(); err != nil {
+	} else if err := hookMgr.InstallDarwinFlowHooks(); err != nil {
 		// Log warning but don't fail - hooks are optional
 		c.plugin.logger.Warn("Failed to install hooks: %v", err)
-		return nil
 	}
+
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "DarwinFlow logging is now active for all Claude Code sessions.")
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "Next steps:")
+	fmt.Fprintln(out, "  1. Restart Claude Code to activate the hooks")
+	fmt.Fprintln(out, "  2. Events will be automatically logged to", c.plugin.dbPath)
 
 	return nil
 }
@@ -187,6 +194,7 @@ func (c *EmitEventCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Command
 
 // LogCommand logs a Claude Code event from hook input
 // DEPRECATED: Use EmitEventCommand instead (will be removed in v2.0)
+// This command is kept for backward compatibility with existing hooks
 type LogCommand struct {
 	plugin *ClaudeCodePlugin
 }
@@ -196,7 +204,7 @@ func (c *LogCommand) GetName() string {
 }
 
 func (c *LogCommand) GetDescription() string {
-	return "Log a Claude Code event (reads JSON from stdin)"
+	return "DEPRECATED: Log a Claude Code event (use emit-event instead)"
 }
 
 func (c *LogCommand) GetUsage() string {
@@ -204,37 +212,14 @@ func (c *LogCommand) GetUsage() string {
 }
 
 func (c *LogCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
-	if len(args) < 1 {
-		return fmt.Errorf("event type required")
-	}
-
-	if c.plugin.handler == nil {
-		return fmt.Errorf("handler not initialized")
-	}
-
-	eventTypeStr := args[0]
-
-	// Get max param length from environment or use default
-	maxParamLength := 30
-	if envVal := os.Getenv("DW_MAX_PARAM_LENGTH"); envVal != "" {
-		if parsed, err := fmt.Sscanf(envVal, "%d", &maxParamLength); err == nil && parsed == 1 {
-			// Successfully parsed
-		}
-	}
-
-	// Read stdin data from command context
-	stdinData, err := io.ReadAll(cmdCtx.GetStdin())
-	if err != nil {
-		// Silently fail - don't disrupt Claude Code
-		return nil
-	}
-
-	// Execute (silently - errors shouldn't disrupt Claude Code)
-	_ = c.plugin.handler.Log(ctx, eventTypeStr, stdinData, maxParamLength)
+	// DEPRECATED: This command is kept for backward compatibility
+	// Silently fail - don't disrupt Claude Code hooks
+	c.plugin.logger.Warn("LogCommand is deprecated, use EmitEventCommand instead")
 	return nil
 }
 
 // AutoSummaryCommand handles auto-triggered session summaries on SessionEnd
+// Returns immediately after spawning background process
 type AutoSummaryCommand struct {
 	plugin *ClaudeCodePlugin
 }
@@ -252,9 +237,16 @@ func (c *AutoSummaryCommand) GetUsage() string {
 }
 
 func (c *AutoSummaryCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
-	if c.plugin.handler == nil {
-		return fmt.Errorf("handler not initialized")
-	}
+	// Add timeout to prevent infinite hangs
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Safely recover from panics
+	defer func() {
+		if r := recover(); r != nil {
+			c.plugin.logger.Error("auto-summary: panic recovered: %v", r)
+		}
+	}()
 
 	// Read stdin data from command context
 	stdinData, err := io.ReadAll(cmdCtx.GetStdin())
@@ -263,8 +255,64 @@ func (c *AutoSummaryCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comma
 		return nil
 	}
 
-	// Execute (silently - errors shouldn't disrupt Claude Code)
-	_ = c.plugin.handler.AutoSummary(ctx, stdinData)
+	// Parse hook input to extract session ID
+	hookInputData, err := c.plugin.hookInputParser.Parse(stdinData)
+	if err != nil {
+		// Not valid hook input, fail silently
+		return nil
+	}
+
+	// Get session ID
+	sessionID := hookInputData.SessionID
+	if sessionID == "" {
+		// No session ID, can't analyze
+		return nil
+	}
+
+	// Load config to check if auto-summary is enabled
+	config, err := c.plugin.configLoader.LoadConfig("")
+	if err != nil {
+		// Config load failed, fail silently
+		return nil
+	}
+
+	// Check if auto-summary is enabled
+	if !config.Analysis.AutoSummaryEnabled {
+		// Auto-summary disabled, silently exit
+		return nil
+	}
+
+	// Spawn detached background process to execute the summary
+	if err := c.spawnBackgroundSummary(ctxWithTimeout, sessionID); err != nil {
+		// Fail silently - don't disrupt Claude Code
+		return nil
+	}
+
+	return nil
+}
+
+// spawnBackgroundSummary spawns a detached background process to execute the summary
+func (c *AutoSummaryCommand) spawnBackgroundSummary(ctx context.Context, sessionID string) error {
+	// Get the path to the current executable
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	// Create command: dw claude-code auto-summary-exec <session-id>
+	cmd := exec.Command(executable, "claude-code", "auto-summary-exec", sessionID)
+
+	// Detach from parent process
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.Stdin = nil
+
+	// Start the process without waiting for it to complete
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	// Don't wait for the process - let it run in background
 	return nil
 }
 
@@ -291,14 +339,24 @@ func (c *AutoSummaryExecCommand) Execute(ctx context.Context, cmdCtx pluginsdk.C
 		return nil
 	}
 
-	if c.plugin.handler == nil {
-		return fmt.Errorf("handler not initialized")
-	}
-
 	sessionID := args[0]
 
-	// Execute (silently - errors shouldn't disrupt background analysis)
-	_ = c.plugin.handler.AutoSummaryExec(ctx, sessionID)
+	// Load config
+	config, err := c.plugin.configLoader.LoadConfig("")
+	if err != nil {
+		// Config load failed, exit silently
+		return nil
+	}
+
+	// Get the prompt name from config
+	promptName := config.Analysis.AutoSummaryPrompt
+	if promptName == "" {
+		promptName = "session_summary"
+	}
+
+	// Execute the analysis using the analysis service
+	_, _ = c.plugin.analysisService.AnalyzeSessionWithPrompt(ctx, sessionID, promptName)
+	// Ignore errors - this is best-effort background analysis
 	return nil
 }
 

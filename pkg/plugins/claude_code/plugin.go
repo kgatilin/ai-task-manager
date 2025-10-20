@@ -18,7 +18,8 @@ type ClaudeCodePlugin struct {
 	logsService     LogsService
 	logger          pluginsdk.Logger
 	setupService    SetupService
-	handler         ClaudeCommandHandler
+	configLoader    ConfigLoader
+	hookInputParser HookInputParser
 	dbPath          string
 }
 
@@ -31,7 +32,8 @@ func NewClaudeCodePlugin(
 	logsService LogsService,
 	logger pluginsdk.Logger,
 	setupService SetupService,
-	handler ClaudeCommandHandler,
+	configLoader ConfigLoader,
+	hookInputParser HookInputParser,
 	dbPath string,
 ) *ClaudeCodePlugin {
 	return &ClaudeCodePlugin{
@@ -39,7 +41,8 @@ func NewClaudeCodePlugin(
 		logsService:     logsService,
 		logger:          logger,
 		setupService:    setupService,
-		handler:         handler,
+		configLoader:    configLoader,
+		hookInputParser: hookInputParser,
 		dbPath:          dbPath,
 	}
 }

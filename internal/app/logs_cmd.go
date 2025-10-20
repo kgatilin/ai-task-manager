@@ -38,7 +38,7 @@ func (h *LogsCommandHandler) ListLogs(ctx context.Context, limit, sessionLimit i
 
 	if len(records) == 0 {
 		fmt.Fprintln(h.out, "No logs found.")
-		fmt.Fprintln(h.out, "Run 'dw claude init' to initialize logging, then use Claude Code to generate events.")
+		fmt.Fprintln(h.out, "Run 'dw init' or a plugin's init command to initialize logging.")
 		return nil
 	}
 

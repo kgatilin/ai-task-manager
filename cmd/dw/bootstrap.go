@@ -74,30 +74,8 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 	// 8. Create plugin registry
 	pluginRegistry := app.NewPluginRegistry(logger)
 
-	// 9. Create command handler for plugin commands
-	transcriptParser := infra.NewTranscriptParser()
-	contextDetector := infra.NewContextDetector()
+	// 9. Create hook input parser for plugins
 	hookInputParser := infra.NewHookInputParserAdapter()
-	eventMapper := &app.EventMapper{}
-
-	loggerService := app.NewLoggerService(
-		nil, // Repository accessed through services
-		transcriptParser,
-		contextDetector,
-		infra.NormalizeContent,
-	)
-
-	handler := app.NewClaudeCommandHandler(
-		setupService,
-		loggerService,
-		analysisService,
-		hookInputParser,
-		eventMapper,
-		configLoader,
-		logger,
-		os.Stdout,
-		pluginRegistry,
-	)
 
 	// 10. Register built-in plugins (cmd layer handles plugin imports)
 	if err := RegisterBuiltInPlugins(
@@ -106,7 +84,8 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 		logsService,
 		logger,
 		setupService,
-		handler,
+		configLoader,
+		hookInputParser,
 		dbPath,
 	); err != nil {
 		return nil, fmt.Errorf("failed to register built-in plugins: %w", err)

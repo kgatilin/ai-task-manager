@@ -9,6 +9,11 @@ import (
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
 )
 
+// HookInputParser defines the interface for parsing hook input from stdin
+type HookInputParser interface {
+	Parse(data []byte) (*domain.HookInputData, error)
+}
+
 // EventMapper maps string event types to domain.EventType
 type EventMapper struct{}
 

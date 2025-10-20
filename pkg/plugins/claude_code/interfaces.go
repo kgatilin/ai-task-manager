@@ -35,6 +35,7 @@ type AnalysisService interface {
 	GetAnalysesBySessionID(ctx context.Context, sessionID string) ([]*SessionAnalysis, error)
 	EstimateTokenCount(ctx context.Context, sessionID string) (int, error)
 	GetLastSession(ctx context.Context) (string, error)
+	AnalyzeSessionWithPrompt(ctx context.Context, sessionID string, promptName string) (*SessionAnalysis, error)
 }
 
 // LogsService provides access to event logs from the event repository.
@@ -58,15 +59,33 @@ type LogsService interface {
 
 // SetupService provides setup functionality
 type SetupService interface {
-	// Methods needed by setup commands (if any)
+	Initialize(ctx context.Context, dbPath string) error
 }
 
-// ClaudeCommandHandler handles claude-specific commands
-type ClaudeCommandHandler interface {
-	Init(ctx context.Context, dbPath string) error
-	Log(ctx context.Context, eventType string, stdinData []byte, maxParamLength int) error
-	AutoSummary(ctx context.Context, stdinData []byte) error
-	AutoSummaryExec(ctx context.Context, sessionID string) error
+// ConfigLoader provides access to configuration
+type ConfigLoader interface {
+	LoadConfig(path string) (*Config, error)
+}
+
+// Config represents the application configuration
+type Config struct {
+	Analysis AnalysisConfig `yaml:"analysis"`
+}
+
+// AnalysisConfig contains analysis-related configuration
+type AnalysisConfig struct {
+	AutoSummaryEnabled bool   `yaml:"auto_summary_enabled"`
+	AutoSummaryPrompt  string `yaml:"auto_summary_prompt"`
+}
+
+// HookInputData represents data from Claude Code hooks
+type HookInputData struct {
+	SessionID string
+}
+
+// HookInputParser parses hook input from stdin
+type HookInputParser interface {
+	Parse(data []byte) (*HookInputData, error)
 }
 
 // TimeProvider for session entities

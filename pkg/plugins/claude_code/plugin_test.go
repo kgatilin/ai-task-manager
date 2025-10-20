@@ -23,7 +23,7 @@ func (m *mockLogger) Error(msg string, keysAndValues ...interface{}) {}
 func TestNewClaudeCodePlugin(t *testing.T) {
 	// This test verifies the constructor works
 	// We use nil services since we're only testing construction
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, nil, "")
 
 	if plugin == nil {
 		t.Fatal("NewClaudeCodePlugin returned nil")
@@ -31,7 +31,7 @@ func TestNewClaudeCodePlugin(t *testing.T) {
 }
 
 func TestGetInfo(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, nil, "")
 
 	info := plugin.GetInfo()
 
@@ -50,7 +50,7 @@ func TestGetInfo(t *testing.T) {
 }
 
 func TestGetEntityTypes(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, nil, "")
 
 	entityTypes := plugin.GetEntityTypes()
 
@@ -96,7 +96,7 @@ func TestGetEntityTypes(t *testing.T) {
 }
 
 func TestUpdateEntity_ReadOnly(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, nil, "")
 
 	ctx := context.Background()
 	_, err := plugin.UpdateEntity(ctx, "session-1", map[string]interface{}{})
@@ -111,7 +111,7 @@ func TestUpdateEntity_ReadOnly(t *testing.T) {
 }
 
 func TestGetCommands(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, nil, "")
 
 	commands := plugin.GetCommands()
 
@@ -209,6 +209,17 @@ func (m *mockAnalysisService) GetLastSession(ctx context.Context) (string, error
 	return "", nil
 }
 
+func (m *mockAnalysisService) AnalyzeSessionWithPrompt(ctx context.Context, sessionID string, promptName string) (*claude_code.SessionAnalysis, error) {
+	// Return a mock analysis
+	return &claude_code.SessionAnalysis{
+		ID:              "analysis-1",
+		SessionID:       sessionID,
+		PromptName:      promptName,
+		ModelUsed:       "claude-sonnet-4",
+		PatternsSummary: "Mock analysis",
+	}, nil
+}
+
 // TestClaudeCodePlugin_QueryBuildsSessionsFromEvents demonstrates event sourcing:
 // Sessions are reconstructed from historical events stored in the event repository.
 //
@@ -263,6 +274,7 @@ func TestClaudeCodePlugin_QueryBuildsSessionsFromEvents(t *testing.T) {
 		analysisService,
 		logsService,
 		logger,
+		nil,
 		nil,
 		nil,
 		"",
@@ -374,6 +386,7 @@ func TestClaudeCodePlugin_GetEntity_RebuildsSameSessionFromEvents(t *testing.T) 
 		logger,
 		nil,
 		nil,
+		nil,
 		"",
 	)
 
@@ -439,6 +452,7 @@ func TestClaudeCodePlugin_QueryWithAnalyses(t *testing.T) {
 		logger,
 		nil,
 		nil,
+		nil,
 		"",
 	)
 
@@ -488,7 +502,7 @@ func TestClaudeCodePlugin_QueryWithAnalyses(t *testing.T) {
 
 // TestClaudeCodePlugin_GetCapabilities verifies expected capabilities
 func TestClaudeCodePlugin_GetCapabilities(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, nil, "")
 
 	capabilities := plugin.GetCapabilities()
 

@@ -125,6 +125,7 @@ overrides:
             pkg/plugins: "Plugin implementations (built-in and external)"
             pkg/pluginsdk: "Plugin SDK (interfaces and types for plugin development)"
     rules:
+        staticcheck: true # Enable staticcheck integration
         directories_import:
             cmd:
                 - internal/app

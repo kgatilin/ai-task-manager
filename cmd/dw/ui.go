@@ -54,12 +54,20 @@ func uiCommand(args []string) {
 	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
 	analysisService := app.NewAnalysisService(repo, repo, logsService, llmExecutor, logger, config)
 
+	// Create setup service
+	setupService := app.NewSetupService(repo, logger)
+
+	// Create config loader (reuse existing logger)
+	configLoaderForPlugin := infra.NewConfigLoader(logger)
+
+	// Create hook input parser
+	hookInputParser := infra.NewHookInputParserAdapter()
+
 	// Create plugin registry
 	registry := app.NewPluginRegistry(logger)
 
 	// Register built-in plugins
-	// Note: setupService and handler are nil because UI doesn't use command execution
-	if err := RegisterBuiltInPlugins(registry, analysisService, logsService, logger, nil, nil, *dbPath); err != nil {
+	if err := RegisterBuiltInPlugins(registry, analysisService, logsService, logger, setupService, configLoaderForPlugin, hookInputParser, *dbPath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error registering built-in plugins: %v\n", err)
 		os.Exit(1)
 	}

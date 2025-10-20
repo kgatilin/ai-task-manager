@@ -95,6 +95,66 @@ func (a *analysisServiceAdapter) GetLastSession(ctx context.Context) (string, er
 	return a.inner.GetLastSession(ctx)
 }
 
+func (a *analysisServiceAdapter) AnalyzeSessionWithPrompt(ctx context.Context, sessionID string, promptName string) (*claude_code.SessionAnalysis, error) {
+	domainAnalysis, err := a.inner.AnalyzeSessionWithPrompt(ctx, sessionID, promptName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &claude_code.SessionAnalysis{
+		ID:              domainAnalysis.ID,
+		SessionID:       domainAnalysis.SessionID,
+		PromptName:      domainAnalysis.PromptName,
+		ModelUsed:       domainAnalysis.ModelUsed,
+		PatternsSummary: domainAnalysis.PatternsSummary,
+		AnalyzedAt:      domainAnalysis.AnalyzedAt,
+	}, nil
+}
+
+// configLoaderAdapter adapts app.ConfigLoader to claude_code.ConfigLoader
+type configLoaderAdapter struct {
+	inner app.ConfigLoader
+}
+
+func (a *configLoaderAdapter) LoadConfig(path string) (*claude_code.Config, error) {
+	domainConfig, err := a.inner.LoadConfig(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return &claude_code.Config{
+		Analysis: claude_code.AnalysisConfig{
+			AutoSummaryEnabled: domainConfig.Analysis.AutoSummaryEnabled,
+			AutoSummaryPrompt:  domainConfig.Analysis.AutoSummaryPrompt,
+		},
+	}, nil
+}
+
+// hookInputParserAdapter adapts app.HookInputParser to claude_code.HookInputParser
+type hookInputParserAdapter struct {
+	inner app.HookInputParser
+}
+
+func (a *hookInputParserAdapter) Parse(data []byte) (*claude_code.HookInputData, error) {
+	domainData, err := a.inner.Parse(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return &claude_code.HookInputData{
+		SessionID: domainData.SessionID,
+	}, nil
+}
+
+// setupServiceAdapter adapts app.SetupService to claude_code.SetupService
+type setupServiceAdapter struct {
+	inner *app.SetupService
+}
+
+func (a *setupServiceAdapter) Initialize(ctx context.Context, dbPath string) error {
+	return a.inner.Initialize(ctx, dbPath)
+}
+
 // RegisterBuiltInPlugins registers all built-in plugins with the registry.
 // This function lives in cmd layer to avoid app layer importing plugins.
 //
@@ -107,7 +167,8 @@ func RegisterBuiltInPlugins(
 	logsService *app.LogsService,
 	logger app.Logger,
 	setupService *app.SetupService,
-	handler *app.ClaudeCommandHandler,
+	configLoader app.ConfigLoader,
+	hookInputParser app.HookInputParser,
 	dbPath string,
 ) error {
 	// Create plugin context (SDK logger adapter)
@@ -116,6 +177,9 @@ func RegisterBuiltInPlugins(
 	// Create service adapters
 	logsAdapter := &logsServiceAdapter{inner: logsService}
 	analysisAdapter := &analysisServiceAdapter{inner: analysisService}
+	setupAdapter := &setupServiceAdapter{inner: setupService}
+	configAdapter := &configLoaderAdapter{inner: configLoader}
+	hookParserAdapter := &hookInputParserAdapter{inner: hookInputParser}
 
 	// Register claude-code plugin
 	// Note: Built-in plugins can receive internal services during construction,
@@ -124,8 +188,9 @@ func RegisterBuiltInPlugins(
 		analysisAdapter,   // Adapter to claude_code.AnalysisService
 		logsAdapter,       // Adapter to claude_code.LogsService
 		sdkLogger,         // SDK logger
-		setupService,      // Implements claude_code.SetupService
-		handler,           // Implements claude_code.ClaudeCommandHandler
+		setupAdapter,      // Adapter to claude_code.SetupService
+		configAdapter,     // Adapter to claude_code.ConfigLoader
+		hookParserAdapter, // Adapter to claude_code.HookInputParser
 		dbPath,
 	)
 

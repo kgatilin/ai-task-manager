@@ -78,10 +78,8 @@ func (h *RefreshCommandHandler) Execute(ctx context.Context, dbPath string) erro
 	fmt.Fprintln(h.out, "  • Database schema updated with latest migrations")
 	fmt.Fprintln(h.out, "  • Configuration verified")
 	fmt.Fprintln(h.out)
-	fmt.Fprintln(h.out, "To refresh plugin-specific configuration (hooks, etc.), run:")
-	fmt.Fprintln(h.out, "  dw claude-code init")
-	fmt.Fprintln(h.out)
-	fmt.Fprintln(h.out, "You may need to restart Claude Code for changes to take effect.")
+	fmt.Fprintln(h.out, "Note: To refresh plugin-specific configuration, run the plugin's init command")
+	fmt.Fprintln(h.out, "Example: dw <plugin-name> init")
 
 	return nil
 }
