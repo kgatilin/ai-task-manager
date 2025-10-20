@@ -32,7 +32,7 @@
   - Multi-step migration process: base tables → column additions → duplicate cleanup → indexes
   - Handles missing columns, duplicates, and schema inconsistencies
   - Backwards compatible with existing databases
-- **Hook Management**: Automatically configures and merges Claude Code hooks
+- **Hook Management**: Claude Code plugin manages its own hooks (`.claude/settings.json`)
 - **Log Viewer**: Query interface with SQL support for exploring captured events
 - **AI Analysis**: Uses Claude CLI to analyze sessions and suggest workflow optimizations
 
@@ -175,8 +175,22 @@ Since plugins use SDK types but the core system uses domain types, an adaptation
 - ✅ TUI using plugin system for entity queries
 - ✅ Command system with plugin-namespaced CLI commands
 - ✅ Tool system with project-scoped tools
+- ✅ Clean bounded context separation (no plugin logic in framework)
+- ✅ Plugin commands are fully self-contained
 - 🔄 External plugin discovery (planned - Phase 6)
 - 🔄 JSON-RPC for non-Go plugins (planned - Phase 5)
+
+**Bounded Context Separation**:
+
+The architecture maintains strict separation between framework and plugins:
+
+- **Framework layers** (`internal/app`, `internal/domain`, `internal/infra`): Zero knowledge of specific plugins
+- **Plugin packages** (`pkg/plugins/claude_code`): Self-contained with all plugin-specific logic
+- **cmd layer**: Only 2 places reference plugins:
+  1. `cmd/dw/main.go` - Backward compatibility mapping (`dw claude` → `dw claude-code`)
+  2. `cmd/dw/plugin_registration.go` - Plugin registration (composition root)
+
+Plugin-specific features (like hook management for claude-code) are handled entirely within the plugin package. The framework provides only generic services through well-defined interfaces.
 
 ### Architecture Documentation
 
@@ -323,6 +337,31 @@ For large features or refactorings that require substantial context, use the Tas
 - Chunk 3: Create core plugin implementation
 - Chunk 4: Add CLI commands and integrate with existing code
 - Chunk 5: Write comprehensive tests for all components
+
+**Final Checklist for Large Changes**:
+
+After completing implementation work (especially when using Task tool delegation), **ALWAYS** create a final checklist using TodoWrite with these items:
+
+1. **Run tests**: `go test ./...` - ensure all tests pass
+2. **Run linter**: `go-arch-lint .` - verify zero violations
+3. **Update README.md**: If functionality changed (commands, features, behavior)
+4. **Update CLAUDE.md**: If workflow or architecture changed
+5. **Regenerate docs**: Run `go-arch-lint docs` if architecture/API changed
+6. **Commit changes**: Create commit with concise, informative message
+
+**Why this matters**:
+- Ensures nothing is forgotten after complex implementations
+- Provides clear completion criteria for the task
+- Makes the workflow systematic and repeatable
+- Gives visibility to the user on final steps
+
+**When to create this checklist**:
+- After completing Task tool delegation work
+- After finishing a multi-step refactoring or feature
+- Before marking a large task as complete
+- Any time substantial code changes were made
+
+Use TodoWrite to track each item and mark them complete as you go.
 
 When working on this project:
 1. Understand the DDD layered architecture (see below)
