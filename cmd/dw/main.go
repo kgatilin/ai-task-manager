@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+
+	"github.com/kgatilin/darwinflow-pub/internal/app"
 )
 
 func main() {
@@ -12,25 +15,71 @@ func main() {
 	}
 
 	command := os.Args[1]
+	args := os.Args[2:]
 
-	switch command {
-	case "claude":
-		handleClaudeCommand(os.Args[2:])
-	case "logs":
-		handleLogs(os.Args[2:])
-	case "analyze":
-		analyzeCmd(os.Args[2:])
-	case "ui":
-		uiCommand(os.Args[2:])
-	case "config":
-		configCmd(os.Args[2:])
-	case "refresh":
-		handleRefresh(os.Args[2:])
-	case "project":
-		projectCommand(os.Args[2:])
-	case "help", "--help", "-h":
+	// Handle help first
+	if command == "help" || command == "--help" || command == "-h" {
 		printUsage()
+		return
+	}
+
+	// Initialize app (use default DB path, can be overridden by command flags)
+	services, err := InitializeApp(app.DefaultDBPath, "", false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing app: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create registries
+	pluginRegistry := app.NewPluginRegistry(services.Logger)
+	if err := RegisterPlugins(pluginRegistry, services); err != nil {
+		fmt.Fprintf(os.Stderr, "Error registering plugins: %v\n", err)
+		os.Exit(1)
+	}
+
+	commandRegistry := app.NewCommandRegistry(pluginRegistry, services.Logger)
+
+	ctx := context.Background()
+
+	// Route command
+	switch command {
+	case "logs":
+		handleLogs(args)
+	case "analyze":
+		analyzeCmd(args)
+	case "ui":
+		uiCommand(args)
+	case "refresh":
+		handleRefresh(args)
+	case "config":
+		configCmd(args)
+	case "project":
+		projectCommand(args)
+	case "claude":
+		// Backward compatibility: "dw claude <command>" -> "dw claude-code <command>"
+		if len(args) > 0 {
+			if err := commandRegistry.ExecuteCommand(ctx, "claude-code", args[0], args[1:]); err != nil {
+				fmt.Fprintf(os.Stderr, "Error executing claude-code command: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: claude subcommand required\n")
+			fmt.Fprintf(os.Stderr, "Usage: dw claude <subcommand>\n")
+			os.Exit(1)
+		}
 	default:
+		// Try plugin commands: dw <plugin-name> <command> [args]
+		if len(args) > 0 {
+			// Try as: dw <plugin> <command> [args]
+			if err := commandRegistry.ExecuteCommand(ctx, command, args[0], args[1:]); err == nil {
+				return
+			}
+		}
+		// Try as: dw <command> (single-word plugin command)
+		if err := commandRegistry.ExecuteCommand(ctx, command, "", args); err == nil {
+			return
+		}
+		// Unknown command
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		printUsage()
 		os.Exit(1)
@@ -41,8 +90,9 @@ func printUsage() {
 	fmt.Println("dw - DarwinFlow CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
-	fmt.Println("  dw claude init       Initialize Claude Code logging")
-	fmt.Println("  dw claude log        Log a Claude Code event")
+	fmt.Println("  dw <plugin> <command> [args]   Run a plugin command")
+	fmt.Println()
+	fmt.Println("Built-in Commands:")
 	fmt.Println("  dw logs              View logged events from the database")
 	fmt.Println("  dw analyze           Analyze sessions to identify tool gaps and inefficiencies")
 	fmt.Println("  dw ui                Interactive UI for browsing and analyzing sessions")
@@ -50,6 +100,12 @@ func printUsage() {
 	fmt.Println("  dw refresh           Update database schema and hooks to latest version")
 	fmt.Println("  dw project           Run project-specific tools provided by plugins")
 	fmt.Println("  dw help              Show this help message")
+	fmt.Println()
+	fmt.Println("Plugin Commands:")
+	fmt.Println("  dw claude init                   Initialize Claude Code logging (backward compat)")
+	fmt.Println("  dw claude log <event-type>       Log a Claude Code event (backward compat)")
+	fmt.Println("  dw claude-code init              Initialize Claude Code logging")
+	fmt.Println("  dw claude-code log <event-type>  Log a Claude Code event")
 	fmt.Println()
 	fmt.Println("For command-specific help:")
 	fmt.Println("  dw logs --help       Show logs command help and database schema")

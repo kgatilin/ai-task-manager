@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // ToolRegistry manages tools provided by plugins
@@ -23,12 +24,12 @@ func NewToolRegistry(pluginRegistry *PluginRegistry, logger Logger) *ToolRegistr
 }
 
 // GetTool retrieves a tool by name from registered plugins
-func (r *ToolRegistry) GetTool(toolName string) (domain.Tool, error) {
+func (r *ToolRegistry) GetTool(toolName string) (pluginsdk.Tool, error) {
 	plugins := r.pluginRegistry.GetAllPlugins()
 
 	for _, plugin := range plugins {
 		// Check if plugin implements IToolProvider
-		toolProvider, ok := plugin.(domain.IToolProvider)
+		toolProvider, ok := plugin.(pluginsdk.IToolProvider)
 		if !ok {
 			continue
 		}
@@ -47,13 +48,13 @@ func (r *ToolRegistry) GetTool(toolName string) (domain.Tool, error) {
 }
 
 // GetAllTools returns all tools from all registered plugins
-func (r *ToolRegistry) GetAllTools() []domain.Tool {
-	var allTools []domain.Tool
+func (r *ToolRegistry) GetAllTools() []pluginsdk.Tool {
+	var allTools []pluginsdk.Tool
 	plugins := r.pluginRegistry.GetAllPlugins()
 
 	for _, plugin := range plugins {
 		// Check if plugin implements IToolProvider
-		toolProvider, ok := plugin.(domain.IToolProvider)
+		toolProvider, ok := plugin.(pluginsdk.IToolProvider)
 		if !ok {
 			continue
 		}
@@ -71,7 +72,7 @@ func (r *ToolRegistry) GetAllTools() []domain.Tool {
 }
 
 // ExecuteTool executes a tool with the given context and arguments
-func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args []string, pluginCtx *PluginContext) error {
+func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args []string, projectCtx *ProjectContext) error {
 	tool, err := r.GetTool(toolName)
 	if err != nil {
 		return err
@@ -81,7 +82,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args []
 	return tool.Execute(ctx, args)
 }
 
-// ExecuteToolWithContext creates a PluginContext and executes the tool
+// ExecuteToolWithContext creates a ProjectContext and executes the tool
 func (r *ToolRegistry) ExecuteToolWithContext(
 	ctx context.Context,
 	toolName string,
@@ -92,7 +93,7 @@ func (r *ToolRegistry) ExecuteToolWithContext(
 	cwd string,
 	dbPath string,
 ) error {
-	pluginCtx := &PluginContext{
+	projectCtx := &ProjectContext{
 		EventRepo:    eventRepo,
 		AnalysisRepo: analysisRepo,
 		Config:       config,
@@ -100,7 +101,7 @@ func (r *ToolRegistry) ExecuteToolWithContext(
 		DBPath:       dbPath,
 	}
 
-	return r.ExecuteTool(ctx, toolName, args, pluginCtx)
+	return r.ExecuteTool(ctx, toolName, args, projectCtx)
 }
 
 // ListTools returns a formatted list of all available tools with their descriptions

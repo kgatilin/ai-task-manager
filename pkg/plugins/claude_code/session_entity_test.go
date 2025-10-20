@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kgatilin/darwinflow-pub/internal/app/plugins/claude_code"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/claude_code"
 )
 
 func TestNewSessionEntity(t *testing.T) {

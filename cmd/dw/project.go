@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
-	"github.com/kgatilin/darwinflow-pub/internal/app/plugins/claude_code"
 	"github.com/kgatilin/darwinflow-pub/internal/infra"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/claude_code"
 )
 
 func projectCommand(args []string) {
@@ -70,7 +70,8 @@ func projectCommand(args []string) {
 	pluginRegistry := app.NewPluginRegistry(logger)
 
 	// Register claude-code core plugin
-	claudeCodePlugin := claude_code.NewClaudeCodePlugin(analysisService, logsService, logger)
+	// Note: setupService and handler are nil because project tools don't use command execution
+	claudeCodePlugin := claude_code.NewClaudeCodePlugin(analysisService, logsService, logger, nil, nil, *dbPath)
 	if err := pluginRegistry.RegisterPlugin(claudeCodePlugin); err != nil {
 		fmt.Fprintf(os.Stderr, "Error registering claude-code plugin: %v\n", err)
 		os.Exit(1)

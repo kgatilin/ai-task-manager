@@ -118,14 +118,20 @@ preset:
             3. Test only through exported (capitalized) functions, types, and methods
             4. If you can't test adequately through the public API, consider whether your API design needs improvement
 
-# Example overrides:
-#overrides:
-#  structure:
-#    required_directories:
-#      scripts: "Build and deployment scripts"
-#  rules:
-#    directories_import:
-#      scripts: ["pkg"]
-#  error_prompt:
-#    architectural_goals: |
-#      Custom goals for your project...
+# Overrides for plugin architecture
+overrides:
+    structure:
+        required_directories:
+            pkg/plugins: "Plugin implementations (built-in and external)"
+    rules:
+        directories_import:
+            cmd:
+                - internal/app
+                - internal/infra
+            pkg/plugins/claude_code:
+                - internal/app
+                - internal/domain
+                - internal/infra
+    test_coverage:
+        package_thresholds:
+            pkg/plugins/claude_code: 70

@@ -1,0 +1,413 @@
+package app_test
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+
+	"github.com/kgatilin/darwinflow-pub/internal/app"
+	"github.com/kgatilin/darwinflow-pub/internal/domain"
+)
+
+// mockCommand implements domain.Command
+type mockCommand struct {
+	name        string
+	description string
+	usage       string
+	executeFunc func(ctx context.Context, args []string) error
+}
+
+func (m *mockCommand) GetName() string        { return m.name }
+func (m *mockCommand) GetDescription() string { return m.description }
+func (m *mockCommand) GetUsage() string       { return m.usage }
+func (m *mockCommand) Execute(ctx context.Context, args []string) error {
+	if m.executeFunc != nil {
+		return m.executeFunc(ctx, args)
+	}
+	return nil
+}
+
+// mockCommandProviderPlugin implements domain.Plugin and domain.ICommandProvider
+type mockCommandProviderPlugin struct {
+	info     domain.PluginInfo
+	commands []domain.Command
+}
+
+func (m *mockCommandProviderPlugin) GetInfo() domain.PluginInfo {
+	return m.info
+}
+
+func (m *mockCommandProviderPlugin) GetEntityTypes() []domain.EntityTypeInfo {
+	return []domain.EntityTypeInfo{}
+}
+
+func (m *mockCommandProviderPlugin) Query(ctx context.Context, query domain.EntityQuery) ([]domain.IExtensible, error) {
+	return nil, nil
+}
+
+func (m *mockCommandProviderPlugin) GetEntity(ctx context.Context, entityID string) (domain.IExtensible, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockCommandProviderPlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (domain.IExtensible, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockCommandProviderPlugin) GetCommands() []domain.Command {
+	return m.commands
+}
+
+// mockNonCommandPlugin implements domain.Plugin but not ICommandProvider
+type mockNonCommandPlugin struct {
+	info domain.PluginInfo
+}
+
+func (m *mockNonCommandPlugin) GetInfo() domain.PluginInfo {
+	return m.info
+}
+
+func (m *mockNonCommandPlugin) GetEntityTypes() []domain.EntityTypeInfo {
+	return []domain.EntityTypeInfo{}
+}
+
+func (m *mockNonCommandPlugin) Query(ctx context.Context, query domain.EntityQuery) ([]domain.IExtensible, error) {
+	return nil, nil
+}
+
+func (m *mockNonCommandPlugin) GetEntity(ctx context.Context, entityID string) (domain.IExtensible, error) {
+	return nil, domain.ErrNotFound
+}
+
+func (m *mockNonCommandPlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (domain.IExtensible, error) {
+	return nil, domain.ErrNotFound
+}
+
+func TestNewCommandRegistry(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	if registry == nil {
+		t.Fatal("NewCommandRegistry returned nil")
+	}
+}
+
+func TestCommandRegistry_GetCommand(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	// Register plugin with commands
+	plugin := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "test-plugin", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{name: "init", description: "Initialize", usage: "init"},
+			&mockCommand{name: "start", description: "Start", usage: "start"},
+		},
+	}
+	pluginRegistry.RegisterPlugin(plugin)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	tests := []struct {
+		name        string
+		pluginName  string
+		commandName string
+		wantErr     bool
+	}{
+		{
+			name:        "existing command",
+			pluginName:  "test-plugin",
+			commandName: "init",
+			wantErr:     false,
+		},
+		{
+			name:        "another existing command",
+			pluginName:  "test-plugin",
+			commandName: "start",
+			wantErr:     false,
+		},
+		{
+			name:        "non-existent command",
+			pluginName:  "test-plugin",
+			commandName: "nonexistent",
+			wantErr:     true,
+		},
+		{
+			name:        "non-existent plugin",
+			pluginName:  "nonexistent-plugin",
+			commandName: "init",
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, err := registry.GetCommand(tt.pluginName, tt.commandName)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("GetCommand() expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("GetCommand() unexpected error: %v", err)
+				}
+				if cmd == nil {
+					t.Errorf("GetCommand() returned nil command")
+				}
+				if cmd.GetName() != tt.commandName {
+					t.Errorf("GetCommand() returned command with name %q, want %q", cmd.GetName(), tt.commandName)
+				}
+			}
+		})
+	}
+}
+
+func TestCommandRegistry_GetCommand_NonCommandProvider(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	// Register plugin that does NOT provide commands
+	plugin := &mockNonCommandPlugin{
+		info: domain.PluginInfo{Name: "no-commands", Version: "1.0.0"},
+	}
+	pluginRegistry.RegisterPlugin(plugin)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	_, err := registry.GetCommand("no-commands", "init")
+	if err == nil {
+		t.Error("GetCommand() expected error for non-command-provider plugin, got nil")
+	}
+}
+
+func TestCommandRegistry_GetCommandsForPlugin(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	// Register plugin with commands
+	plugin := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "test-plugin", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{name: "init", description: "Initialize"},
+			&mockCommand{name: "start", description: "Start"},
+		},
+	}
+	pluginRegistry.RegisterPlugin(plugin)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	commands := registry.GetCommandsForPlugin("test-plugin")
+
+	if len(commands) != 2 {
+		t.Errorf("GetCommandsForPlugin() returned %d commands, want 2", len(commands))
+	}
+}
+
+func TestCommandRegistry_GetCommandsForPlugin_NonExistent(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	commands := registry.GetCommandsForPlugin("nonexistent")
+
+	if commands != nil {
+		t.Errorf("GetCommandsForPlugin() returned %v, want nil", commands)
+	}
+}
+
+func TestCommandRegistry_GetAllCommands(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	// Register multiple plugins
+	plugin1 := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "plugin1", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{name: "init", description: "Initialize"},
+		},
+	}
+	plugin2 := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "plugin2", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{name: "start", description: "Start"},
+			&mockCommand{name: "stop", description: "Stop"},
+		},
+	}
+
+	pluginRegistry.RegisterPlugin(plugin1)
+	pluginRegistry.RegisterPlugin(plugin2)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	allCommands := registry.GetAllCommands()
+
+	if len(allCommands) != 2 {
+		t.Errorf("GetAllCommands() returned %d plugins, want 2", len(allCommands))
+	}
+
+	if len(allCommands["plugin1"]) != 1 {
+		t.Errorf("GetAllCommands()[plugin1] has %d commands, want 1", len(allCommands["plugin1"]))
+	}
+
+	if len(allCommands["plugin2"]) != 2 {
+		t.Errorf("GetAllCommands()[plugin2] has %d commands, want 2", len(allCommands["plugin2"]))
+	}
+}
+
+func TestCommandRegistry_ExecuteCommand(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	executed := false
+	executedArgs := []string{}
+
+	plugin := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "test-plugin", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{
+				name:        "test-cmd",
+				description: "Test command",
+				executeFunc: func(ctx context.Context, args []string) error {
+					executed = true
+					executedArgs = args
+					return nil
+				},
+			},
+		},
+	}
+	pluginRegistry.RegisterPlugin(plugin)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	ctx := context.Background()
+	args := []string{"arg1", "arg2"}
+
+	err := registry.ExecuteCommand(ctx, "test-plugin", "test-cmd", args)
+
+	if err != nil {
+		t.Errorf("ExecuteCommand() unexpected error: %v", err)
+	}
+
+	if !executed {
+		t.Error("ExecuteCommand() did not execute the command")
+	}
+
+	if len(executedArgs) != 2 || executedArgs[0] != "arg1" || executedArgs[1] != "arg2" {
+		t.Errorf("ExecuteCommand() passed wrong args: %v", executedArgs)
+	}
+}
+
+func TestCommandRegistry_ExecuteCommand_Error(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	expectedErr := errors.New("command failed")
+
+	plugin := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "test-plugin", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{
+				name:        "fail-cmd",
+				description: "Failing command",
+				executeFunc: func(ctx context.Context, args []string) error {
+					return expectedErr
+				},
+			},
+		},
+	}
+	pluginRegistry.RegisterPlugin(plugin)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	ctx := context.Background()
+	err := registry.ExecuteCommand(ctx, "test-plugin", "fail-cmd", nil)
+
+	if err != expectedErr {
+		t.Errorf("ExecuteCommand() error = %v, want %v", err, expectedErr)
+	}
+}
+
+func TestCommandRegistry_ListCommands(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	plugin := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "test-plugin", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{name: "init", description: "Initialize system", usage: "init [--force]"},
+			&mockCommand{name: "start", description: "Start service", usage: "start"},
+		},
+	}
+	pluginRegistry.RegisterPlugin(plugin)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	output := registry.ListCommands()
+
+	if !strings.Contains(output, "test-plugin") {
+		t.Error("ListCommands() output does not contain plugin name")
+	}
+
+	if !strings.Contains(output, "init") || !strings.Contains(output, "Initialize system") {
+		t.Error("ListCommands() output does not contain init command")
+	}
+
+	if !strings.Contains(output, "start") || !strings.Contains(output, "Start service") {
+		t.Error("ListCommands() output does not contain start command")
+	}
+}
+
+func TestCommandRegistry_ListCommands_Empty(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	output := registry.ListCommands()
+
+	if !strings.Contains(output, "No plugin commands available") {
+		t.Errorf("ListCommands() with no plugins should return 'No plugin commands available', got: %s", output)
+	}
+}
+
+func TestCommandRegistry_Caching(t *testing.T) {
+	logger := &app.NoOpLogger{}
+	pluginRegistry := app.NewPluginRegistry(logger)
+
+	callCount := 0
+
+	// Create a plugin that tracks GetCommands calls
+	plugin := &mockCommandProviderPlugin{
+		info: domain.PluginInfo{Name: "test-plugin", Version: "1.0.0"},
+		commands: []domain.Command{
+			&mockCommand{name: "init", description: "Initialize"},
+		},
+	}
+
+	// Wrap to count calls
+	originalGetCommands := plugin.GetCommands
+	plugin.commands = originalGetCommands()
+
+	pluginRegistry.RegisterPlugin(plugin)
+	registry := app.NewCommandRegistry(pluginRegistry, logger)
+
+	// First call - should cache
+	registry.GetCommand("test-plugin", "init")
+	callCount++
+
+	// Second call - should use cache
+	registry.GetCommand("test-plugin", "init")
+
+	// The command should still work (we can't directly verify caching without modifying the implementation)
+	cmd, err := registry.GetCommand("test-plugin", "init")
+	if err != nil {
+		t.Errorf("GetCommand() with cache should not error: %v", err)
+	}
+	if cmd.GetName() != "init" {
+		t.Errorf("GetCommand() with cache returned wrong command: %s", cmd.GetName())
+	}
+}

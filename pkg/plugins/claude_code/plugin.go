@@ -14,6 +14,9 @@ type ClaudeCodePlugin struct {
 	analysisService *app.AnalysisService
 	logsService     *app.LogsService
 	logger          app.Logger
+	setupService    *app.SetupService
+	handler         *app.ClaudeCommandHandler
+	dbPath          string
 }
 
 // NewClaudeCodePlugin creates a new Claude Code plugin
@@ -21,11 +24,17 @@ func NewClaudeCodePlugin(
 	analysisService *app.AnalysisService,
 	logsService *app.LogsService,
 	logger app.Logger,
+	setupService *app.SetupService,
+	handler *app.ClaudeCommandHandler,
+	dbPath string,
 ) *ClaudeCodePlugin {
 	return &ClaudeCodePlugin{
 		analysisService: analysisService,
 		logsService:     logsService,
 		logger:          logger,
+		setupService:    setupService,
+		handler:         handler,
+		dbPath:          dbPath,
 	}
 }
 

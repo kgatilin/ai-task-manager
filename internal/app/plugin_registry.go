@@ -6,12 +6,14 @@ import (
 	"sync"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // PluginRegistry manages all registered plugins and routes operations to them.
+// It uses SDK plugin interfaces and adapts between SDK and domain types.
 type PluginRegistry struct {
-	plugins    map[string]domain.Plugin // key: plugin name
-	entityMap  map[string]string        // key: entity type, value: plugin name
+	plugins    map[string]pluginsdk.Plugin // key: plugin name (uses SDK interface)
+	entityMap  map[string]string           // key: entity type, value: plugin name
 	logger     Logger
 	mu         sync.RWMutex
 }
@@ -19,15 +21,16 @@ type PluginRegistry struct {
 // NewPluginRegistry creates a new plugin registry
 func NewPluginRegistry(logger Logger) *PluginRegistry {
 	return &PluginRegistry{
-		plugins:   make(map[string]domain.Plugin),
+		plugins:   make(map[string]pluginsdk.Plugin),
 		entityMap: make(map[string]string),
 		logger:    logger,
 	}
 }
 
 // RegisterPlugin registers a plugin with the system.
+// Accepts plugins implementing the SDK Plugin interface.
 // Returns error if plugin name already exists or entity type conflicts.
-func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
+func (r *PluginRegistry) RegisterPlugin(plugin pluginsdk.Plugin) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -62,8 +65,8 @@ func (r *PluginRegistry) RegisterPlugin(plugin domain.Plugin) error {
 	return nil
 }
 
-// GetPlugin retrieves a plugin by name
-func (r *PluginRegistry) GetPlugin(name string) (domain.Plugin, error) {
+// GetPlugin retrieves a plugin by name (returns SDK plugin)
+func (r *PluginRegistry) GetPlugin(name string) (pluginsdk.Plugin, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -76,7 +79,7 @@ func (r *PluginRegistry) GetPlugin(name string) (domain.Plugin, error) {
 }
 
 // GetPluginForEntityType retrieves the plugin that provides a given entity type
-func (r *PluginRegistry) GetPluginForEntityType(entityType string) (domain.Plugin, error) {
+func (r *PluginRegistry) GetPluginForEntityType(entityType string) (pluginsdk.Plugin, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -88,12 +91,12 @@ func (r *PluginRegistry) GetPluginForEntityType(entityType string) (domain.Plugi
 	return r.plugins[pluginName], nil
 }
 
-// GetAllPlugins returns all registered plugins
-func (r *PluginRegistry) GetAllPlugins() []domain.Plugin {
+// GetAllPlugins returns all registered plugins (SDK plugins)
+func (r *PluginRegistry) GetAllPlugins() []pluginsdk.Plugin {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	plugins := make([]domain.Plugin, 0, len(r.plugins))
+	plugins := make([]pluginsdk.Plugin, 0, len(r.plugins))
 	for _, plugin := range r.plugins {
 		plugins = append(plugins, plugin)
 	}
@@ -101,23 +104,27 @@ func (r *PluginRegistry) GetAllPlugins() []domain.Plugin {
 	return plugins
 }
 
-// GetAllEntityTypes returns all entity types from all plugins
+// GetAllEntityTypes returns all entity types from all plugins (adapted to domain)
 func (r *PluginRegistry) GetAllEntityTypes() []domain.EntityTypeInfo {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
 	var entityTypes []domain.EntityTypeInfo
 	for _, plugin := range r.plugins {
-		entityTypes = append(entityTypes, plugin.GetEntityTypes()...)
+		sdkTypes := plugin.GetEntityTypes()
+		entityTypes = append(entityTypes, adaptEntityTypeInfos(sdkTypes)...)
 	}
 
 	return entityTypes
 }
 
-// Query executes a query across one or more plugins
+// Query executes a query across one or more plugins (adapts between domain and SDK)
 func (r *PluginRegistry) Query(ctx context.Context, query domain.EntityQuery) ([]domain.IExtensible, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+
+	// Convert domain query to SDK query
+	sdkQuery := adaptEntityQuery(query)
 
 	// If entity type is specified, route to specific plugin
 	if query.EntityType != "" {
@@ -127,18 +134,26 @@ func (r *PluginRegistry) Query(ctx context.Context, query domain.EntityQuery) ([
 		}
 
 		plugin := r.plugins[pluginName]
-		return plugin.Query(ctx, query)
+		sdkEntities, err := plugin.Query(ctx, sdkQuery)
+		if err != nil {
+			return nil, err
+		}
+
+		// Adapt SDK entities to domain entities
+		return adaptEntities(sdkEntities), nil
 	}
 
 	// Otherwise, query all plugins and combine results
 	var allEntities []domain.IExtensible
 	for _, plugin := range r.plugins {
-		entities, err := plugin.Query(ctx, query)
+		sdkEntities, err := plugin.Query(ctx, sdkQuery)
 		if err != nil {
 			r.logger.Warn("Plugin %s query failed: %v", plugin.GetInfo().Name, err)
 			continue
 		}
-		allEntities = append(allEntities, entities...)
+
+		// Adapt and append
+		allEntities = append(allEntities, adaptEntities(sdkEntities)...)
 	}
 
 	return allEntities, nil
@@ -153,9 +168,10 @@ func (r *PluginRegistry) GetEntity(ctx context.Context, entityID string) (domain
 
 	// Try each plugin until we find the entity
 	for _, plugin := range r.plugins {
-		entity, err := plugin.GetEntity(ctx, entityID)
+		sdkEntity, err := plugin.GetEntity(ctx, entityID)
 		if err == nil {
-			return entity, nil
+			// Adapt SDK entity to domain entity
+			return newEntityAdapter(sdkEntity), nil
 		}
 	}
 
@@ -169,9 +185,10 @@ func (r *PluginRegistry) UpdateEntity(ctx context.Context, entityID string, fiel
 
 	// Try each plugin until we find the entity
 	for _, plugin := range r.plugins {
-		entity, err := plugin.UpdateEntity(ctx, entityID, fields)
+		sdkEntity, err := plugin.UpdateEntity(ctx, entityID, fields)
 		if err == nil {
-			return entity, nil
+			// Adapt SDK entity to domain entity
+			return newEntityAdapter(sdkEntity), nil
 		}
 	}
 

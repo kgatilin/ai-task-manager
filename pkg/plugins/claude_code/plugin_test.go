@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
-	"github.com/kgatilin/darwinflow-pub/internal/app/plugins/claude_code"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/claude_code"
 )
 
 // Minimal test focusing on what can be tested without complex mocking
@@ -15,7 +15,7 @@ import (
 func TestNewClaudeCodePlugin(t *testing.T) {
 	// This test verifies the constructor works
 	// We use nil services since we're only testing construction
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{})
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
 
 	if plugin == nil {
 		t.Fatal("NewClaudeCodePlugin returned nil")
@@ -23,7 +23,7 @@ func TestNewClaudeCodePlugin(t *testing.T) {
 }
 
 func TestGetInfo(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{})
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
 
 	info := plugin.GetInfo()
 
@@ -42,7 +42,7 @@ func TestGetInfo(t *testing.T) {
 }
 
 func TestGetEntityTypes(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{})
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
 
 	entityTypes := plugin.GetEntityTypes()
 
@@ -88,7 +88,7 @@ func TestGetEntityTypes(t *testing.T) {
 }
 
 func TestUpdateEntity_ReadOnly(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{})
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
 
 	ctx := context.Background()
 	_, err := plugin.UpdateEntity(ctx, "session-1", map[string]interface{}{})
@@ -102,7 +102,7 @@ func TestUpdateEntity_ReadOnly(t *testing.T) {
 }
 
 func TestGetTools(t *testing.T) {
-	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{})
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
 
 	tools := plugin.GetTools()
 
@@ -132,6 +132,53 @@ func TestGetTools(t *testing.T) {
 	if sessionSummaryTool.GetUsage() == "" {
 		t.Error("Tool usage should not be empty")
 	}
+}
+
+func TestGetCommands(t *testing.T) {
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &app.NoOpLogger{}, nil, nil, "")
+
+	commands := plugin.GetCommands()
+
+	// Verify we get exactly 4 commands
+	if len(commands) != 4 {
+		t.Fatalf("Expected 4 commands, got %d", len(commands))
+	}
+
+	// Verify expected command names
+	expectedCommands := map[string]bool{
+		"init":              false,
+		"log":               false,
+		"auto-summary":      false,
+		"auto-summary-exec": false,
+	}
+
+	for _, cmd := range commands {
+		name := cmd.GetName()
+		if _, exists := expectedCommands[name]; !exists {
+			t.Errorf("Unexpected command: %s", name)
+		}
+		expectedCommands[name] = true
+
+		// Verify each command has required metadata
+		if cmd.GetDescription() == "" {
+			t.Errorf("Command %s has empty description", name)
+		}
+		if cmd.GetUsage() == "" {
+			t.Errorf("Command %s has empty usage", name)
+		}
+	}
+
+	// Verify all expected commands were found
+	for name, found := range expectedCommands {
+		if !found {
+			t.Errorf("Expected command %s not found", name)
+		}
+	}
+}
+
+func TestCommandProvider_Interface(t *testing.T) {
+	// Verify that ClaudeCodePlugin implements ICommandProvider
+	var _ domain.ICommandProvider = (*claude_code.ClaudeCodePlugin)(nil)
 }
 
 // Note: Full Query, GetEntity, and tool execution tests would require:
