@@ -14,7 +14,7 @@ type MockTool struct {
 	name        string
 	description string
 	usage       string
-	executeFunc func(ctx context.Context, args []string, projectCtx *domain.ProjectContext) error
+	executeFunc func(ctx context.Context, args []string) error
 }
 
 func (m *MockTool) GetName() string {
@@ -29,9 +29,9 @@ func (m *MockTool) GetUsage() string {
 	return m.usage
 }
 
-func (m *MockTool) Execute(ctx context.Context, args []string, projectCtx *domain.ProjectContext) error {
+func (m *MockTool) Execute(ctx context.Context, args []string) error {
 	if m.executeFunc != nil {
-		return m.executeFunc(ctx, args, projectCtx)
+		return m.executeFunc(ctx, args)
 	}
 	return nil
 }
@@ -183,7 +183,7 @@ func TestToolRegistry_ExecuteTool(t *testing.T) {
 		&MockTool{
 			name:        "test-tool",
 			description: "Test tool",
-			executeFunc: func(ctx context.Context, args []string, projectCtx *domain.ProjectContext) error {
+			executeFunc: func(ctx context.Context, args []string) error {
 				executed = true
 				receivedArgs = args
 				return nil
@@ -199,12 +199,9 @@ func TestToolRegistry_ExecuteTool(t *testing.T) {
 	toolRegistry := app.NewToolRegistry(pluginRegistry, logger)
 
 	ctx := context.Background()
-	projectCtx := &domain.ProjectContext{
-		CWD: "/test",
-	}
 	args := []string{"arg1", "arg2"}
 
-	err := toolRegistry.ExecuteTool(ctx, "test-tool", args, projectCtx)
+	err := toolRegistry.ExecuteTool(ctx, "test-tool", args, nil)
 	if err != nil {
 		t.Fatalf("ExecuteTool failed: %v", err)
 	}
@@ -225,7 +222,7 @@ func TestToolRegistry_ExecuteTool_Error(t *testing.T) {
 	tools := []domain.Tool{
 		&MockTool{
 			name: "failing-tool",
-			executeFunc: func(ctx context.Context, args []string, projectCtx *domain.ProjectContext) error {
+			executeFunc: func(ctx context.Context, args []string) error {
 				return expectedErr
 			},
 		},
@@ -239,8 +236,7 @@ func TestToolRegistry_ExecuteTool_Error(t *testing.T) {
 	toolRegistry := app.NewToolRegistry(pluginRegistry, logger)
 
 	ctx := context.Background()
-	projectCtx := &domain.ProjectContext{}
-	err := toolRegistry.ExecuteTool(ctx, "failing-tool", nil, projectCtx)
+	err := toolRegistry.ExecuteTool(ctx, "failing-tool", nil, nil)
 
 	if err == nil {
 		t.Error("Expected error from ExecuteTool, got nil")
@@ -267,12 +263,12 @@ func TestToolRegistry_ExecuteToolWithContext(t *testing.T) {
 	logger := &app.NoOpLogger{}
 	pluginRegistry := app.NewPluginRegistry(logger)
 
-	var receivedProjectCtx *domain.ProjectContext
+	executed := false
 	tools := []domain.Tool{
 		&MockTool{
 			name: "ctx-tool",
-			executeFunc: func(ctx context.Context, args []string, projectCtx *domain.ProjectContext) error {
-				receivedProjectCtx = projectCtx
+			executeFunc: func(ctx context.Context, args []string) error {
+				executed = true
 				return nil
 			},
 		},
@@ -295,17 +291,8 @@ func TestToolRegistry_ExecuteToolWithContext(t *testing.T) {
 		t.Fatalf("ExecuteToolWithContext failed: %v", err)
 	}
 
-	if receivedProjectCtx == nil {
-		t.Fatal("ProjectContext was not passed to tool")
-	}
-	if receivedProjectCtx.CWD != cwd {
-		t.Errorf("Expected CWD = %s, got %s", cwd, receivedProjectCtx.CWD)
-	}
-	if receivedProjectCtx.DBPath != dbPath {
-		t.Errorf("Expected DBPath = %s, got %s", dbPath, receivedProjectCtx.DBPath)
-	}
-	if receivedProjectCtx.Config != config {
-		t.Error("Config was not passed correctly")
+	if !executed {
+		t.Error("Tool was not executed")
 	}
 }
 

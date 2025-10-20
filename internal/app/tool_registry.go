@@ -71,17 +71,17 @@ func (r *ToolRegistry) GetAllTools() []domain.Tool {
 }
 
 // ExecuteTool executes a tool with the given context and arguments
-func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args []string, projectCtx *domain.ProjectContext) error {
+func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args []string, pluginCtx *PluginContext) error {
 	tool, err := r.GetTool(toolName)
 	if err != nil {
 		return err
 	}
 
 	r.logger.Info("Executing tool: %s", toolName)
-	return tool.Execute(ctx, args, projectCtx)
+	return tool.Execute(ctx, args)
 }
 
-// ExecuteToolWithContext creates a ProjectContext and executes the tool
+// ExecuteToolWithContext creates a PluginContext and executes the tool
 func (r *ToolRegistry) ExecuteToolWithContext(
 	ctx context.Context,
 	toolName string,
@@ -92,7 +92,7 @@ func (r *ToolRegistry) ExecuteToolWithContext(
 	cwd string,
 	dbPath string,
 ) error {
-	projectCtx := &domain.ProjectContext{
+	pluginCtx := &PluginContext{
 		EventRepo:    eventRepo,
 		AnalysisRepo: analysisRepo,
 		Config:       config,
@@ -100,7 +100,7 @@ func (r *ToolRegistry) ExecuteToolWithContext(
 		DBPath:       dbPath,
 	}
 
-	return r.ExecuteTool(ctx, toolName, args, projectCtx)
+	return r.ExecuteTool(ctx, toolName, args, pluginCtx)
 }
 
 // ListTools returns a formatted list of all available tools with their descriptions

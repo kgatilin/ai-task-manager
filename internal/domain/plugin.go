@@ -86,7 +86,22 @@ type EntityQuery struct {
 	OrderDesc bool
 }
 
-// Tool represents a command-line tool provided by a plugin
+// Command represents a CLI command provided by a plugin (e.g., dw <plugin-name> <command>)
+type Command interface {
+	// GetName returns the command name (e.g., "init", "log")
+	GetName() string
+
+	// GetDescription returns a brief description of what the command does
+	GetDescription() string
+
+	// GetUsage returns usage instructions (e.g., "init [--force]")
+	GetUsage() string
+
+	// Execute runs the command with provided arguments
+	Execute(ctx context.Context, args []string) error
+}
+
+// Tool represents a project-scoped tool provided by a plugin (e.g., dw project <tool-name>)
 type Tool interface {
 	// GetName returns the tool's command name (used as: dw project <name>)
 	GetName() string
@@ -97,29 +112,18 @@ type Tool interface {
 	// GetUsage returns usage instructions (e.g., "analyze [--format=json]")
 	GetUsage() string
 
-	// Execute runs the tool with provided arguments and context
-	Execute(ctx context.Context, args []string, projectCtx *ProjectContext) error
+	// Execute runs the tool with provided arguments
+	// Note: Tools receive PluginContext from app layer (not defined in domain)
+	Execute(ctx context.Context, args []string) error
 }
 
-// ProjectContext provides access to the project's data and services
-type ProjectContext struct {
-	// EventRepo provides access to logged events
-	EventRepo EventRepository
-
-	// AnalysisRepo provides access to session analyses
-	AnalysisRepo AnalysisRepository
-
-	// Config is the project's configuration
-	Config *Config
-
-	// CWD is the current working directory
-	CWD string
-
-	// DBPath is the path to the database
-	DBPath string
+// ICommandProvider is a capability that plugins can implement to provide CLI commands
+type ICommandProvider interface {
+	// GetCommands returns the commands provided by this plugin
+	GetCommands() []Command
 }
 
-// IToolProvider is a capability that plugins can implement to provide CLI tools
+// IToolProvider is a capability that plugins can implement to provide project tools
 type IToolProvider interface {
 	// GetTools returns the tools provided by this plugin
 	GetTools() []Tool

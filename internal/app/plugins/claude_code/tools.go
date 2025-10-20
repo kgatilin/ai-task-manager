@@ -36,7 +36,7 @@ func (t *SessionSummaryTool) GetUsage() string {
 }
 
 // Execute runs the tool
-func (t *SessionSummaryTool) Execute(ctx context.Context, args []string, projectCtx *domain.ProjectContext) error {
+func (t *SessionSummaryTool) Execute(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("session-summary", flag.ContinueOnError)
 	sessionID := fs.String("session-id", "", "Session ID to summarize")
 	last := fs.Bool("last", false, "Summarize the most recent session")

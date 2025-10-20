@@ -3,8 +3,6 @@ package app
 import (
 	"context"
 	"io"
-
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
 )
 
 // ProjectCommandHandler handles project command operations
@@ -36,7 +34,6 @@ func (h *ProjectCommandHandler) ExecuteTool(
 	ctx context.Context,
 	toolName string,
 	args []string,
-	projectCtx *domain.ProjectContext,
 ) error {
-	return h.toolRegistry.ExecuteTool(ctx, toolName, args, projectCtx)
+	return h.toolRegistry.ExecuteTool(ctx, toolName, args, nil)
 }

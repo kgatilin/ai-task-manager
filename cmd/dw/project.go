@@ -8,7 +8,6 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/app/plugins/claude_code"
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
 	"github.com/kgatilin/darwinflow-pub/internal/infra"
 )
 
@@ -62,13 +61,6 @@ func projectCommand(args []string) {
 	}
 	defer repo.Close()
 
-	// Get current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Create services
 	logsService := app.NewLogsService(repo, repo)
 	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
@@ -100,17 +92,8 @@ func projectCommand(args []string) {
 		return
 	}
 
-	// Create project context
-	projectCtx := &domain.ProjectContext{
-		EventRepo:    repo,
-		AnalysisRepo: repo,
-		Config:       config,
-		CWD:          cwd,
-		DBPath:       *dbPath,
-	}
-
 	// Execute tool
-	if err := handler.ExecuteTool(ctx, toolName, toolArgs, projectCtx); err != nil {
+	if err := handler.ExecuteTool(ctx, toolName, toolArgs); err != nil {
 		fmt.Fprintf(os.Stderr, "Error executing tool '%s': %v\n", toolName, err)
 		os.Exit(1)
 	}
