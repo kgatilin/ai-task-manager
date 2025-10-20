@@ -1,0 +1,190 @@
+package app_test
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/kgatilin/darwinflow-pub/internal/app"
+	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/internal/infra"
+)
+
+// mockEventRepository is a mock for testing
+type mockEventRepository struct {
+	initializeFunc func(ctx context.Context) error
+}
+
+func (m *mockEventRepository) Initialize(ctx context.Context) error {
+	if m.initializeFunc != nil {
+		return m.initializeFunc(ctx)
+	}
+	return nil
+}
+
+func (m *mockEventRepository) Close() error {
+	return nil
+}
+
+func (m *mockEventRepository) Save(ctx context.Context, event *domain.Event) error {
+	return nil
+}
+
+func (m *mockEventRepository) SaveEvent(ctx context.Context, event *domain.Event) error {
+	return nil
+}
+
+func (m *mockEventRepository) GetEvent(ctx context.Context, id string) (*domain.Event, error) {
+	return nil, nil
+}
+
+func (m *mockEventRepository) ListEvents(ctx context.Context, limit int) ([]*domain.Event, error) {
+	return nil, nil
+}
+
+func (m *mockEventRepository) FindByQuery(ctx context.Context, query domain.EventQuery) ([]*domain.Event, error) {
+	return nil, nil
+}
+
+// mockHookConfigManager is a mock for testing
+type mockHookConfigManager struct {
+	installHooksFunc   func() error
+	getSettingsPathFunc func() string
+}
+
+func (m *mockHookConfigManager) InstallDarwinFlowHooks() error {
+	if m.installHooksFunc != nil {
+		return m.installHooksFunc()
+	}
+	return nil
+}
+
+func (m *mockHookConfigManager) GetSettingsPath() string {
+	if m.getSettingsPathFunc != nil {
+		return m.getSettingsPathFunc()
+	}
+	return "/mock/settings.json"
+}
+
+// mockConfigLoader is a mock for testing
+type mockConfigLoader struct {
+	loadConfigFunc              func(path string) (*domain.Config, error)
+	initializeDefaultConfigFunc func(path string) error
+}
+
+func (m *mockConfigLoader) LoadConfig(path string) (*domain.Config, error) {
+	if m.loadConfigFunc != nil {
+		return m.loadConfigFunc(path)
+	}
+	return &domain.Config{}, nil
+}
+
+func (m *mockConfigLoader) InitializeDefaultConfig(path string) error {
+	if m.initializeDefaultConfigFunc != nil {
+		return m.initializeDefaultConfigFunc(path)
+	}
+	return nil
+}
+
+func TestRefreshCommandHandler_Execute(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := &mockEventRepository{}
+	mockHookMgr := &mockHookConfigManager{}
+	mockConfigLdr := &mockConfigLoader{}
+	logger := infra.NewDefaultLogger()
+	out := &bytes.Buffer{}
+
+	handler := app.NewRefreshCommandHandler(mockRepo, mockHookMgr, mockConfigLdr, logger, out)
+
+	err := handler.Execute(ctx, "/test/db/path.db")
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Refreshing DarwinFlow") {
+		t.Errorf("Output should indicate refreshing, got: %s", output)
+	}
+	if !strings.Contains(output, "Database schema updated") {
+		t.Errorf("Output should confirm database update, got: %s", output)
+	}
+	if !strings.Contains(output, "Hooks updated") {
+		t.Errorf("Output should confirm hooks update, got: %s", output)
+	}
+	if !strings.Contains(output, "refreshed successfully") {
+		t.Errorf("Output should indicate success, got: %s", output)
+	}
+}
+
+func TestRefreshCommandHandler_Execute_WithMissingConfig(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := &mockEventRepository{}
+	mockHookMgr := &mockHookConfigManager{}
+	mockConfigLdr := &mockConfigLoader{
+		loadConfigFunc: func(path string) (*domain.Config, error) {
+			return nil, nil // Config doesn't exist
+		},
+	}
+	logger := infra.NewDefaultLogger()
+	out := &bytes.Buffer{}
+
+	handler := app.NewRefreshCommandHandler(mockRepo, mockHookMgr, mockConfigLdr, logger, out)
+
+	err := handler.Execute(ctx, "/test/db/path.db")
+	if err != nil {
+		t.Fatalf("Execute failed: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "Creating default configuration") {
+		t.Errorf("Output should indicate creating default config, got: %s", output)
+	}
+}
+
+func TestRefreshCommandHandler_Execute_RepositoryError(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := &mockEventRepository{
+		initializeFunc: func(ctx context.Context) error {
+			return fmt.Errorf("database initialization failed")
+		},
+	}
+	mockHookMgr := &mockHookConfigManager{}
+	mockConfigLdr := &mockConfigLoader{}
+	logger := infra.NewDefaultLogger()
+	out := &bytes.Buffer{}
+
+	handler := app.NewRefreshCommandHandler(mockRepo, mockHookMgr, mockConfigLdr, logger, out)
+
+	err := handler.Execute(ctx, "/test/db/path.db")
+	if err == nil {
+		t.Error("Execute should fail when repository initialization fails")
+	}
+	if !strings.Contains(err.Error(), "error updating database schema") {
+		t.Errorf("Error should mention database schema, got: %v", err)
+	}
+}
+
+func TestRefreshCommandHandler_Execute_HookError(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := &mockEventRepository{}
+	mockHookMgr := &mockHookConfigManager{
+		installHooksFunc: func() error {
+			return fmt.Errorf("hook installation failed")
+		},
+	}
+	mockConfigLdr := &mockConfigLoader{}
+	logger := infra.NewDefaultLogger()
+	out := &bytes.Buffer{}
+
+	handler := app.NewRefreshCommandHandler(mockRepo, mockHookMgr, mockConfigLdr, logger, out)
+
+	err := handler.Execute(ctx, "/test/db/path.db")
+	if err == nil {
+		t.Error("Execute should fail when hook installation fails")
+	}
+	if !strings.Contains(err.Error(), "error updating hooks") {
+		t.Errorf("Error should mention hooks, got: %v", err)
+	}
+}

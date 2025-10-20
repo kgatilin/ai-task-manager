@@ -73,11 +73,12 @@ func handleLogs(args []string) {
 	defer repo.Close()
 
 	service := app.NewLogsService(repo, repo)
+	handler := app.NewLogsCommandHandler(service, os.Stdout)
 	ctx := context.Background()
 
 	// Handle arbitrary SQL query
 	if opts.Query != "" {
-		if err := ExecuteRawQuery(ctx, service, opts.Query); err != nil {
+		if err := handler.ExecuteRawQuery(ctx, opts.Query); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
@@ -85,7 +86,7 @@ func handleLogs(args []string) {
 	}
 
 	// Handle standard log listing
-	if err := ListLogs(ctx, service, opts); err != nil {
+	if err := handler.ListLogs(ctx, opts.Limit, opts.SessionLimit, opts.SessionID, opts.Ordered, opts.Format); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -164,88 +165,3 @@ func printLogsHelp() {
 	fmt.Println()
 }
 
-// ListLogs displays logs based on the provided options
-func ListLogs(ctx context.Context, service *app.LogsService, opts *LogsOptions) error {
-	records, err := service.ListRecentLogs(ctx, opts.Limit, opts.SessionLimit, opts.SessionID, opts.Ordered)
-	if err != nil {
-		return err
-	}
-
-	if len(records) == 0 {
-		fmt.Println("No logs found.")
-		fmt.Println("Run 'dw claude init' to initialize logging, then use Claude Code to generate events.")
-		return nil
-	}
-
-	// Handle CSV format
-	if opts.Format == "csv" {
-		return app.FormatLogsAsCSV(os.Stdout, records)
-	}
-
-	// Handle Markdown format
-	if opts.Format == "markdown" {
-		return app.FormatLogsAsMarkdown(os.Stdout, records)
-	}
-
-	// Validate format
-	if opts.Format != "text" && opts.Format != "" {
-		fmt.Fprintf(os.Stderr, "Error: Invalid format '%s'. Valid formats: text, csv, markdown\n", opts.Format)
-		os.Exit(1)
-	}
-
-	// Display logs in text format
-	if opts.SessionID != "" {
-		fmt.Printf("Showing %d logs for session %s:\n\n", len(records), opts.SessionID)
-	} else if opts.SessionLimit > 0 {
-		fmt.Printf("Showing %d logs from %d most recent sessions:\n\n", len(records), opts.SessionLimit)
-	} else {
-		fmt.Printf("Showing %d most recent logs:\n\n", len(records))
-	}
-
-	for i, record := range records {
-		fmt.Print(app.FormatLogRecord(i, record))
-	}
-
-	return nil
-}
-
-// ExecuteRawQuery executes a raw SQL query and displays the results
-func ExecuteRawQuery(ctx context.Context, service *app.LogsService, query string) error {
-	result, err := service.ExecuteRawQuery(ctx, query)
-	if err != nil {
-		return err
-	}
-
-	// Print column headers
-	for i, col := range result.Columns {
-		if i > 0 {
-			fmt.Print(" | ")
-		}
-		fmt.Print(col)
-	}
-	fmt.Println()
-	fmt.Println(repeatString("-", 80))
-
-	// Print rows
-	for _, row := range result.Rows {
-		for i, val := range row {
-			if i > 0 {
-				fmt.Print(" | ")
-			}
-			fmt.Print(app.FormatQueryValue(val))
-		}
-		fmt.Println()
-	}
-
-	fmt.Println()
-	fmt.Printf("(%d rows)\n", len(result.Rows))
-	return nil
-}
-
-func repeatString(s string, count int) string {
-	result := ""
-	for i := 0; i < count; i++ {
-		result += s
-	}
-	return result
-}

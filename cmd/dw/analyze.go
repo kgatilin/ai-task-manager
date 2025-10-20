@@ -103,214 +103,26 @@ func analyzeCmd(args []string) {
 	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
 	analysisService := app.NewAnalysisService(repo, repo, logsService, llmExecutor, logger, config)
 
-	// Handle different modes
-	if *refresh {
-		refreshAnalyses(ctx, analysisService, logger, *limit, selectedPrompts)
-		return
+	// Create command handler
+	handler := app.NewAnalyzeCommandHandler(analysisService, logger, os.Stdout)
+
+	// Build options
+	opts := app.AnalyzeOptions{
+		SessionID:     *sessionID,
+		Last:          *last,
+		ViewOnly:      *viewOnly,
+		AnalyzeAll:    *analyzeAll,
+		Refresh:       *refresh,
+		Limit:         *limit,
+		PromptNames:   selectedPrompts,
+		ModelOverride: *modelOverride,
+		TokenLimit:    *tokenLimit,
 	}
 
-	if *analyzeAll {
-		analyzeAllSessions(ctx, analysisService, logger, selectedPrompts)
-		return
-	}
-
-	// Determine which session to analyze
-	var targetSessionID string
-	if *sessionID != "" {
-		targetSessionID = *sessionID
-	} else if *last {
-		lastSessionID, err := analysisService.GetLastSession(ctx)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to get last session: %v\n", err)
-			os.Exit(1)
-		}
-		targetSessionID = lastSessionID
-		fmt.Printf("Analyzing last session: %s\n\n", targetSessionID)
-	} else {
-		fmt.Fprintf(os.Stderr, "Error: must specify --session-id or --last\n")
-		fs.Usage()
+	// Execute
+	if err := handler.Execute(ctx, opts); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
-	}
-
-	// View existing analysis if requested
-	if *viewOnly {
-		viewAnalysis(ctx, analysisService, targetSessionID)
-		return
-	}
-
-	// Perform analysis
-	if len(selectedPrompts) == 1 {
-		// Single prompt - use simple sequential analysis
-		fmt.Printf("Analyzing session %s with prompt '%s'...\n", targetSessionID, selectedPrompts[0])
-		analysis, err := analysisService.AnalyzeSessionWithPrompt(ctx, targetSessionID, selectedPrompts[0])
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to analyze session: %v\n", err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("\nAnalysis completed at %s\n\n", analysis.AnalyzedAt.Format("2006-01-02 15:04:05"))
-		fmt.Println("=== Analysis Result ===")
-		fmt.Println(analysis.AnalysisResult)
-	} else {
-		// Multiple prompts - use parallel analysis
-		fmt.Printf("Analyzing session %s with %d prompts in parallel: %v\n", targetSessionID, len(selectedPrompts), selectedPrompts)
-		analyses, errs := analysisService.AnalyzeSessionWithMultiplePrompts(ctx, targetSessionID, selectedPrompts)
-
-		if len(errs) > 0 {
-			fmt.Fprintf(os.Stderr, "\nErrors during analysis:\n")
-			for _, err := range errs {
-				fmt.Fprintf(os.Stderr, "  - %v\n", err)
-			}
-		}
-
-		if len(analyses) > 0 {
-			fmt.Printf("\nCompleted %d/%d analyses successfully\n\n", len(analyses), len(selectedPrompts))
-			for promptName, analysis := range analyses {
-				fmt.Printf("=== Analysis: %s (completed at %s) ===\n", promptName, analysis.AnalyzedAt.Format("15:04:05"))
-				fmt.Println(analysis.AnalysisResult)
-				fmt.Println()
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "All analyses failed\n")
-			os.Exit(1)
-		}
 	}
 }
 
-func viewAnalysis(ctx context.Context, service *app.AnalysisService, sessionID string) {
-	analysis, err := service.GetAnalysis(ctx, sessionID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to get analysis: %v\n", err)
-		os.Exit(1)
-	}
-
-	if analysis == nil {
-		fmt.Printf("No analysis found for session %s\n", sessionID)
-		fmt.Println("Run without --view to analyze this session")
-		os.Exit(1)
-	}
-
-	fmt.Printf("Session: %s\n", analysis.SessionID)
-	fmt.Printf("Analyzed at: %s\n", analysis.AnalyzedAt.Format("2006-01-02 15:04:05"))
-	fmt.Printf("Model: %s\n\n", analysis.ModelUsed)
-	fmt.Println("=== Analysis Result ===")
-	fmt.Println(analysis.AnalysisResult)
-}
-
-func analyzeAllSessions(ctx context.Context, service *app.AnalysisService, logger *infra.Logger, promptNames []string) {
-	// Get unanalyzed sessions
-	logger.Debug("Fetching unanalyzed sessions")
-	sessionIDs, err := service.GetUnanalyzedSessions(ctx)
-	if err != nil {
-		logger.Error("Failed to get unanalyzed sessions: %v", err)
-		fmt.Fprintf(os.Stderr, "Failed to get unanalyzed sessions: %v\n", err)
-		os.Exit(1)
-	}
-	logger.Debug("Found %d unanalyzed sessions", len(sessionIDs))
-
-	if len(sessionIDs) == 0 {
-		logger.Info("No unanalyzed sessions found")
-		fmt.Println("No unanalyzed sessions found")
-		return
-	}
-
-	fmt.Printf("Found %d unanalyzed session(s)\n", len(sessionIDs))
-	fmt.Printf("Using prompts: %v\n\n", promptNames)
-
-	// Analyze each session with all prompts
-	successCount := 0
-	for i, sessionID := range sessionIDs {
-		fmt.Printf("[%d/%d] Analyzing session %s with %d prompt(s)...\n", i+1, len(sessionIDs), sessionID, len(promptNames))
-		logger.Debug("Starting analysis for session %s (%d/%d)", sessionID, i+1, len(sessionIDs))
-
-		if len(promptNames) == 1 {
-			// Single prompt - simple sequential
-			analysis, err := service.AnalyzeSessionWithPrompt(ctx, sessionID, promptNames[0])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to analyze session %s: %v\n", sessionID, err)
-				logger.Warn("Analysis failed for session %s: %v", sessionID, err)
-				continue
-			}
-			successCount++
-			logger.Info("Analysis completed for session %s", sessionID)
-			fmt.Printf("✓ Completed at %s\n\n", analysis.AnalyzedAt.Format("15:04:05"))
-		} else {
-			// Multiple prompts - parallel
-			analyses, errs := service.AnalyzeSessionWithMultiplePrompts(ctx, sessionID, promptNames)
-			if len(errs) > 0 {
-				logger.Warn("Some analyses failed for session %s: %v", sessionID, errs)
-			}
-			if len(analyses) > 0 {
-				successCount++
-				logger.Info("Completed %d/%d analyses for session %s", len(analyses), len(promptNames), sessionID)
-				fmt.Printf("✓ Completed %d/%d analyses\n\n", len(analyses), len(promptNames))
-			} else {
-				fmt.Fprintf(os.Stderr, "All analyses failed for session %s\n", sessionID)
-			}
-		}
-	}
-
-	fmt.Printf("\nAnalyzed %d/%d session(s) successfully\n", successCount, len(sessionIDs))
-	logger.Info("Batch analysis complete: %d/%d successful", successCount, len(sessionIDs))
-}
-
-func refreshAnalyses(ctx context.Context, service *app.AnalysisService, logger *infra.Logger, limit int, promptNames []string) {
-	// Get all sessions (or latest N if limit is specified)
-	logger.Debug("Fetching session IDs for refresh (limit: %d)", limit)
-	sessionIDs, err := service.GetAllSessionIDs(ctx, limit)
-	if err != nil {
-		logger.Error("Failed to get session IDs: %v", err)
-		fmt.Fprintf(os.Stderr, "Failed to get session IDs: %v\n", err)
-		os.Exit(1)
-	}
-	logger.Debug("Found %d sessions to refresh", len(sessionIDs))
-
-	if len(sessionIDs) == 0 {
-		logger.Info("No sessions found to refresh")
-		fmt.Println("No sessions found to refresh")
-		return
-	}
-
-	if limit > 0 {
-		fmt.Printf("Refreshing analyses for latest %d session(s)\n", len(sessionIDs))
-	} else {
-		fmt.Printf("Refreshing analyses for all %d session(s)\n", len(sessionIDs))
-	}
-	fmt.Printf("Using prompts: %v\n\n", promptNames)
-
-	// Re-analyze each session with all prompts
-	successCount := 0
-	for i, sessionID := range sessionIDs {
-		fmt.Printf("[%d/%d] Re-analyzing session %s with %d prompt(s)...\n", i+1, len(sessionIDs), sessionID, len(promptNames))
-		logger.Debug("Starting re-analysis for session %s (%d/%d)", sessionID, i+1, len(sessionIDs))
-
-		if len(promptNames) == 1 {
-			// Single prompt - simple sequential
-			analysis, err := service.AnalyzeSessionWithPrompt(ctx, sessionID, promptNames[0])
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to re-analyze session %s: %v\n", sessionID, err)
-				logger.Warn("Re-analysis failed for session %s: %v", sessionID, err)
-				continue
-			}
-			successCount++
-			logger.Info("Re-analysis completed for session %s", sessionID)
-			fmt.Printf("✓ Completed at %s\n\n", analysis.AnalyzedAt.Format("15:04:05"))
-		} else {
-			// Multiple prompts - parallel
-			analyses, errs := service.AnalyzeSessionWithMultiplePrompts(ctx, sessionID, promptNames)
-			if len(errs) > 0 {
-				logger.Warn("Some re-analyses failed for session %s: %v", sessionID, errs)
-			}
-			if len(analyses) > 0 {
-				successCount++
-				logger.Info("Completed %d/%d re-analyses for session %s", len(analyses), len(promptNames), sessionID)
-				fmt.Printf("✓ Completed %d/%d analyses\n\n", len(analyses), len(promptNames))
-			} else {
-				fmt.Fprintf(os.Stderr, "All re-analyses failed for session %s\n", sessionID)
-			}
-		}
-	}
-
-	fmt.Printf("\nRefreshed %d/%d session(s) successfully\n", successCount, len(sessionIDs))
-	logger.Info("Refresh complete: %d/%d successful", successCount, len(sessionIDs))
-}

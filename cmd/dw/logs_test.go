@@ -1,16 +1,9 @@
 package main_test
 
 import (
-	"context"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	main "github.com/kgatilin/darwinflow-pub/cmd/dw"
-	"github.com/kgatilin/darwinflow-pub/internal/app"
-	"github.com/kgatilin/darwinflow-pub/internal/infra"
 )
 
 func TestParseLogsFlags(t *testing.T) {
@@ -111,107 +104,8 @@ func TestParseLogsFlags(t *testing.T) {
 	}
 }
 
-func TestListLogs_EmptyDB(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// Create empty database
-	store, err := infra.NewSQLiteEventRepository(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore failed: %v", err)
-	}
-	ctx := context.Background()
-	if err := store.Initialize(ctx); err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-	defer store.Close()
-
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// Test ListLogs with empty database - should not error
-	service := app.NewLogsService(store, store)
-	opts := &main.LogsOptions{Limit: 10, SessionLimit: 0}
-	err = main.ListLogs(ctx, service, opts)
-
-	// Restore stdout and capture output
-	w.Close()
-	os.Stdout = oldStdout
-	output, _ := io.ReadAll(r)
-
-	if err != nil {
-		t.Errorf("ListLogs with empty DB failed: %v", err)
-	}
-
-	// Should display "No logs found" message
-	if !strings.Contains(string(output), "No logs found") {
-		t.Errorf("Expected 'No logs found' message, got: %s", output)
-	}
-}
-
-func TestExecuteRawQuery_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// Create and initialize database
-	store, err := infra.NewSQLiteEventRepository(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore failed: %v", err)
-	}
-	ctx := context.Background()
-	if err := store.Initialize(ctx); err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-	defer store.Close()
-
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// Test ExecuteRawQuery with valid query
-	service := app.NewLogsService(store, store)
-	err = main.ExecuteRawQuery(ctx, service, "SELECT COUNT(*) FROM events")
-
-	w.Close()
-	os.Stdout = oldStdout
-	output, _ := io.ReadAll(r)
-
-	if err != nil {
-		t.Errorf("ExecuteRawQuery failed: %v", err)
-	}
-
-	// Should have column headers and row count
-	outputStr := string(output)
-	if !strings.Contains(outputStr, "rows") {
-		t.Errorf("Expected row count in output, got: %s", outputStr)
-	}
-}
-
-func TestExecuteRawQuery_InvalidSQL(t *testing.T) {
-	tmpDir := t.TempDir()
-	dbPath := filepath.Join(tmpDir, "test.db")
-
-	// Create database
-	store, err := infra.NewSQLiteEventRepository(dbPath)
-	if err != nil {
-		t.Fatalf("NewSQLiteStore failed: %v", err)
-	}
-	ctx := context.Background()
-	if err := store.Initialize(ctx); err != nil {
-		t.Fatalf("Init failed: %v", err)
-	}
-	defer store.Close()
-
-	// Test with invalid SQL
-	service := app.NewLogsService(store, store)
-	err = main.ExecuteRawQuery(ctx, service, "INVALID SQL QUERY")
-	if err == nil {
-		t.Error("Expected error for invalid SQL, got nil")
-	}
-}
+// Note: ListLogs and ExecuteRawQuery functionality is now tested in internal/app/logs_cmd_test.go
+// The logic has been moved to the app layer for better testability
 
 func TestParseLogsFlags_InvalidFlag(t *testing.T) {
 	// Test with an invalid flag
