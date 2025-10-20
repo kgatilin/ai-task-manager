@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // HookConfig represents the hooks configuration for Claude Code
@@ -72,7 +74,7 @@ func findSettingsFile() (string, error) {
 func DefaultDarwinFlowConfig() HookConfig {
 	return HookConfig{
 		Hooks: map[string][]HookMatcher{
-			"PreToolUse": {
+			string(pluginsdk.TriggerBeforeToolUse): {
 				{
 					Matcher: "*", // Match all tools
 					Hooks: []HookAction{
@@ -84,7 +86,7 @@ func DefaultDarwinFlowConfig() HookConfig {
 					},
 				},
 			},
-			"UserPromptSubmit": {
+			string(pluginsdk.TriggerUserInput): {
 				{
 					Hooks: []HookAction{
 						{
@@ -95,7 +97,7 @@ func DefaultDarwinFlowConfig() HookConfig {
 					},
 				},
 			},
-			"SessionEnd": {
+			string(pluginsdk.TriggerSessionEnd): {
 				{
 					Hooks: []HookAction{
 						{

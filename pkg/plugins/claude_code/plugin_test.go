@@ -2,6 +2,8 @@ package claude_code_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -485,3 +487,185 @@ func TestClaudeCodePlugin_QueryWithAnalyses(t *testing.T) {
 // The tests above demonstrate the event sourcing pattern in isolation with mocks.
 // The session_entity_test.go file provides comprehensive coverage of the
 // SessionEntity logic which is the core functionality.
+
+// TestClaudeCodePlugin_ImplementsIHookProvider verifies that the plugin
+// implements the IHookProvider interface.
+func TestClaudeCodePlugin_ImplementsIHookProvider(t *testing.T) {
+	// Verify plugin implements IHookProvider
+	var _ pluginsdk.IHookProvider = (*claude_code.ClaudeCodePlugin)(nil)
+}
+
+// TestClaudeCodePlugin_GetHooks verifies the hook configuration.
+func TestClaudeCodePlugin_GetHooks(t *testing.T) {
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+
+	hooks := plugin.GetHooks()
+
+	// Verify we get exactly 3 hooks
+	if len(hooks) != 3 {
+		t.Fatalf("Expected 3 hooks, got %d", len(hooks))
+	}
+
+	// Verify each hook has required fields
+	for i, hook := range hooks {
+		if hook.TriggerType == "" {
+			t.Errorf("Hook %d: missing TriggerType", i)
+		}
+		if hook.Name == "" {
+			t.Errorf("Hook %d: missing Name", i)
+		}
+		if hook.Description == "" {
+			t.Errorf("Hook %d: missing Description", i)
+		}
+		if hook.Command == "" {
+			t.Errorf("Hook %d: missing Command", i)
+		}
+		if hook.Timeout < 0 {
+			t.Errorf("Hook %d: invalid Timeout %d", i, hook.Timeout)
+		}
+	}
+
+	// Verify hook configurations
+	expectedHooks := map[string]pluginsdk.HookConfiguration{
+		string(pluginsdk.TriggerBeforeToolUse): {
+			TriggerType: string(pluginsdk.TriggerBeforeToolUse),
+			Name:        "PreToolUse",
+			Description: "Triggered before any tool invocation",
+			Command:     "dw claude-code emit-event",
+			Timeout:     5,
+		},
+		string(pluginsdk.TriggerUserInput): {
+			TriggerType: string(pluginsdk.TriggerUserInput),
+			Name:        "UserPromptSubmit",
+			Description: "Triggered when user submits a prompt",
+			Command:     "dw claude-code emit-event",
+			Timeout:     5,
+		},
+		string(pluginsdk.TriggerSessionEnd): {
+			TriggerType: string(pluginsdk.TriggerSessionEnd),
+			Name:        "SessionEnd",
+			Description: "Triggered at the end of a session",
+			Command:     "dw claude-code auto-summary",
+			Timeout:     0,
+		},
+	}
+
+	for _, hook := range hooks {
+		expected, ok := expectedHooks[hook.TriggerType]
+		if !ok {
+			t.Errorf("Unexpected trigger type: %s", hook.TriggerType)
+			continue
+		}
+
+		if hook.TriggerType != expected.TriggerType {
+			t.Errorf("TriggerType mismatch: got %s, want %s", hook.TriggerType, expected.TriggerType)
+		}
+		if hook.Name != expected.Name {
+			t.Errorf("Name mismatch for %s: got %s, want %s", hook.TriggerType, hook.Name, expected.Name)
+		}
+		if hook.Description != expected.Description {
+			t.Errorf("Description mismatch for %s: got %s, want %s", hook.TriggerType, hook.Description, expected.Description)
+		}
+		if hook.Command != expected.Command {
+			t.Errorf("Command mismatch for %s: got %s, want %s", hook.TriggerType, hook.Command, expected.Command)
+		}
+		if hook.Timeout != expected.Timeout {
+			t.Errorf("Timeout mismatch for %s: got %d, want %d", hook.TriggerType, hook.Timeout, expected.Timeout)
+		}
+	}
+}
+
+// TestClaudeCodePlugin_InstallHooks verifies hook installation.
+func TestClaudeCodePlugin_InstallHooks(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Change to temp directory for this test
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(oldCwd)
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+
+	// Test hook installation
+	err = plugin.InstallHooks(tmpDir)
+	if err != nil {
+		t.Fatalf("InstallHooks failed: %v", err)
+	}
+
+	// Verify settings file was created
+	settingsFile := filepath.Join(tmpDir, ".claude", "settings.json")
+	if _, err := os.Stat(settingsFile); err != nil {
+		t.Errorf("Settings file not created at %s: %v", settingsFile, err)
+	}
+}
+
+// TestClaudeCodePlugin_RefreshHooks verifies hook refresh.
+func TestClaudeCodePlugin_RefreshHooks(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Change to temp directory for this test
+	oldCwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Failed to get current directory: %v", err)
+	}
+	defer os.Chdir(oldCwd)
+
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("Failed to change directory: %v", err)
+	}
+
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+
+	// First install
+	if err := plugin.InstallHooks(tmpDir); err != nil {
+		t.Fatalf("Initial install failed: %v", err)
+	}
+
+	// Then refresh
+	err = plugin.RefreshHooks(tmpDir)
+	if err != nil {
+		t.Fatalf("RefreshHooks failed: %v", err)
+	}
+
+	// Verify settings still exists after refresh
+	settingsFile := filepath.Join(tmpDir, ".claude", "settings.json")
+	if _, err := os.Stat(settingsFile); err != nil {
+		t.Errorf("Settings file missing after refresh: %v", err)
+	}
+}
+
+// TestClaudeCodePlugin_GetCapabilities_IncludesIHookProvider verifies that
+// GetCapabilities includes the IHookProvider capability.
+func TestClaudeCodePlugin_GetCapabilities_IncludesIHookProvider(t *testing.T) {
+	plugin := claude_code.NewClaudeCodePlugin(nil, nil, &mockLogger{}, nil, nil, "")
+
+	capabilities := plugin.GetCapabilities()
+
+	// Verify we have the expected capabilities
+	expectedCapabilities := map[string]bool{
+		"IEntityProvider":  false,
+		"IEntityUpdater":   false,
+		"ICommandProvider": false,
+		"IHookProvider":    false,
+	}
+
+	for _, cap := range capabilities {
+		if _, exists := expectedCapabilities[cap]; !exists {
+			t.Errorf("Unexpected capability: %s", cap)
+		}
+		expectedCapabilities[cap] = true
+	}
+
+	// Verify all expected capabilities were found
+	for cap, found := range expectedCapabilities {
+		if !found {
+			t.Errorf("Missing expected capability: %s", cap)
+		}
+	}
+}
