@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/infra"
@@ -169,6 +170,13 @@ func handleInit(args []string) {
 
 	fmt.Println("Initializing Claude Code logging for DarwinFlow...")
 	fmt.Println()
+
+	// Ensure database directory exists before creating repository
+	dbDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dbDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating database directory: %v\n", err)
+		os.Exit(1)
+	}
 
 	// Create infrastructure dependencies
 	repository, err := infra.NewSQLiteEventRepository(dbPath)
