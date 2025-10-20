@@ -172,6 +172,35 @@ For detailed architecture and API information, see:
 
 **Note**: When the user refers to "workflow", they mean these CLAUDE.md instructions.
 
+**Handling Large Tasks with Task Tool Delegation**:
+
+For large features or refactorings that require substantial context, use the Task tool to ensure complete implementation:
+
+1. **Decompose First**: Break the large task into smaller, context-sized chunks
+   - Each chunk should be independently implementable
+   - Aim for chunks that fit comfortably within context limits
+   - Consider natural boundaries (packages, features, components)
+
+2. **Sequential Delegation Pattern**:
+   - Launch Task tool for the first chunk with detailed instructions
+   - Wait for sub-agent completion report
+   - Review the report and results
+   - Launch next Task tool for the next chunk
+   - Continue until the entire feature is fully implemented
+
+3. **Benefits**:
+   - Ensures complete implementation without hitting context limits
+   - Each chunk gets full attention and thorough implementation
+   - Natural checkpoints for review and validation
+   - Avoids incomplete features due to context exhaustion
+
+**Example**: Adding a complex plugin system:
+- Chunk 1: Define domain interfaces and capability contracts
+- Chunk 2: Implement plugin registry and discovery
+- Chunk 3: Create core plugin implementation
+- Chunk 4: Add CLI commands and integrate with existing code
+- Chunk 5: Write comprehensive tests for all components
+
 When working on this project:
 1. Understand the DDD layered architecture (see below)
 2. Check @docs/arch-index.md to see current packages and dependencies
