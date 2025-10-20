@@ -73,7 +73,9 @@ func (s *SessionEntity) GetType() string {
 }
 
 func (s *SessionEntity) GetCapabilities() []string {
-	return []string{"IExtensible", "IHasContext", "ITrackable"}
+	// Minimal capabilities - TUI only uses IExtensible (GetID, GetAllFields)
+	// IHasContext and ITrackable are implemented but not actively used
+	return []string{"IExtensible"}
 }
 
 func (s *SessionEntity) GetField(name string) interface{} {

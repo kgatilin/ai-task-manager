@@ -38,42 +38,85 @@
 
 ### Plugin System Architecture
 
-**DarwinFlow uses a capability-driven plugin system** to enable extensibility across different workflow types.
+**DarwinFlow uses a capability-driven plugin system** with a public SDK for extensibility.
 
 **Core Concepts**:
-- **Capabilities**: Interfaces that define what an entity can do (IExtensible, IHasContext, ITrackable, ISchedulable, IRelatable)
-- **Plugins**: Providers of entities (built-in core plugins or external plugins)
-- **Plugin Registry**: Central manager that routes queries to appropriate plugins
-- **Entity Types**: Concrete types provided by plugins (e.g., "session", "task", "roadmap")
+- **SDK Contract** (`pkg/pluginsdk`): Public API that all plugins (internal and external) import
+- **Plugin Capabilities**: Interfaces defining what plugins can DO (IEntityProvider, ICommandProvider, IEventEmitter)
+- **Entity Capabilities**: Interfaces defining what entities ARE (IExtensible, IHasContext, ITrackable, etc.)
+- **Plugin Registry**: Central manager that routes queries to appropriate plugins based on capabilities
+- **Adaptation Layer**: Converts between SDK types and internal domain types
 
-**Capability Interfaces** (defined in `internal/domain/capability.go`):
-- `IExtensible` - Base capability: ID, type, fields (all entities must implement)
-- `IHasContext` - Entities with related data (files, activity, metadata)
-- `ITrackable` - Status and progress tracking
-- `ISchedulable` - Time-based scheduling (start date, due date)
-- `IRelatable` - Explicit relationships between entities
+**Plugin SDK** (`pkg/pluginsdk/`):
+- Public API accessible to external Go plugins
+- Zero dependencies on internal packages
+- Defines all plugin and entity interfaces
+- Self-contained types (Event, EntityContext, PluginInfo, etc.)
 
-**Plugin Architecture**:
-- **Plugin Interface** (`internal/domain/plugin.go`): Contract all plugins must implement
-- **PluginRegistry** (`internal/app/plugin_registry.go`): Manages plugin lifecycle and routing
-- **Claude Code Plugin** (`pkg/plugins/claude_code/`): Core plugin providing "session" entities
-  - Implements IExtensible + IHasContext + ITrackable
-  - Wraps existing Claude Code session data
-  - Provides commands (`init`, `log`) and tools (`session-summary`)
-  - Read-only (sessions cannot be modified)
+**Plugin Capability Interfaces** (defined in `pkg/pluginsdk/capability.go`):
+- `IEntityProvider` - Plugins that provide queryable entities
+- `IEntityUpdater` - Plugins that support entity updates
+- `ICommandProvider` - Plugins that provide CLI commands
+- `IEventEmitter` - Plugins that emit real-time events (planned)
+
+**Entity Capability Interfaces** (defined in `pkg/pluginsdk/entity.go`):
+- `IExtensible` - **Required**: Base capability (ID, type, fields) - all entities must implement
+- `IHasContext` - **Optional**: Entities with related data (files, activity, metadata)
+- `ITrackable` - **Optional**: Status and progress tracking
+- `ISchedulable` - **Optional**: Time-based scheduling (planned)
+- `IRelatable` - **Optional**: Explicit entity relationships (planned)
+
+**Plugin Types**:
+- **Internal plugins** (`pkg/plugins/`): Built-in plugins that ship with the tool
+  - Import `pkg/pluginsdk` for interfaces
+  - Receive adapted internal services via cmd layer
+  - Example: `pkg/plugins/claude_code`
+- **External plugins** (planned): User-created plugins
+  - Import `pkg/pluginsdk` (public API)
+  - No access to `internal/*` packages
+  - Communicate via SDK contracts only
 
 **How It Works**:
-1. TUI queries PluginRegistry for entities
-2. Registry routes to appropriate plugin based on entity type
-3. Plugin returns entities implementing capability interfaces
-4. TUI renders based on capabilities (not entity types)
-5. Same UI components work for all entity types with same capabilities
+1. Plugins import `pkg/pluginsdk` and implement required interfaces
+2. Plugin declares capabilities via `GetCapabilities()` method
+3. CLI routes commands to PluginRegistry
+4. Registry uses capability-based routing to find correct plugin
+5. Adaptation layer converts SDK types ↔ domain types
+6. TUI/commands work with entities through SDK interfaces
+7. All plugins use same SDK contract (internal and external)
+
+**Example Plugin**:
+```go
+package myplugin
+
+import "github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
+
+type MyPlugin struct {
+    logger pluginsdk.Logger
+    // ... other dependencies
+}
+
+func (p *MyPlugin) GetInfo() pluginsdk.PluginInfo {
+    return pluginsdk.PluginInfo{
+        Name:        "my-plugin",
+        Version:     "1.0.0",
+        Description: "My custom plugin",
+    }
+}
+
+func (p *MyPlugin) GetCapabilities() []string {
+    return []string{"IEntityProvider", "ICommandProvider"}
+}
+
+// Implement capability interfaces...
+```
 
 **Benefits**:
-- Add new entity types without changing main tool
-- UI automatically supports new entities if they implement known capabilities
-- Cross-project workflow optimization (analyze patterns across all entity types)
-- Extensible for different workflow domains (coding, project management, research, etc.)
+- External Go plugins can import public SDK
+- Internal plugins use same contracts
+- Type-safe capability detection
+- Clean separation: plugins know only SDK, not internal implementation
+- UI automatically supports new entity types with known capabilities
 
 **Command System**:
 Plugins provide CLI commands via the `ICommandProvider` capability (defined in `internal/domain/plugin.go`):
@@ -102,20 +145,52 @@ Plugins can also provide project-specific tools via the `IToolProvider` capabili
 4. `dw project <toolname>` routes to project tools (e.g., session-summary)
 5. Commands/tools execute with appropriate context (I/O, repos, config, etc.)
 
+**Adaptation Layer**:
+
+Since plugins use SDK types but the core system uses domain types, an adaptation layer handles conversions:
+
+**Location**:
+- `cmd/dw/plugin_registration.go` - Adapts internal services for plugins
+- `internal/app/plugin_entity_adapter.go` - Converts SDK entities to domain entities
+- `internal/app/plugin_context.go` - Implements SDK interfaces using domain services
+
+**Conversions**:
+- `pluginsdk.Event` ↔ `domain.Event`
+- `pluginsdk.IExtensible` ↔ `domain.IExtensible`
+- `pluginsdk.EntityQuery` ↔ `domain.EntityQuery`
+- `pluginsdk.EntityContext` ↔ `domain.ActivityRecord`
+
+**Why adaptation?**:
+- SDK must be independent (no internal imports)
+- Domain represents core business logic
+- Plugins shouldn't know about internal implementation
+- External plugins can only access public SDK
+
 **Current State**:
-- ✅ Core plugin infrastructure implemented
-- ✅ Claude-code plugin providing sessions, commands, and tools
+- ✅ SDK in `pkg/pluginsdk/` (public, self-contained)
+- ✅ Claude-code plugin uses SDK exclusively
+- ✅ Capability-based routing in PluginRegistry
+- ✅ Adaptation layer for SDK↔domain conversion
+- ✅ Internal plugins ready (pkg/plugins/)
 - ✅ TUI using plugin system for entity queries
 - ✅ Command system with plugin-namespaced CLI commands
 - ✅ Tool system with project-scoped tools
-- ⚠️ SDK in `pkg/pluginsdk/` exists but violates DDD architecture (see Phase 2)
-- 🔄 External plugin discovery (planned)
-- 🔄 Subprocess communication protocol (planned)
+- 🔄 External plugin discovery (planned - Phase 6)
+- 🔄 JSON-RPC for non-Go plugins (planned - Phase 5)
 
 ### Architecture Documentation
 
 For detailed architecture and API information, see:
-- @docs/arch-index.md - Architecture summary and package details with commands to retrieve full info on packages
+- @docs/arch-index.md - Architecture summary and package details
+- `pkg/pluginsdk/` - Public plugin SDK (godoc for API reference)
+- Run `go-arch-lint .` to validate architecture compliance
+
+**Key architectural principles**:
+1. **SDK is public**: `pkg/pluginsdk` defines contracts for all plugins
+2. **Plugins import SDK**: Both internal and external plugins use pkg/pluginsdk
+3. **Domain is internal**: Core business logic in `internal/domain`
+4. **Adaptation at boundaries**: cmd/app layers convert SDK↔domain types
+5. **DDD compliance**: Maintained with go-arch-lint validation
 
 ### Current Implementation Status
 
@@ -224,15 +299,20 @@ When working on this project:
 8. **Commit after each iteration** - After completing each logical task/iteration, commit all changes with a concise, informative commit message (e.g., "add session refresh feature" rather than long explanations)
 
 **Working with the Plugin System**:
-- Plugin interfaces are defined in `internal/domain/plugin.go` (Plugin, Command, ICommandProvider, IToolProvider)
-- Capability interfaces are defined in `internal/domain/capability.go` (IExtensible, ITrackable, IHasContext, etc.)
-- Core plugins live in `pkg/plugins/` (e.g., `pkg/plugins/claude_code/`)
-- Plugins implement domain interfaces and use domain types only
-- Plugin tests should verify interface compliance and capability support
-- TUI should render based on capabilities, not entity types
+- **SDK interfaces** are defined in `pkg/pluginsdk/` (Plugin, IEntityProvider, ICommandProvider, IToolProvider)
+- **Entity capability interfaces** are defined in `pkg/pluginsdk/entity.go` (IExtensible, ITrackable, IHasContext, etc.)
+- **Internal plugins** live in `pkg/plugins/` (e.g., `pkg/plugins/claude_code/`)
+- Plugins import `pkg/pluginsdk` and implement SDK interfaces
+- **Adaptation layer** in `internal/app/` and `cmd/dw/` converts SDK ↔ domain types
+- Plugin tests should verify SDK interface compliance and capability support
+- TUI should render based on entity capabilities, not entity types
+- **Entity capabilities**:
+  - IExtensible is **required** - all entities must implement
+  - IHasContext, ITrackable, ISchedulable, IRelatable are **optional**
+  - Entities declare capabilities via `GetCapabilities()` method
+  - TUI only uses capabilities that are declared
 - Commands are plugin-scoped: `dw <plugin-name> <command>`
 - Tools are project-scoped: `dw project <toolname>`
-- **Architecture Note**: `pkg/pluginsdk/` exists but violates DDD rules (will be addressed in Phase 2)
 
 ---
 

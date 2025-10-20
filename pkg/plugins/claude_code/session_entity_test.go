@@ -53,19 +53,17 @@ func TestSessionEntity_GetCapabilities(t *testing.T) {
 
 	capabilities := entity.GetCapabilities()
 
-	expectedCaps := map[string]bool{
-		"IExtensible":  true,
-		"IHasContext":  true,
-		"ITrackable":   true,
-	}
+	// SessionEntity declares minimal capabilities - only IExtensible is required
+	// IHasContext and ITrackable are implemented but not declared (not actively used by TUI)
+	expectedCaps := []string{"IExtensible"}
 
 	if len(capabilities) != len(expectedCaps) {
 		t.Errorf("Expected %d capabilities, got %d", len(expectedCaps), len(capabilities))
 	}
 
-	for _, cap := range capabilities {
-		if !expectedCaps[cap] {
-			t.Errorf("Unexpected capability: %s", cap)
+	for i, cap := range capabilities {
+		if cap != expectedCaps[i] {
+			t.Errorf("Expected capability[%d] = %q, got %q", i, expectedCaps[i], cap)
 		}
 	}
 }

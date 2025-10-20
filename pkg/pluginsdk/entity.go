@@ -2,8 +2,17 @@ package pluginsdk
 
 import "time"
 
-// IExtensible is the base capability all entities must implement.
+// IExtensible is the REQUIRED base capability that ALL entities must implement.
 // It provides core identity and introspection for any entity in the system.
+//
+// Required methods:
+//   - GetID: Unique identifier for the entity
+//   - GetType: Entity type name (e.g., "session", "task", "roadmap")
+//   - GetCapabilities: List of capability interfaces this entity implements
+//   - GetField: Access individual fields by name
+//   - GetAllFields: Get all entity fields as a map
+//
+// Currently used by: TUI entity list/detail views, PluginRegistry routing
 type IExtensible interface {
 	// GetID returns the unique identifier for this entity
 	GetID() string
@@ -23,8 +32,15 @@ type IExtensible interface {
 	GetAllFields() map[string]interface{}
 }
 
-// IHasContext is a capability for entities that have related data,
-// such as linked files, related entities, or activity history.
+// IHasContext is an OPTIONAL capability for entities with related contextual data.
+// Entities implement this when they have associated files, activity records, or metadata.
+//
+// Use cases:
+//   - Sessions with tool invocations and file references
+//   - Tasks with associated code changes
+//   - Projects with related artifacts
+//
+// Currently used by: [none - available for future use]
 type IHasContext interface {
 	IExtensible
 
@@ -63,7 +79,15 @@ type ActivityRecord struct {
 	Actor string `json:"actor"`
 }
 
-// ITrackable is a capability for entities that have status and progress tracking.
+// ITrackable is an OPTIONAL capability for entities with status and progress tracking.
+// Entities implement this when they have lifecycle states and completion metrics.
+//
+// Use cases:
+//   - Sessions that can be active/completed/analyzed
+//   - Tasks with todo/in-progress/done states
+//   - Workflows with multi-step progress
+//
+// Currently used by: [none - available for future use]
 type ITrackable interface {
 	IExtensible
 
@@ -80,7 +104,15 @@ type ITrackable interface {
 	GetBlockReason() string
 }
 
-// ISchedulable is a capability for entities that have time-based scheduling.
+// ISchedulable is an OPTIONAL capability for entities with time-based scheduling.
+// Entities implement this when they have start dates, due dates, or deadlines.
+//
+// Use cases:
+//   - Tasks with deadlines
+//   - Scheduled workflows
+//   - Time-boxed sessions
+//
+// Currently used by: [none - available for future use]
 type ISchedulable interface {
 	IExtensible
 
@@ -94,7 +126,15 @@ type ISchedulable interface {
 	IsOverdue() bool
 }
 
-// IRelatable is a capability for entities that have explicit relationships with other entities.
+// IRelatable is an OPTIONAL capability for entities with explicit relationships.
+// Entities implement this when they reference other entities.
+//
+// Use cases:
+//   - Tasks related to sessions
+//   - Projects containing tasks
+//   - Hierarchical workflows
+//
+// Currently used by: [none - available for future use]
 type IRelatable interface {
 	IExtensible
 
