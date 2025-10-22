@@ -10,7 +10,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		printUsage()
+		printUsageWithPlugins()
 		os.Exit(1)
 	}
 
@@ -19,7 +19,7 @@ func main() {
 
 	// Handle help first
 	if command == "help" || command == "--help" || command == "-h" {
-		printUsage()
+		printUsageWithPlugins()
 		return
 	}
 
@@ -81,14 +81,26 @@ func main() {
 		if err := services.CommandRegistry.ExecuteCommand(ctx, command, "", args, cmdCtx); err == nil {
 			return
 		}
-		// Unknown command
+		// Unknown command - show full help with loaded plugins
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
-		printUsage()
+		printFullUsage(services)
 		os.Exit(1)
 	}
 }
 
-func printUsage() {
+// printUsageWithPlugins initializes the app to load plugins, then prints full usage
+func printUsageWithPlugins() {
+	services, err := InitializeApp(app.DefaultDBPath, "", false)
+	if err != nil {
+		// Fallback to basic usage if can't initialize
+		printBasicUsage()
+		return
+	}
+	printFullUsage(services)
+}
+
+// printBasicUsage shows help without plugin commands (fallback)
+func printBasicUsage() {
 	fmt.Println("dw - DarwinFlow CLI")
 	fmt.Println()
 	fmt.Println("Usage:")
@@ -103,12 +115,58 @@ func printUsage() {
 	fmt.Println("  dw refresh           Update database schema and hooks to latest version")
 	fmt.Println("  dw help              Show this help message")
 	fmt.Println()
+	fmt.Println("For command-specific help:")
+	fmt.Println("  dw logs --help       Show logs command help and database schema")
+	fmt.Println("  dw analyze --help    Show analyze command options")
+	fmt.Println("  dw config --help     Show config command options")
+	fmt.Println()
+}
+
+// printFullUsage shows help with all registered plugin commands
+func printFullUsage(services *AppServices) {
+	fmt.Println("dw - DarwinFlow CLI")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  dw <plugin> <command> [args]   Run a plugin command")
+	fmt.Println()
+	fmt.Println("Built-in Commands:")
+	fmt.Println("  dw init              Initialize DarwinFlow and all plugins")
+	fmt.Println("  dw logs              View logged events from the database")
+	fmt.Println("  dw analyze           Analyze sessions to identify tool gaps and inefficiencies")
+	fmt.Println("  dw ui                Interactive UI for browsing and analyzing sessions")
+	fmt.Println("  dw config            Manage DarwinFlow configuration")
+	fmt.Println("  dw refresh           Update database schema and hooks to latest version")
+	fmt.Println("  dw help              Show this help message")
+	fmt.Println()
+
+	// Dynamically list all plugin commands
 	fmt.Println("Plugin Commands:")
-	fmt.Println("  dw claude init                          Initialize Claude Code logging (backward compat)")
-	fmt.Println("  dw claude log <event-type>              Log a Claude Code event (backward compat)")
-	fmt.Println("  dw claude-code init                     Initialize Claude Code logging")
-	fmt.Println("  dw claude-code log <event-type>         Log a Claude Code event")
-	fmt.Println("  dw claude-code session-summary [flags]  Display session summary")
+
+	// Get all commands from all plugins
+	allCommands := services.CommandRegistry.GetAllCommands()
+	if len(allCommands) == 0 {
+		fmt.Println("  (no plugins with commands registered)")
+	} else {
+		for pluginName, commands := range allCommands {
+			pluginInfo, err := services.PluginRegistry.GetPlugin(pluginName)
+			if err != nil {
+				continue
+			}
+
+			info := pluginInfo.GetInfo()
+			fmt.Printf("\n  %s (%s):\n", info.Name, info.Description)
+
+			for _, cmd := range commands {
+				// Format: "    dw <plugin> <command>    <description>"
+				cmdLine := fmt.Sprintf("    dw %s %s", pluginName, cmd.GetName())
+				fmt.Printf("%-45s %s\n", cmdLine, cmd.GetDescription())
+			}
+		}
+	}
+
+	fmt.Println()
+	fmt.Println("Backward Compatibility:")
+	fmt.Println("  dw claude <command>  Alias for 'dw claude-code <command>'")
 	fmt.Println()
 	fmt.Println("For command-specific help:")
 	fmt.Println("  dw logs --help       Show logs command help and database schema")

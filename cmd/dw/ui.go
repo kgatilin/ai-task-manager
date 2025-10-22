@@ -64,7 +64,8 @@ func uiCommand(args []string) {
 	registry := app.NewPluginRegistry(logger)
 
 	// Register built-in plugins
-	if err := RegisterBuiltInPlugins(registry, analysisService, logsService, logger, setupService, configLoaderForPlugin, *dbPath); err != nil {
+	workingDir, _ := os.Getwd()
+	if err := RegisterBuiltInPlugins(registry, analysisService, logsService, logger, setupService, configLoaderForPlugin, *dbPath, workingDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error registering built-in plugins: %v\n", err)
 		os.Exit(1)
 	}

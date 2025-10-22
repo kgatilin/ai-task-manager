@@ -83,6 +83,7 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 		setupService,
 		configLoader,
 		dbPath,
+		workingDir,
 	); err != nil {
 		return nil, fmt.Errorf("failed to register built-in plugins: %w", err)
 	}

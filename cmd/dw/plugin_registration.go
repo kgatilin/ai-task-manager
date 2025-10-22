@@ -157,6 +157,7 @@ func RegisterBuiltInPlugins(
 	setupService *app.SetupService,
 	configLoader app.ConfigLoader,
 	dbPath string,
+	workingDir string,
 ) error {
 	// Create plugin context (SDK logger adapter)
 	sdkLogger := &loggerAdapter{inner: logger}
@@ -184,7 +185,7 @@ func RegisterBuiltInPlugins(
 	}
 
 	// Register task-manager plugin (Phase 4 example plugin)
-	taskPlugin, err := task_manager.NewTaskManagerPlugin(sdkLogger, dbPath)
+	taskPlugin, err := task_manager.NewTaskManagerPlugin(sdkLogger, workingDir)
 	if err != nil {
 		return fmt.Errorf("failed to create task-manager plugin: %w", err)
 	}
