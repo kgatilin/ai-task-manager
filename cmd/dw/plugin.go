@@ -9,8 +9,8 @@ import (
 	"github.com/kgatilin/darwinflow-pub/internal/infra"
 )
 
-// pluginCmd handles the "dw plugin" command and its subcommands
-func pluginCmd(args []string) {
+// PluginCmd handles the "dw plugin" command and its subcommands
+func PluginCmd(args []string) {
 	if len(args) == 0 {
 		printPluginCmdHelp()
 		os.Exit(1)

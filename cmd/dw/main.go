@@ -57,7 +57,7 @@ func main() {
 	case "config":
 		configCmd(args)
 	case "plugin":
-		pluginCmd(args)
+		PluginCmd(args)
 		return
 	case "claude":
 		// Backward compatibility: "dw claude <command>" -> "dw claude-code <command>"

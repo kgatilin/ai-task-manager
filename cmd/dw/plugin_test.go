@@ -1,4 +1,4 @@
-package main
+package main_test
 
 import (
 	"bytes"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	main "github.com/kgatilin/darwinflow-pub/cmd/dw"
 )
 
 // TestPluginListCommand tests the 'dw plugin list' command
@@ -16,7 +18,7 @@ func TestPluginListCommand(t *testing.T) {
 	os.Stdout = w
 
 	// Run plugin list command
-	pluginCmd([]string{"list"})
+	main.PluginCmd([]string{"list"})
 
 	// Restore stdout
 	w.Close()
@@ -57,7 +59,7 @@ func TestPluginReloadCommand_NoConfig(t *testing.T) {
 	os.Stdout = w
 
 	// Run plugin reload command
-	pluginCmd([]string{"reload"})
+	main.PluginCmd([]string{"reload"})
 
 	// Restore stdout
 	w.Close()
@@ -92,7 +94,7 @@ func TestPluginCommand_Help(t *testing.T) {
 			os.Stdout = w
 
 			// Run command
-			pluginCmd(tc.args)
+			main.PluginCmd(tc.args)
 
 			// Restore stdout
 			w.Close()
