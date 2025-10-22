@@ -69,6 +69,19 @@ func main() {
 			os.Exit(1)
 		}
 	default:
+		// Check if this is a plugin help request: dw <plugin> --help
+		if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
+			if printPluginHelp(services, command) {
+				return
+			}
+		}
+		// If no args and it's a known plugin, show plugin help
+		if len(args) == 0 {
+			if printPluginHelp(services, command) {
+				return
+			}
+		}
+
 		// Try plugin commands: dw <plugin-name> <command> [args]
 		cmdCtx := app.NewCommandContext(services.Logger, services.DBPath, services.WorkingDir, services.EventRepo, os.Stdout, os.Stdin)
 		if len(args) > 0 {
@@ -176,4 +189,43 @@ func printFullUsage(services *AppServices) {
 	fmt.Println("Environment Variables:")
 	fmt.Println("  DW_CONTEXT           Set the current context (e.g., project/myapp)")
 	fmt.Println()
+}
+
+// printPluginHelp shows help for a specific plugin and its commands
+func printPluginHelp(services *AppServices, pluginName string) bool {
+	// Check if plugin exists
+	plugin, err := services.PluginRegistry.GetPlugin(pluginName)
+	if err != nil {
+		return false
+	}
+
+	// Get plugin info
+	info := plugin.GetInfo()
+
+	// Print plugin header
+	fmt.Printf("Plugin: %s (version %s)\n", info.Name, info.Version)
+	fmt.Printf("Description: %s\n\n", info.Description)
+
+	// Get and display commands
+	commands := services.CommandRegistry.GetCommandsForPlugin(pluginName)
+	if len(commands) == 0 {
+		fmt.Println("This plugin provides no commands.")
+		return true
+	}
+
+	fmt.Println("Available Commands:")
+	fmt.Println()
+
+	for _, cmd := range commands {
+		// Format: "  dw <plugin> <command>    <description>"
+		cmdLine := fmt.Sprintf("  dw %s %s", pluginName, cmd.GetName())
+		fmt.Printf("%-40s %s\n", cmdLine, cmd.GetDescription())
+	}
+
+	fmt.Println()
+	fmt.Println("For command-specific help:")
+	fmt.Printf("  dw %s <command> --help\n", pluginName)
+	fmt.Println()
+
+	return true
 }
