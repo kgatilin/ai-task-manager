@@ -58,16 +58,16 @@ func (c *CreateCommand) GetUsage() string {
 }
 
 func (c *CreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
-	if len(args) < 2 {
+	if len(args) < 1 {
 		return fmt.Errorf("usage: %s", c.GetUsage())
 	}
 
-	title := args[1]
+	title := args[0]
 	description := ""
 	priority := "medium"
 
 	// Parse optional flags
-	for i := 2; i < len(args); i++ {
+	for i := 1; i < len(args); i++ {
 		switch args[i] {
 		case "--description":
 			if i+1 < len(args) {
