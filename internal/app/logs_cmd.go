@@ -6,13 +6,13 @@ import (
 	"io"
 	"strings"
 
-	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // LogsServiceInterface defines the interface for logs operations
 type LogsServiceInterface interface {
 	ListRecentLogs(ctx context.Context, limit, sessionLimit int, sessionID string, ordered bool) ([]*LogRecord, error)
-	ExecuteRawQuery(ctx context.Context, query string) (*domain.QueryResult, error)
+	ExecuteRawQuery(ctx context.Context, query string) (*pluginsdk.QueryResult, error)
 }
 
 // LogsCommandHandler handles the logs command presentation logic

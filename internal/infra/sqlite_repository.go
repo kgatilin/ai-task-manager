@@ -11,6 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // SQLiteEventRepository implements domain.EventRepository using SQLite
@@ -191,7 +192,8 @@ func (r *SQLiteEventRepository) Save(ctx context.Context, event *domain.Event) e
 }
 
 // FindByQuery retrieves events based on query criteria
-func (r *SQLiteEventRepository) FindByQuery(ctx context.Context, query domain.EventQuery) ([]*domain.Event, error) {
+// Uses pluginsdk.EventQuery as the single source of truth for query structure
+func (r *SQLiteEventRepository) FindByQuery(ctx context.Context, query pluginsdk.EventQuery) ([]*domain.Event, error) {
 	var conditions []string
 	var args []interface{}
 
@@ -215,9 +217,10 @@ func (r *SQLiteEventRepository) FindByQuery(ctx context.Context, query domain.Ev
 		conditions = append(conditions, fmt.Sprintf("event_type IN (%s)", strings.Join(placeholders, ",")))
 	}
 
-	if query.SessionID != "" {
+	// Map Metadata["session_id"] to session_id column
+	if sessionID, ok := query.Metadata["session_id"]; ok && sessionID != "" {
 		conditions = append(conditions, "session_id = ?")
-		args = append(args, query.SessionID)
+		args = append(args, sessionID)
 	}
 
 	// Build SQL query
@@ -321,8 +324,8 @@ func (r *SQLiteEventRepository) Close() error {
 }
 
 // ExecuteRawQuery executes an arbitrary SQL query and returns results
-// Implements domain.RawQueryExecutor interface
-func (r *SQLiteEventRepository) ExecuteRawQuery(ctx context.Context, query string) (*domain.QueryResult, error) {
+// Implements pluginsdk.RawQueryExecutor interface
+func (r *SQLiteEventRepository) ExecuteRawQuery(ctx context.Context, query string) (*pluginsdk.QueryResult, error) {
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
@@ -359,7 +362,7 @@ func (r *SQLiteEventRepository) ExecuteRawQuery(ctx context.Context, query strin
 		return nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	return &domain.QueryResult{
+	return &pluginsdk.QueryResult{
 		Columns: columns,
 		Rows:    resultRows,
 	}, nil

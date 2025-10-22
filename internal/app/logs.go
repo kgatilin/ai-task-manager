@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // LogRecord represents a formatted log entry for display
@@ -24,12 +25,12 @@ type LogRecord struct {
 
 // LogsService provides methods for querying and displaying logs
 type LogsService struct {
-	repo          domain.EventRepository
-	rawExecutor   domain.RawQueryExecutor
+	repo        domain.EventRepository
+	rawExecutor pluginsdk.RawQueryExecutor
 }
 
 // NewLogsService creates a new logs service
-func NewLogsService(repo domain.EventRepository, rawExecutor domain.RawQueryExecutor) *LogsService {
+func NewLogsService(repo domain.EventRepository, rawExecutor pluginsdk.RawQueryExecutor) *LogsService {
 	return &LogsService{
 		repo:        repo,
 		rawExecutor: rawExecutor,
@@ -76,10 +77,14 @@ func (s *LogsService) ListRecentLogs(ctx context.Context, limit int, sessionLimi
 	}
 
 	// Original behavior: limit by number of events
-	query := domain.EventQuery{
+	query := pluginsdk.EventQuery{
 		Limit:       limit,
-		SessionID:   sessionID,
 		OrderByTime: ordered,
+	}
+
+	// Map sessionID to Metadata if provided
+	if sessionID != "" {
+		query.Metadata = map[string]string{"session_id": sessionID}
 	}
 
 	events, err := s.repo.FindByQuery(ctx, query)
@@ -95,10 +100,10 @@ func (s *LogsService) fetchEventsForSessions(ctx context.Context, sessionIDs []s
 	allRecords := make([]*LogRecord, 0)
 
 	for _, sessionID := range sessionIDs {
-		query := domain.EventQuery{
-			SessionID:   sessionID,
+		query := pluginsdk.EventQuery{
 			OrderByTime: ordered,
 			Limit:       0, // No limit for individual sessions
+			Metadata:    map[string]string{"session_id": sessionID},
 		}
 
 		events, err := s.repo.FindByQuery(ctx, query)
@@ -151,7 +156,7 @@ func (s *LogsService) convertEventsToRecords(events []*domain.Event) ([]*LogReco
 }
 
 // ExecuteRawQuery executes an arbitrary SQL query
-func (s *LogsService) ExecuteRawQuery(ctx context.Context, query string) (*domain.QueryResult, error) {
+func (s *LogsService) ExecuteRawQuery(ctx context.Context, query string) (*pluginsdk.QueryResult, error) {
 	return s.rawExecutor.ExecuteRawQuery(ctx, query)
 }
 

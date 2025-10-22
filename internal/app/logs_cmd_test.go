@@ -9,12 +9,13 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // mockLogsService is a mock implementation for testing
 type mockLogsService struct {
 	listRecentLogsFunc  func(ctx context.Context, limit, sessionLimit int, sessionID string, ordered bool) ([]*app.LogRecord, error)
-	executeRawQueryFunc func(ctx context.Context, query string) (*domain.QueryResult, error)
+	executeRawQueryFunc func(ctx context.Context, query string) (*pluginsdk.QueryResult, error)
 }
 
 func (m *mockLogsService) ListRecentLogs(ctx context.Context, limit, sessionLimit int, sessionID string, ordered bool) ([]*app.LogRecord, error) {
@@ -39,11 +40,11 @@ func (m *mockLogsService) ListRecentLogs(ctx context.Context, limit, sessionLimi
 	}, nil
 }
 
-func (m *mockLogsService) ExecuteRawQuery(ctx context.Context, query string) (*domain.QueryResult, error) {
+func (m *mockLogsService) ExecuteRawQuery(ctx context.Context, query string) (*pluginsdk.QueryResult, error) {
 	if m.executeRawQueryFunc != nil {
 		return m.executeRawQueryFunc(ctx, query)
 	}
-	return &domain.QueryResult{
+	return &pluginsdk.QueryResult{
 		Columns: []string{"id", "event_type", "count"},
 		Rows: [][]interface{}{
 			{"1", "tool.invoked", 10},
@@ -274,7 +275,7 @@ func TestLogsService_ListRecentLogs_WithSessionLimit(t *testing.T) {
 	ctx := context.Background()
 
 	eventRepo := &MockEventRepository{
-		queryResult: &domain.QueryResult{
+		queryResult: &pluginsdk.QueryResult{
 			Columns: []string{"session_id"},
 			Rows: [][]interface{}{
 				{"session-123"},
@@ -303,7 +304,7 @@ func TestLogsService_ExecuteRawQuery(t *testing.T) {
 	ctx := context.Background()
 
 	eventRepo := &MockEventRepository{
-		queryResult: &domain.QueryResult{
+		queryResult: &pluginsdk.QueryResult{
 			Columns: []string{"id", "event_type", "count"},
 			Rows: [][]interface{}{
 				{"1", "claude.tool.invoked", 10},

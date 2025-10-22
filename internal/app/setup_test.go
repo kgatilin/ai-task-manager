@@ -7,6 +7,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // MockEventRepository for testing
@@ -17,7 +18,7 @@ type MockEventRepository struct {
 	rawQueryError error
 	events        []*domain.Event
 	savedEvents   []*domain.Event
-	queryResult   *domain.QueryResult
+	queryResult   *pluginsdk.QueryResult
 	closed        bool
 }
 
@@ -37,14 +38,15 @@ func (m *MockEventRepository) Save(ctx context.Context, event *domain.Event) err
 	return nil
 }
 
-func (m *MockEventRepository) FindByQuery(ctx context.Context, query domain.EventQuery) ([]*domain.Event, error) {
+func (m *MockEventRepository) FindByQuery(ctx context.Context, query pluginsdk.EventQuery) ([]*domain.Event, error) {
 	if m.queryError != nil {
 		return nil, m.queryError
 	}
-	if query.SessionID != "" {
+	sessionID := query.Metadata["session_id"]
+	if sessionID != "" {
 		var result []*domain.Event
 		for _, e := range m.events {
-			if e.SessionID == query.SessionID {
+			if e.SessionID == sessionID {
 				result = append(result, e)
 			}
 		}
@@ -58,14 +60,14 @@ func (m *MockEventRepository) Close() error {
 	return nil
 }
 
-func (m *MockEventRepository) ExecuteRawQuery(ctx context.Context, query string) (*domain.QueryResult, error) {
+func (m *MockEventRepository) ExecuteRawQuery(ctx context.Context, query string) (*pluginsdk.QueryResult, error) {
 	if m.rawQueryError != nil {
 		return nil, m.rawQueryError
 	}
 	if m.queryResult != nil {
 		return m.queryResult, nil
 	}
-	return &domain.QueryResult{
+	return &pluginsdk.QueryResult{
 		Columns: []string{"id", "event_type"},
 		Rows:    [][]interface{}{{"1", "test"}},
 	}, nil

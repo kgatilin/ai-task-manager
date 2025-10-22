@@ -10,6 +10,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
 	"github.com/kgatilin/darwinflow-pub/internal/infra"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -428,7 +429,7 @@ func TestSQLiteEventRepository_FindByQuery(t *testing.T) {
 	}
 
 	// Test FindByQuery with session filter
-	query := domain.EventQuery{SessionID: "session-123"}
+	query := pluginsdk.EventQuery{Metadata: map[string]string{"session_id": "session-123"}}
 	events, err := store.FindByQuery(ctx, query)
 	if err != nil {
 		t.Fatalf("FindByQuery failed: %v", err)
@@ -639,7 +640,7 @@ func TestSQLiteEventRepository_Save(t *testing.T) {
 	}
 
 	// Verify it was saved
-	query := domain.EventQuery{SessionID: "session-save-test"}
+	query := pluginsdk.EventQuery{Metadata: map[string]string{"session_id": "session-save-test"}}
 	events, err := store.FindByQuery(ctx, query)
 	if err != nil {
 		t.Fatalf("FindByQuery failed: %v", err)
@@ -687,8 +688,8 @@ func TestSQLiteEventRepository_FindByQuery_WithLimit(t *testing.T) {
 	}
 
 	// Query with limit
-	query := domain.EventQuery{
-		SessionID: "limit-session",
+	query := pluginsdk.EventQuery{
+		Metadata: map[string]string{"session_id": "limit-session"},
 		Limit:     5,
 	}
 	events, err := store.FindByQuery(ctx, query)
@@ -740,8 +741,8 @@ func TestSQLiteEventRepository_FindByQuery_WithEventTypes(t *testing.T) {
 	}
 
 	// Query for specific event types
-	query := domain.EventQuery{
-		SessionID:  "type-session",
+	query := pluginsdk.EventQuery{
+		Metadata:   map[string]string{"session_id": "type-session"},
 		EventTypes: []string{"claude.tool.invoked"},
 	}
 	events, err := store.FindByQuery(ctx, query)
@@ -799,8 +800,8 @@ func TestSQLiteEventRepository_FindByQuery_WithTimeRange(t *testing.T) {
 
 	// Query for events after 1 hour ago
 	oneHourAgo := baseTime.Add(-1 * time.Hour)
-	query := domain.EventQuery{
-		SessionID: "time-session",
+	query := pluginsdk.EventQuery{
+		Metadata: map[string]string{"session_id": "time-session"},
 		StartTime: &oneHourAgo,
 	}
 	events, err := store.FindByQuery(ctx, query)
@@ -857,8 +858,8 @@ func TestSQLiteEventRepository_FindByQuery_Ordered(t *testing.T) {
 	}
 
 	// Query with ordering
-	query := domain.EventQuery{
-		SessionID:   "order-session",
+	query := pluginsdk.EventQuery{
+		Metadata:    map[string]string{"session_id": "order-session"},
 		OrderByTime: true,
 	}
 	events, err := store.FindByQuery(ctx, query)
@@ -912,7 +913,7 @@ func TestSQLiteEventRepository_Save_WithVersion(t *testing.T) {
 	}
 
 	// Retrieve and verify version is persisted
-	events, err := repo.FindByQuery(ctx, domain.EventQuery{})
+	events, err := repo.FindByQuery(ctx, pluginsdk.EventQuery{})
 	if err != nil {
 		t.Fatalf("FindByQuery() error = %v", err)
 	}
@@ -953,7 +954,7 @@ func TestSQLiteEventRepository_Save_DefaultVersion(t *testing.T) {
 	}
 
 	// Retrieve and verify default version is persisted
-	events, err := repo.FindByQuery(ctx, domain.EventQuery{})
+	events, err := repo.FindByQuery(ctx, pluginsdk.EventQuery{})
 	if err != nil {
 		t.Fatalf("FindByQuery() error = %v", err)
 	}
@@ -1010,7 +1011,7 @@ func TestSQLiteEventRepository_MultipleVersions(t *testing.T) {
 	}
 
 	// Retrieve all events
-	events, err := repo.FindByQuery(ctx, domain.EventQuery{})
+	events, err := repo.FindByQuery(ctx, pluginsdk.EventQuery{})
 	if err != nil {
 		t.Fatalf("FindByQuery() error = %v", err)
 	}
@@ -1103,8 +1104,8 @@ func TestPhase3_EmitEventHookIntegration(t *testing.T) {
 	}
 
 	// Step 5: Query EventRepository for stored event
-	query := domain.EventQuery{
-		SessionID: "test-session-123",
+	query := pluginsdk.EventQuery{
+		Metadata: map[string]string{"session_id": "test-session-123"},
 	}
 	storedEvents, err := repo.FindByQuery(ctx, query)
 	if err != nil {
@@ -1192,8 +1193,8 @@ func TestPhase3_MultipleEventsOrdering(t *testing.T) {
 	}
 
 	// Query all events for session
-	query := domain.EventQuery{
-		SessionID: sessionID,
+	query := pluginsdk.EventQuery{
+		Metadata: map[string]string{"session_id": sessionID},
 	}
 	storedEvents, err := repo.FindByQuery(ctx, query)
 	if err != nil {
@@ -1255,8 +1256,8 @@ func TestPhase3_EventVersioning(t *testing.T) {
 	}
 
 	// Query all versioned events
-	query := domain.EventQuery{
-		SessionID: sessionID,
+	query := pluginsdk.EventQuery{
+		Metadata: map[string]string{"session_id": sessionID},
 	}
 	allEvents, err := repo.FindByQuery(ctx, query)
 	if err != nil {
@@ -1326,8 +1327,8 @@ func TestPhase3_EventPayloadPersistence(t *testing.T) {
 	}
 
 	// Retrieve and verify payload structure
-	query := domain.EventQuery{
-		SessionID: "test-session",
+	query := pluginsdk.EventQuery{
+		Metadata: map[string]string{"session_id": "test-session"},
 	}
 	stored, err := repo.FindByQuery(ctx, query)
 	if err != nil {
@@ -1480,8 +1481,8 @@ func TestPhase3_HookMigrationCompatibility(t *testing.T) {
 	}
 
 	// Retrieve and verify backward compatibility
-	query := domain.EventQuery{
-		SessionID: "legacy-session",
+	query := pluginsdk.EventQuery{
+		Metadata: map[string]string{"session_id": "legacy-session"},
 	}
 	stored, err := repo.FindByQuery(ctx, query)
 	if err != nil {

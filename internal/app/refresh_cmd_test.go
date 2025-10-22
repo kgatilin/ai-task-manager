@@ -9,6 +9,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // mockEventRepository is a mock for testing
@@ -43,7 +44,7 @@ func (m *mockEventRepository) ListEvents(ctx context.Context, limit int) ([]*dom
 	return nil, nil
 }
 
-func (m *mockEventRepository) FindByQuery(ctx context.Context, query domain.EventQuery) ([]*domain.Event, error) {
+func (m *mockEventRepository) FindByQuery(ctx context.Context, query pluginsdk.EventQuery) ([]*domain.Event, error) {
 	return nil, nil
 }
 

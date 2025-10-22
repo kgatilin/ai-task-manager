@@ -29,7 +29,7 @@ func (m *mockEventRepo) Save(ctx context.Context, event *domain.Event) error {
 	return nil
 }
 
-func (m *mockEventRepo) FindByQuery(ctx context.Context, query domain.EventQuery) ([]*domain.Event, error) {
+func (m *mockEventRepo) FindByQuery(ctx context.Context, query pluginsdk.EventQuery) ([]*domain.Event, error) {
 	return m.events, nil
 }
 

@@ -84,7 +84,7 @@ For substantial refactorings or multi-package features:
 **Purpose**: Track active work items, enable task switching, prevent losing context.
 
 **Files**:
-- `.agent/roadmap.md` - Active work items with status and next steps
+- `@.agent/roadmap.md` - Active work items with status and next steps
 - `.agent/roadmap_done.md` - Completed items archive
 - `.agent/details/<item-name>.md` - Detailed implementation docs with checklists
 
