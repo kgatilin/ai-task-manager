@@ -50,6 +50,12 @@ type AppModel struct {
 	// Flag to track if we should show detail view after refresh
 	showDetailAfterRefresh bool
 
+	// Real-time event streaming
+	eventDispatcher *app.EventDispatcher
+	eventChan       <-chan pluginsdk.Event
+	newEventCount   int
+	lastEventTime   time.Time
+
 	width  int
 	height int
 }
@@ -61,6 +67,7 @@ func NewAppModel(
 	analysisService *app.AnalysisService,
 	logsService *app.LogsService,
 	config *domain.Config,
+	eventDispatcher *app.EventDispatcher,
 ) *AppModel {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -75,15 +82,58 @@ func NewAppModel(
 		currentView:     ViewSessionList,
 		spinner:         s,
 		loading:         true,
+		eventDispatcher: eventDispatcher,
 	}
 }
 
 // Init initializes the application
 func (m *AppModel) Init() tea.Cmd {
+	subscribeCmd := m.subscribeToEvents()
 	return tea.Batch(
 		m.spinner.Tick,
 		m.loadSessions,
+		subscribeCmd,
 	)
+}
+
+// subscribeToEvents starts listening for real-time events from the dispatcher
+func (m *AppModel) subscribeToEvents() tea.Cmd {
+	if m.eventDispatcher == nil {
+		return nil
+	}
+
+	// Get the event channel from the dispatcher
+	m.eventChan = m.eventDispatcher.GetEventChannel()
+
+	// Return a command that listens for events in a background goroutine
+	return func() tea.Msg {
+		return m.listenForEvents()
+	}
+}
+
+// listenForEvents waits for the next event and returns it as a message
+// This is designed to be called repeatedly by the Update loop
+func (m *AppModel) listenForEvents() tea.Msg {
+	if m.eventChan == nil {
+		return nil
+	}
+
+	// This blocks until an event arrives
+	event := <-m.eventChan
+
+	// Return the event as a message so Update can handle it
+	return EventArrivedMsg{
+		Event:     event,
+		Timestamp: time.Now(),
+	}
+}
+
+// listenForNextEvent returns a command that listens for the next event
+// This is called repeatedly to maintain the event listening loop
+func (m *AppModel) listenForNextEvent() tea.Cmd {
+	return func() tea.Msg {
+		return m.listenForEvents()
+	}
 }
 
 // Update handles all messages
@@ -128,14 +178,40 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 
+	case EventArrivedMsg:
+		// Increment unread event counter
+		m.newEventCount++
+		m.lastEventTime = msg.Timestamp
+
+		// Auto-refresh if user is viewing session list
+		if !m.loading && m.currentView == ViewSessionList {
+			// Trigger a refresh to show updated event counts
+			return m, tea.Batch(
+				m.loadSessions,
+				m.listenForNextEvent(), // Continue listening for events
+			)
+		}
+
+		// Continue listening for the next event
+		return m, m.listenForNextEvent()
+
 	case SessionsLoadedMsg:
 		m.loading = false
 		if msg.Error != nil {
 			m.err = msg.Error
-			return m, nil
+			return m, m.listenForNextEvent()
 		}
 		m.sessions = msg.Sessions
 		m.sessionList = NewSessionListModel(msg.Sessions)
+
+		// Sync the new event count to the session list view
+		m.sessionList.SetNewEventCount(m.newEventCount)
+
+		// If we're in session list view, clear the new event count when we display it
+		if m.currentView == ViewSessionList {
+			m.newEventCount = 0
+			m.sessionList.SetNewEventCount(0)
+		}
 
 		// If we should show detail view after refresh (e.g., after analysis)
 		if m.showDetailAfterRefresh && m.selectedSession != nil {
@@ -146,25 +222,31 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedSession = session
 					m.sessionDetail = NewSessionDetailModel(session)
 					m.currentView = ViewSessionDetail
-					// Send initial window size to the detail view
+					// Send initial window size to the detail view and continue listening
 					if m.width > 0 && m.height > 0 {
-						return m, func() tea.Msg {
-							return tea.WindowSizeMsg{Width: m.width, Height: m.height}
-						}
+						return m, tea.Batch(
+							func() tea.Msg {
+								return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+							},
+							m.listenForNextEvent(),
+						)
 					}
-					return m, nil
+					return m, m.listenForNextEvent()
 				}
 			}
 		}
 
 		m.currentView = ViewSessionList
-		// Send initial window size to the newly created list
+		// Send initial window size to the newly created list and continue listening
 		if m.width > 0 && m.height > 0 {
-			return m, func() tea.Msg {
-				return tea.WindowSizeMsg{Width: m.width, Height: m.height}
-			}
+			return m, tea.Batch(
+				func() tea.Msg {
+					return tea.WindowSizeMsg{Width: m.width, Height: m.height}
+				},
+				m.listenForNextEvent(),
+			)
 		}
-		return m, nil
+		return m, m.listenForNextEvent()
 
 	case SelectedSessionMsg:
 		m.selectedSession = msg.Session
@@ -462,8 +544,9 @@ func Run(
 	analysisService *app.AnalysisService,
 	logsService *app.LogsService,
 	config *domain.Config,
+	eventDispatcher *app.EventDispatcher,
 ) error {
-	m := NewAppModel(ctx, pluginRegistry, analysisService, logsService, config)
+	m := NewAppModel(ctx, pluginRegistry, analysisService, logsService, config, eventDispatcher)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 
 	if _, err := p.Run(); err != nil {

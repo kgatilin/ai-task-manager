@@ -147,10 +147,13 @@ overrides:
                 - pkg/pluginsdk
             pkg/plugins/claude_code:
                 - pkg/pluginsdk
+            pkg/plugins/task_manager:
+                - pkg/pluginsdk
             pkg/pluginsdk: [] # SDK has zero dependencies - fully public
         test_coverage:
             package_thresholds:
                 pkg/plugins/claude_code: 70
+                pkg/plugins/task_manager: 50
                 pkg/pluginsdk: 0 # SDK is interface-only, no tests needed
                 cmd: 20
                 internal/app/tui: 70

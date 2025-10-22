@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // ViewState represents the current view in the TUI
@@ -54,4 +55,10 @@ type SaveCompleteMsg struct {
 
 type ErrorMsg struct {
 	Error error
+}
+
+// EventArrivedMsg is sent when a new event arrives from the event dispatcher
+type EventArrivedMsg struct {
+	Event     pluginsdk.Event
+	Timestamp time.Time
 }

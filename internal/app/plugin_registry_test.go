@@ -622,7 +622,11 @@ func (p *MockEventEmitterPlugin) GetCapabilities() []string {
 	return p.capabilities
 }
 
-func (p *MockEventEmitterPlugin) EmitEvent(ctx context.Context, event pluginsdk.Event) error {
+func (p *MockEventEmitterPlugin) StartEventStream(ctx context.Context, eventChan chan<- pluginsdk.Event) error {
+	return nil
+}
+
+func (p *MockEventEmitterPlugin) StopEventStream() error {
 	return nil
 }
 
@@ -675,7 +679,11 @@ func (p *MockMultiCapabilityPlugin) UpdateEntity(ctx context.Context, entityID s
 	return nil, nil
 }
 
-func (p *MockMultiCapabilityPlugin) EmitEvent(ctx context.Context, event pluginsdk.Event) error {
+func (p *MockMultiCapabilityPlugin) StartEventStream(ctx context.Context, eventChan chan<- pluginsdk.Event) error {
+	return nil
+}
+
+func (p *MockMultiCapabilityPlugin) StopEventStream() error {
 	return nil
 }
 

@@ -38,10 +38,32 @@ type ICommandProvider interface {
 
 // IEventEmitter is a plugin capability for emitting real-time events.
 // Plugins that implement this can stream events to the framework's event store.
+//
+// Event emission supports two modes:
+// 1. Synchronous: Call PluginContext.EmitEvent() directly (existing behavior)
+// 2. Asynchronous streaming: Implement StartEventStream/StopEventStream (Phase 4)
+//
+// For async streaming, the framework provides a buffered channel where plugins
+// can push events. The EventDispatcher consumes events in the background.
 type IEventEmitter interface {
 	Plugin
-	// Event emission is handled via PluginContext.EmitEvent() for built-in plugins
-	// or stdout JSON streams for subprocess plugins.
+
+	// StartEventStream begins streaming events to the provided channel.
+	// The plugin should start a background goroutine that pushes Event objects
+	// to eventChan. The plugin must respect ctx cancellation and stop when
+	// ctx.Done() is signaled or StopEventStream is called.
+	//
+	// The framework owns the channel lifecycle - plugins should NOT close it.
+	//
+	// Returns error if streaming cannot be started (e.g., already running).
+	StartEventStream(ctx context.Context, eventChan chan<- Event) error
+
+	// StopEventStream stops the event stream started by StartEventStream.
+	// The plugin should gracefully stop its background goroutine and cease
+	// sending events. This method should be idempotent (safe to call multiple times).
+	//
+	// Returns error if streaming cannot be stopped cleanly.
+	StopEventStream() error
 }
 
 // EntityTypeInfo describes an entity type provided by a plugin

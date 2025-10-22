@@ -6,6 +6,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/internal/app"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/claude_code"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager"
 )
 
 // loggerAdapter adapts app.Logger to domain.Logger (SDK interface)
@@ -180,6 +181,16 @@ func RegisterBuiltInPlugins(
 
 	if err := registry.RegisterPlugin(claudePlugin); err != nil {
 		return fmt.Errorf("failed to register claude-code plugin: %w", err)
+	}
+
+	// Register task-manager plugin (Phase 4 example plugin)
+	taskPlugin, err := task_manager.NewTaskManagerPlugin(sdkLogger, dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to create task-manager plugin: %w", err)
+	}
+
+	if err := registry.RegisterPlugin(taskPlugin); err != nil {
+		return fmt.Errorf("failed to register task-manager plugin: %w", err)
 	}
 
 	// Note: Plugin registration is logged by PluginRegistry.RegisterPlugin()

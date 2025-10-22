@@ -14,7 +14,7 @@ func TestNewAppModel(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
 
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	if model == nil {
 		t.Fatal("NewAppModel() returned nil")
@@ -24,7 +24,7 @@ func TestNewAppModel(t *testing.T) {
 func TestAppModel_Init(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	cmd := model.Init()
 	if cmd == nil {
@@ -35,7 +35,7 @@ func TestAppModel_Init(t *testing.T) {
 func TestAppModel_UpdateCtrlC(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Test ctrl+c quits
 	msg := tea.KeyMsg{Type: tea.KeyCtrlC}
@@ -49,7 +49,7 @@ func TestAppModel_UpdateCtrlC(t *testing.T) {
 func TestAppModel_UpdateWindowSize(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send window size message
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
@@ -70,7 +70,7 @@ func TestAppModel_UpdateWindowSize(t *testing.T) {
 func TestAppModel_UpdateSessionsLoaded(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send window size first
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -98,7 +98,7 @@ func TestAppModel_UpdateSessionsLoaded(t *testing.T) {
 func TestAppModel_UpdateSessionsLoadedError(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send SessionsLoadedMsg with error
 	msg := tui.SessionsLoadedMsg{Sessions: nil, Error: domain.ErrNotFound}
@@ -112,7 +112,7 @@ func TestAppModel_UpdateSessionsLoadedError(t *testing.T) {
 func TestAppModel_UpdateSelectedSession(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send window size first
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -147,7 +147,7 @@ func TestAppModel_UpdateSelectedSession(t *testing.T) {
 func TestAppModel_UpdateBackToList(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send window size first
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -170,7 +170,7 @@ func TestAppModel_UpdateBackToList(t *testing.T) {
 func TestAppModel_UpdateRefreshRequest(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send RefreshRequestMsg
 	msg := tui.RefreshRequestMsg{}
@@ -188,7 +188,7 @@ func TestAppModel_UpdateRefreshRequest(t *testing.T) {
 func TestAppModel_UpdateAnalyzeSession(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send AnalyzeSessionMsg
 	msg := tui.AnalyzeSessionMsg{SessionID: "test-session-id"}
@@ -206,7 +206,7 @@ func TestAppModel_UpdateAnalyzeSession(t *testing.T) {
 func TestAppModel_UpdateReanalyzeSession(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send ReanalyzeSessionMsg
 	msg := tui.ReanalyzeSessionMsg{SessionID: "test-session-id"}
@@ -224,7 +224,7 @@ func TestAppModel_UpdateReanalyzeSession(t *testing.T) {
 func TestAppModel_UpdateSaveToMarkdown(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send SaveToMarkdownMsg
 	msg := tui.SaveToMarkdownMsg{SessionID: "test-session-id"}
@@ -242,7 +242,7 @@ func TestAppModel_UpdateSaveToMarkdown(t *testing.T) {
 func TestAppModel_UpdateAnalysisComplete(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send AnalysisCompleteMsg
 	analysis := &domain.SessionAnalysis{
@@ -269,7 +269,7 @@ func TestAppModel_UpdateAnalysisComplete(t *testing.T) {
 func TestAppModel_UpdateAnalysisCompleteError(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send AnalysisCompleteMsg with error
 	msg := tui.AnalysisCompleteMsg{
@@ -286,7 +286,7 @@ func TestAppModel_UpdateAnalysisCompleteError(t *testing.T) {
 func TestAppModel_UpdateSaveComplete(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send SaveCompleteMsg
 	msg := tui.SaveCompleteMsg{
@@ -303,7 +303,7 @@ func TestAppModel_UpdateSaveComplete(t *testing.T) {
 func TestAppModel_UpdateSaveCompleteError(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send SaveCompleteMsg with error
 	msg := tui.SaveCompleteMsg{
@@ -320,7 +320,7 @@ func TestAppModel_UpdateSaveCompleteError(t *testing.T) {
 func TestAppModel_View(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// View while loading should show spinner
 	view := model.View()
@@ -332,7 +332,7 @@ func TestAppModel_View(t *testing.T) {
 func TestAppModel_ViewWithError(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send window size
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -365,7 +365,7 @@ func TestAppModel_WindowSizeForAllViewStates(t *testing.T) {
 		},
 	}
 
-	model := tui.NewAppModel(context.Background(), nil, nil, nil, nil)
+	model := tui.NewAppModel(context.Background(), nil, nil, nil, &domain.Config{}, nil)
 
 	// Send window sizes in different orders
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 50, Height: 25})
@@ -388,7 +388,7 @@ func TestAppModel_WindowSizeForAllViewStates(t *testing.T) {
 
 func TestAppModel_WindowSizeMsgWhileLoading(t *testing.T) {
 	ctx := context.Background()
-	model := tui.NewAppModel(ctx, nil, nil, nil, nil)
+	model := tui.NewAppModel(ctx, nil, nil, nil, &domain.Config{}, nil)
 
 	// Send window size while loading (before sessions are loaded)
 	// This tests the early return path in Update when loading is true
@@ -401,7 +401,7 @@ func TestAppModel_WindowSizeMsgWhileLoading(t *testing.T) {
 
 func TestAppModel_View_UnknownState(t *testing.T) {
 	ctx := context.Background()
-	model := tui.NewAppModel(ctx, nil, nil, nil, nil)
+	model := tui.NewAppModel(ctx, nil, nil, nil, &domain.Config{}, nil)
 
 	// Set window size and load sessions
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -420,7 +420,7 @@ func TestAppModel_View_UnknownState(t *testing.T) {
 func TestAppModel_UpdateWindowSizeDifferentViews(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	sessions := []*tui.SessionInfo{
 		{
@@ -467,7 +467,7 @@ func TestAppModel_UpdateWindowSizeDifferentViews(t *testing.T) {
 func TestAppModel_UpdateCurrentView_AllStates(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	sessions := []*tui.SessionInfo{
 		{
@@ -515,7 +515,7 @@ func TestAppModel_UpdateCurrentView_AllStates(t *testing.T) {
 func TestAppModel_View_AllViewStates(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	sessions := []*tui.SessionInfo{
 		{
@@ -560,7 +560,7 @@ func TestAppModel_View_AllViewStates(t *testing.T) {
 func TestAppModel_UpdateBackToDetail(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send window size first
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
@@ -583,7 +583,7 @@ func TestAppModel_UpdateBackToDetail(t *testing.T) {
 func TestAppModel_UpdateCurrentView_SessionList(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Load sessions to trigger ViewSessionList
 	sessions := []*tui.SessionInfo{
@@ -615,7 +615,7 @@ func TestAppModel_UpdateCurrentView_SessionList(t *testing.T) {
 func TestAppModel_UpdateCurrentView_SessionDetail(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	sessions := []*tui.SessionInfo{
 		{
@@ -650,7 +650,7 @@ func TestAppModel_UpdateCurrentView_SessionDetail(t *testing.T) {
 func TestAppModel_ViewSessionList(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	sessions := []*tui.SessionInfo{
 		{
@@ -681,7 +681,7 @@ func TestAppModel_ViewSessionList(t *testing.T) {
 func TestAppModel_ViewSessionDetail(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	sessions := []*tui.SessionInfo{
 		{
@@ -716,7 +716,7 @@ func TestAppModel_ViewSessionDetail(t *testing.T) {
 func TestAppModel_ViewAnalysisViewer(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	analysis := &domain.SessionAnalysis{
 		SessionID:      "test-session-analysis",
@@ -764,7 +764,7 @@ func TestAppModel_ViewAnalysisViewer(t *testing.T) {
 func TestAppModel_UpdateSessionsLoadedWithDetailRefresh(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	sessions := []*tui.SessionInfo{
 		{
@@ -809,7 +809,7 @@ func TestAppModel_UpdateSessionsLoadedWithDetailRefresh(t *testing.T) {
 func TestAppModel_ViewErrorWithSmallWidth(t *testing.T) {
 	ctx := context.Background()
 	config := &domain.Config{}
-	model := tui.NewAppModel(ctx, nil, nil, nil, config)
+	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send very small window size
 	updatedModel, _ := model.Update(tea.WindowSizeMsg{Width: 20, Height: 10})

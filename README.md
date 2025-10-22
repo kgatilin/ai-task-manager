@@ -118,6 +118,41 @@ cmd → internal/app + internal/infra → internal/domain
   - Entity: `session` (IExtensible + IHasContext + ITrackable)
   - Commands: `init`, `emit-event` (for hook integration)
   - CLI: `dw claude-code <command>` or `dw claude <command>` (backward compat)
+- **task-manager** (`pkg/plugins/task_manager`): Task tracking with real-time event streaming
+  - Entity: `task` (IExtensible + IHasContext)
+  - Capabilities: IEventEmitter (file-based fsnotify watching)
+  - Commands: `init`, `create`, `list`, `update`
+  - CLI: `dw task-manager <command>`
+
+### Real-Time Event Streaming (Phase 4)
+
+DarwinFlow now supports real-time event streaming from multiple plugins simultaneously:
+
+- **EventDispatcher**: Background event processing with buffered channels (100 event buffer)
+- **Multi-Plugin Support**: 2+ plugins can emit events concurrently without blocking
+- **High Throughput**: Validated at >30,000 events/sec (far exceeds 1,000/sec requirement)
+- **TUI Real-Time Updates**: Auto-refresh session list when new events arrive
+- **Event Counter Badge**: Shows "+N new" indicator in TUI status bar
+
+**Example Workflow: Task Tracking**
+
+```bash
+# Initialize task tracking
+dw task-manager init
+
+# Create tasks
+dw task-manager create "Implement feature X" --priority high
+dw task-manager create "Write tests" --priority medium
+
+# List tasks
+dw task-manager list
+dw task-manager list --status in-progress
+
+# Update task status
+dw task-manager update task-123 --status done
+```
+
+The task-manager plugin demonstrates real-time event streaming using fsnotify to watch task files and emit events when tasks are created, updated, or deleted. These events are visible in real-time in the TUI session list.
 
 **Architecture Documentation:**
 - See `docs/arch-generated.md` for complete dependency graph

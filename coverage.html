@@ -1,0 +1,1049 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>task_manager: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/commands.go (24.7%)</option>
+				
+				<option value="file1">github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/plugin.go (61.7%)</option>
+				
+				<option value="file2">github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/task_entity.go (86.7%)</option>
+				
+				<option value="file3">github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/watcher.go (56.5%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package task_manager
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "os"
+        "path/filepath"
+        "strings"
+        "time"
+
+        "github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
+)
+
+// InitCommand initializes the task directory
+type InitCommand struct {
+        plugin *TaskManagerPlugin
+}
+
+func (c *InitCommand) GetName() string <span class="cov8" title="1">{
+        return "init"
+}</span>
+
+func (c *InitCommand) GetDescription() string <span class="cov0" title="0">{
+        return "Initialize task directory"
+}</span>
+
+func (c *InitCommand) GetUsage() string <span class="cov0" title="0">{
+        return "dw task-manager init"
+}</span>
+
+func (c *InitCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error <span class="cov0" title="0">{
+        // Create tasks directory
+        tasksDir := filepath.Join(cmdCtx.GetWorkingDir(), ".darwinflow", "tasks")
+        if err := os.MkdirAll(tasksDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create tasks directory: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">fmt.Fprintf(cmdCtx.GetStdout(), "Task directory initialized at %s\n", tasksDir)
+        return nil</span>
+}
+
+// CreateCommand creates a new task
+type CreateCommand struct {
+        plugin *TaskManagerPlugin
+}
+
+func (c *CreateCommand) GetName() string <span class="cov8" title="1">{
+        return "create"
+}</span>
+
+func (c *CreateCommand) GetDescription() string <span class="cov0" title="0">{
+        return "Create a new task"
+}</span>
+
+func (c *CreateCommand) GetUsage() string <span class="cov0" title="0">{
+        return "dw task-manager create &lt;title&gt; [--description &lt;desc&gt;] [--priority &lt;priority&gt;]"
+}</span>
+
+func (c *CreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error <span class="cov8" title="1">{
+        if len(args) &lt; 2 </span><span class="cov0" title="0">{
+                return fmt.Errorf("usage: %s", c.GetUsage())
+        }</span>
+
+        <span class="cov8" title="1">title := args[1]
+        description := ""
+        priority := "medium"
+
+        // Parse optional flags
+        for i := 2; i &lt; len(args); i++ </span><span class="cov8" title="1">{
+                switch args[i] </span>{
+                case "--description":<span class="cov0" title="0">
+                        if i+1 &lt; len(args) </span><span class="cov0" title="0">{
+                                description = args[i+1]
+                                i++
+                        }</span>
+                case "--priority":<span class="cov8" title="1">
+                        if i+1 &lt; len(args) </span><span class="cov8" title="1">{
+                                priority = args[i+1]
+                                i++
+                        }</span>
+                }
+        }
+
+        // Generate task ID based on current timestamp
+        <span class="cov8" title="1">taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
+        now := time.Now().UTC()
+
+        task := &amp;TaskEntity{
+                ID:          taskID,
+                Title:       title,
+                Description: description,
+                Status:      "todo",
+                Priority:    priority,
+                CreatedAt:   now,
+                UpdatedAt:   now,
+        }
+
+        // Save task
+        tasksDir := filepath.Join(cmdCtx.GetWorkingDir(), ".darwinflow", "tasks")
+        if err := os.MkdirAll(tasksDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create tasks directory: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">filePath := filepath.Join(tasksDir, taskID+".json")
+        data, err := json.MarshalIndent(task, "", "  ")
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to marshal task: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">if err := os.WriteFile(filePath, data, 0644); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to save task: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">fmt.Fprintf(cmdCtx.GetStdout(), "Task created: %s\n", taskID)
+        fmt.Fprintf(cmdCtx.GetStdout(), "Title: %s\n", title)
+        fmt.Fprintf(cmdCtx.GetStdout(), "Priority: %s\n", priority)
+
+        return nil</span>
+}
+
+// ListCommand lists all tasks
+type ListCommand struct {
+        plugin *TaskManagerPlugin
+}
+
+func (c *ListCommand) GetName() string <span class="cov0" title="0">{
+        return "list"
+}</span>
+
+func (c *ListCommand) GetDescription() string <span class="cov0" title="0">{
+        return "List all tasks"
+}</span>
+
+func (c *ListCommand) GetUsage() string <span class="cov0" title="0">{
+        return "dw task-manager list [--status &lt;status&gt;]"
+}</span>
+
+func (c *ListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error <span class="cov0" title="0">{
+        // Parse optional status filter
+        var statusFilter string
+        for i := 1; i &lt; len(args); i++ </span><span class="cov0" title="0">{
+                if args[i] == "--status" &amp;&amp; i+1 &lt; len(args) </span><span class="cov0" title="0">{
+                        statusFilter = args[i+1]
+                        i++
+                }</span>
+        }
+
+        // Build query
+        <span class="cov0" title="0">query := pluginsdk.EntityQuery{
+                EntityType: "task",
+        }
+
+        if statusFilter != "" </span><span class="cov0" title="0">{
+                query.Filters = map[string]interface{}{
+                        "status": statusFilter,
+                }
+        }</span>
+
+        // Query tasks
+        <span class="cov0" title="0">entities, err := c.plugin.Query(ctx, query)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to query tasks: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">if len(entities) == 0 </span><span class="cov0" title="0">{
+                fmt.Fprintf(cmdCtx.GetStdout(), "No tasks found\n")
+                return nil
+        }</span>
+
+        // Display tasks
+        <span class="cov0" title="0">fmt.Fprintf(cmdCtx.GetStdout(), "Tasks:\n")
+        fmt.Fprintf(cmdCtx.GetStdout(), "%-20s %-30s %-15s %-10s\n", "ID", "Title", "Status", "Priority")
+        fmt.Fprintf(cmdCtx.GetStdout(), "%s\n", strings.Repeat("-", 75))
+
+        for _, entity := range entities </span><span class="cov0" title="0">{
+                task := entity.(*TaskEntity)
+                fmt.Fprintf(
+                        cmdCtx.GetStdout(),
+                        "%-20s %-30s %-15s %-10s\n",
+                        task.ID[:20],
+                        truncateString(task.Title, 30),
+                        task.Status,
+                        task.Priority,
+                )
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// UpdateCommand updates a task
+type UpdateCommand struct {
+        plugin *TaskManagerPlugin
+}
+
+func (c *UpdateCommand) GetName() string <span class="cov0" title="0">{
+        return "update"
+}</span>
+
+func (c *UpdateCommand) GetDescription() string <span class="cov0" title="0">{
+        return "Update a task"
+}</span>
+
+func (c *UpdateCommand) GetUsage() string <span class="cov0" title="0">{
+        return "dw task-manager update &lt;id&gt; --status &lt;status&gt;"
+}</span>
+
+func (c *UpdateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error <span class="cov0" title="0">{
+        if len(args) &lt; 2 </span><span class="cov0" title="0">{
+                return fmt.Errorf("usage: %s", c.GetUsage())
+        }</span>
+
+        <span class="cov0" title="0">taskID := args[1]
+        updates := make(map[string]interface{})
+
+        // Parse optional flags
+        for i := 2; i &lt; len(args); i++ </span><span class="cov0" title="0">{
+                switch args[i] </span>{
+                case "--status":<span class="cov0" title="0">
+                        if i+1 &lt; len(args) </span><span class="cov0" title="0">{
+                                updates["status"] = args[i+1]
+                                i++
+                        }</span>
+                case "--title":<span class="cov0" title="0">
+                        if i+1 &lt; len(args) </span><span class="cov0" title="0">{
+                                updates["title"] = args[i+1]
+                                i++
+                        }</span>
+                case "--description":<span class="cov0" title="0">
+                        if i+1 &lt; len(args) </span><span class="cov0" title="0">{
+                                updates["description"] = args[i+1]
+                                i++
+                        }</span>
+                case "--priority":<span class="cov0" title="0">
+                        if i+1 &lt; len(args) </span><span class="cov0" title="0">{
+                                updates["priority"] = args[i+1]
+                                i++
+                        }</span>
+                }
+        }
+
+        <span class="cov0" title="0">if len(updates) == 0 </span><span class="cov0" title="0">{
+                return fmt.Errorf("no updates specified")
+        }</span>
+
+        // Update task
+        <span class="cov0" title="0">_, err := c.plugin.UpdateEntity(ctx, taskID, updates)
+        if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to update task: %w", err)
+        }</span>
+
+        <span class="cov0" title="0">fmt.Fprintf(cmdCtx.GetStdout(), "Task updated: %s\n", taskID)
+        for key, value := range updates </span><span class="cov0" title="0">{
+                fmt.Fprintf(cmdCtx.GetStdout(), "  %s: %v\n", key, value)
+        }</span>
+
+        <span class="cov0" title="0">return nil</span>
+}
+
+// Helper functions
+
+func truncateString(s string, maxLen int) string <span class="cov0" title="0">{
+        if len(s) &lt;= maxLen </span><span class="cov0" title="0">{
+                return s
+        }</span>
+        <span class="cov0" title="0">return s[:maxLen-3] + "..."</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package task_manager
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "os"
+        "path/filepath"
+
+        "github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
+)
+
+// Ensure plugin implements required SDK interfaces
+var (
+        _ pluginsdk.Plugin           = (*TaskManagerPlugin)(nil)
+        _ pluginsdk.IEntityProvider  = (*TaskManagerPlugin)(nil)
+        _ pluginsdk.ICommandProvider = (*TaskManagerPlugin)(nil)
+        _ pluginsdk.IEventEmitter    = (*TaskManagerPlugin)(nil)
+)
+
+// TaskManagerPlugin provides task management with real-time file watching.
+// It implements Plugin, IEntityProvider, ICommandProvider, and IEventEmitter interfaces.
+type TaskManagerPlugin struct {
+        logger      pluginsdk.Logger
+        workingDir  string
+        tasksDir    string
+        fileWatcher *FileWatcher
+}
+
+// NewTaskManagerPlugin creates a new task manager plugin
+func NewTaskManagerPlugin(logger pluginsdk.Logger, workingDir string) (*TaskManagerPlugin, error) <span class="cov8" title="1">{
+        tasksDir := filepath.Join(workingDir, ".darwinflow", "tasks")
+
+        fileWatcher, err := NewFileWatcher(logger, tasksDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create file watcher: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;TaskManagerPlugin{
+                logger:      logger,
+                workingDir:  workingDir,
+                tasksDir:    tasksDir,
+                fileWatcher: fileWatcher,
+        }, nil</span>
+}
+
+// GetInfo returns metadata about this plugin (SDK interface)
+func (p *TaskManagerPlugin) GetInfo() pluginsdk.PluginInfo <span class="cov8" title="1">{
+        return pluginsdk.PluginInfo{
+                Name:        "task-manager",
+                Version:     "1.0.0",
+                Description: "Task tracking with real-time file watching",
+                IsCore:      false,
+        }
+}</span>
+
+// GetCapabilities returns the capability interfaces this plugin implements (SDK interface)
+func (p *TaskManagerPlugin) GetCapabilities() []string <span class="cov8" title="1">{
+        return []string{"IEntityProvider", "ICommandProvider", "IEventEmitter"}
+}</span>
+
+// GetEntityTypes returns the entity types this plugin provides (SDK interface)
+func (p *TaskManagerPlugin) GetEntityTypes() []pluginsdk.EntityTypeInfo <span class="cov8" title="1">{
+        return []pluginsdk.EntityTypeInfo{
+                {
+                        Type:              "task",
+                        DisplayName:       "Task",
+                        DisplayNamePlural: "Tasks",
+                        Capabilities:      []string{"IExtensible", "ITrackable"},
+                        Icon:              "✓",
+                        Description:       "Task with status tracking",
+                },
+        }
+}</span>
+
+// Query returns entities matching the given query (SDK interface)
+func (p *TaskManagerPlugin) Query(ctx context.Context, query pluginsdk.EntityQuery) ([]pluginsdk.IExtensible, error) <span class="cov8" title="1">{
+        // Ensure tasks directory exists
+        if err := os.MkdirAll(p.tasksDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create tasks directory: %w", err)
+        }</span>
+
+        // Read all task files
+        <span class="cov8" title="1">entries, err := os.ReadDir(p.tasksDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to read tasks directory: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">entities := make([]pluginsdk.IExtensible, 0)
+
+        for _, entry := range entries </span><span class="cov8" title="1">{
+                if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">filePath := filepath.Join(p.tasksDir, entry.Name())
+                task, err := p.loadTaskFromFile(filePath)
+                if err != nil </span><span class="cov0" title="0">{
+                        p.logger.Warn("failed to load task", "path", filePath, "error", err)
+                        continue</span>
+                }
+
+                // Apply filters if specified
+                <span class="cov8" title="1">if !p.matchesFilters(task, query.Filters) </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov8" title="1">entities = append(entities, task)</span>
+        }
+
+        // Apply offset and limit
+        <span class="cov8" title="1">if query.Offset &gt; 0 </span><span class="cov0" title="0">{
+                if query.Offset &gt;= len(entities) </span><span class="cov0" title="0">{
+                        return []pluginsdk.IExtensible{}, nil
+                }</span>
+                <span class="cov0" title="0">entities = entities[query.Offset:]</span>
+        }
+
+        <span class="cov8" title="1">if query.Limit &gt; 0 &amp;&amp; len(entities) &gt; query.Limit </span><span class="cov0" title="0">{
+                entities = entities[:query.Limit]
+        }</span>
+
+        <span class="cov8" title="1">return entities, nil</span>
+}
+
+// GetEntity retrieves a single entity by ID (SDK interface)
+func (p *TaskManagerPlugin) GetEntity(ctx context.Context, entityID string) (pluginsdk.IExtensible, error) <span class="cov0" title="0">{
+        filePath := filepath.Join(p.tasksDir, entityID+".json")
+        task, err := p.loadTaskFromFile(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, pluginsdk.ErrNotFound
+        }</span>
+        <span class="cov0" title="0">return task, nil</span>
+}
+
+// UpdateEntity updates an entity's fields (SDK interface)
+func (p *TaskManagerPlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (pluginsdk.IExtensible, error) <span class="cov8" title="1">{
+        filePath := filepath.Join(p.tasksDir, entityID+".json")
+        task, err := p.loadTaskFromFile(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, pluginsdk.ErrNotFound
+        }</span>
+
+        // Update fields
+        <span class="cov8" title="1">if title, ok := fields["title"]; ok </span><span class="cov8" title="1">{
+                if titleStr, ok := title.(string); ok </span><span class="cov8" title="1">{
+                        task.Title = titleStr
+                }</span>
+        }
+        <span class="cov8" title="1">if description, ok := fields["description"]; ok </span><span class="cov0" title="0">{
+                if descStr, ok := description.(string); ok </span><span class="cov0" title="0">{
+                        task.Description = descStr
+                }</span>
+        }
+        <span class="cov8" title="1">if status, ok := fields["status"]; ok </span><span class="cov8" title="1">{
+                if statusStr, ok := status.(string); ok </span><span class="cov8" title="1">{
+                        task.Status = statusStr
+                }</span>
+        }
+        <span class="cov8" title="1">if priority, ok := fields["priority"]; ok </span><span class="cov0" title="0">{
+                if priorityStr, ok := priority.(string); ok </span><span class="cov0" title="0">{
+                        task.Priority = priorityStr
+                }</span>
+        }
+
+        // Save updated task
+        <span class="cov8" title="1">if err := p.saveTaskToFile(filePath, task); err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to save task: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return task, nil</span>
+}
+
+// GetCommands returns the CLI commands provided by this plugin (SDK interface)
+func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command <span class="cov8" title="1">{
+        return []pluginsdk.Command{
+                &amp;InitCommand{plugin: p},
+                &amp;CreateCommand{plugin: p},
+                &amp;ListCommand{plugin: p},
+                &amp;UpdateCommand{plugin: p},
+        }
+}</span>
+
+// StartEventStream begins streaming events to the provided channel (SDK interface)
+func (p *TaskManagerPlugin) StartEventStream(ctx context.Context, eventChan chan&lt;- pluginsdk.Event) error <span class="cov8" title="1">{
+        p.logger.Info("starting event stream for task-manager plugin")
+        return p.fileWatcher.Start(ctx, eventChan)
+}</span>
+
+// StopEventStream stops the event stream (SDK interface)
+func (p *TaskManagerPlugin) StopEventStream() error <span class="cov8" title="1">{
+        p.logger.Info("stopping event stream for task-manager plugin")
+        return p.fileWatcher.Stop()
+}</span>
+
+// Helper methods
+
+// loadTaskFromFile loads a task from a JSON file
+func (p *TaskManagerPlugin) loadTaskFromFile(filePath string) (*TaskEntity, error) <span class="cov8" title="1">{
+        data, err := os.ReadFile(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var task TaskEntity
+        if err := json.Unmarshal(data, &amp;task); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;task, nil</span>
+}
+
+// saveTaskToFile saves a task to a JSON file
+func (p *TaskManagerPlugin) saveTaskToFile(filePath string, task *TaskEntity) error <span class="cov8" title="1">{
+        // Ensure directory exists
+        if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">data, err := json.MarshalIndent(task, "", "  ")
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">return os.WriteFile(filePath, data, 0644)</span>
+}
+
+// matchesFilters checks if an entity matches the given filters
+func (p *TaskManagerPlugin) matchesFilters(entity pluginsdk.IExtensible, filters map[string]interface{}) bool <span class="cov8" title="1">{
+        if len(filters) == 0 </span><span class="cov8" title="1">{
+                return true
+        }</span>
+
+        <span class="cov0" title="0">for key, expectedValue := range filters </span><span class="cov0" title="0">{
+                actualValue := entity.GetField(key)
+                if actualValue != expectedValue </span><span class="cov0" title="0">{
+                        return false
+                }</span>
+        }
+
+        <span class="cov0" title="0">return true</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package task_manager
+
+import (
+        "encoding/json"
+        "time"
+)
+
+// TaskEntity represents a task and implements SDK capability interfaces.
+// It implements IExtensible and ITrackable interfaces.
+type TaskEntity struct {
+        ID          string    `json:"id"`
+        Title       string    `json:"title"`
+        Description string    `json:"description"`
+        Status      string    `json:"status"` // todo, in-progress, done
+        Priority    string    `json:"priority"`
+        CreatedAt   time.Time `json:"created_at"`
+        UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// NewTaskEntity creates a new task entity
+func NewTaskEntity(id, title, description, status, priority string, createdAt, updatedAt time.Time) *TaskEntity <span class="cov8" title="1">{
+        return &amp;TaskEntity{
+                ID:          id,
+                Title:       title,
+                Description: description,
+                Status:      status,
+                Priority:    priority,
+                CreatedAt:   createdAt,
+                UpdatedAt:   updatedAt,
+        }
+}</span>
+
+// IExtensible implementation
+
+// GetID returns the unique identifier for this entity
+func (t *TaskEntity) GetID() string <span class="cov8" title="1">{
+        return t.ID
+}</span>
+
+// GetType returns the entity type
+func (t *TaskEntity) GetType() string <span class="cov8" title="1">{
+        return "task"
+}</span>
+
+// GetCapabilities returns list of capability names this entity supports
+func (t *TaskEntity) GetCapabilities() []string <span class="cov0" title="0">{
+        return []string{"IExtensible", "ITrackable"}
+}</span>
+
+// GetField retrieves a named field value
+func (t *TaskEntity) GetField(name string) interface{} <span class="cov8" title="1">{
+        fields := t.GetAllFields()
+        return fields[name]
+}</span>
+
+// GetAllFields returns all fields as a map
+func (t *TaskEntity) GetAllFields() map[string]interface{} <span class="cov8" title="1">{
+        return map[string]interface{}{
+                "id":          t.ID,
+                "title":       t.Title,
+                "description": t.Description,
+                "status":      t.Status,
+                "priority":    t.Priority,
+                "created_at":  t.CreatedAt,
+                "updated_at":  t.UpdatedAt,
+                "progress":    t.GetProgress(),
+                "is_blocked":  t.IsBlocked(),
+        }
+}</span>
+
+// ITrackable implementation
+
+// GetStatus returns the current status (todo, in-progress, done)
+func (t *TaskEntity) GetStatus() string <span class="cov8" title="1">{
+        return t.Status
+}</span>
+
+// GetProgress returns completion progress as a value between 0.0 and 1.0
+func (t *TaskEntity) GetProgress() float64 <span class="cov8" title="1">{
+        switch t.Status </span>{
+        case "done":<span class="cov8" title="1">
+                return 1.0</span>
+        case "in-progress":<span class="cov8" title="1">
+                return 0.5</span>
+        default:<span class="cov8" title="1"> // todo
+                return 0.0</span>
+        }
+}
+
+// IsBlocked returns true if the entity is blocked from progressing
+func (t *TaskEntity) IsBlocked() bool <span class="cov8" title="1">{
+        // Tasks are never blocked in this implementation
+        return false
+}</span>
+
+// GetBlockReason returns the reason for blocking, or empty string if not blocked
+func (t *TaskEntity) GetBlockReason() string <span class="cov0" title="0">{
+        return ""
+}</span>
+
+// MarshalTask serializes a task to JSON bytes with indentation
+func MarshalTask(t *TaskEntity) ([]byte, error) <span class="cov8" title="1">{
+        return json.MarshalIndent(t, "", "  ")
+}</span>
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package task_manager
+
+import (
+        "context"
+        "encoding/json"
+        "fmt"
+        "os"
+        "path/filepath"
+        "sync"
+        "time"
+
+        "github.com/fsnotify/fsnotify"
+        "github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
+)
+
+// FileWatcher watches the tasks directory for changes and emits events.
+// It uses fsnotify to watch for file system changes.
+type FileWatcher struct {
+        mu           sync.Mutex
+        logger       pluginsdk.Logger
+        tasksDir     string
+        watcher      *fsnotify.Watcher
+        ctx          context.Context
+        cancel       context.CancelFunc
+        eventChan    chan&lt;- pluginsdk.Event
+        isRunning    bool
+        done         chan struct{}
+        trackedFiles map[string]*TaskEntity // Track known file states
+}
+
+// NewFileWatcher creates a new file watcher
+func NewFileWatcher(logger pluginsdk.Logger, tasksDir string) (*FileWatcher, error) <span class="cov8" title="1">{
+        watcher, err := fsnotify.NewWatcher()
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to create watcher: %w", err)
+        }</span>
+
+        <span class="cov8" title="1">return &amp;FileWatcher{
+                logger:       logger,
+                tasksDir:     tasksDir,
+                watcher:      watcher,
+                trackedFiles: make(map[string]*TaskEntity),
+                done:         make(chan struct{}),
+        }, nil</span>
+}
+
+// Start begins watching the tasks directory
+func (fw *FileWatcher) Start(ctx context.Context, eventChan chan&lt;- pluginsdk.Event) error <span class="cov8" title="1">{
+        fw.mu.Lock()
+        defer fw.mu.Unlock()
+
+        if fw.isRunning </span><span class="cov0" title="0">{
+                return fmt.Errorf("file watcher is already running")
+        }</span>
+
+        // Create tasks directory if it doesn't exist
+        <span class="cov8" title="1">if err := os.MkdirAll(fw.tasksDir, 0755); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to create tasks directory: %w", err)
+        }</span>
+
+        // Create a cancellable context
+        <span class="cov8" title="1">fw.ctx, fw.cancel = context.WithCancel(ctx)
+        fw.eventChan = eventChan
+
+        // Watch the tasks directory
+        if err := fw.watcher.Add(fw.tasksDir); err != nil </span><span class="cov0" title="0">{
+                fw.watcher.Close()
+                return fmt.Errorf("failed to watch directory: %w", err)
+        }</span>
+
+        // Load existing tasks
+        <span class="cov8" title="1">if err := fw.loadExistingTasks(); err != nil </span><span class="cov0" title="0">{
+                fw.logger.Warn("failed to load existing tasks: %v", err)
+        }</span>
+
+        <span class="cov8" title="1">fw.isRunning = true
+
+        // Start the watch loop in a background goroutine
+        go fw.watchLoop()
+
+        fw.logger.Info("file watcher started for directory", "path", fw.tasksDir)
+        return nil</span>
+}
+
+// Stop stops watching the tasks directory
+func (fw *FileWatcher) Stop() error <span class="cov8" title="1">{
+        fw.mu.Lock()
+        defer fw.mu.Unlock()
+
+        if !fw.isRunning </span><span class="cov0" title="0">{
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">fw.isRunning = false
+
+        // Cancel the context to stop the watch loop
+        if fw.cancel != nil </span><span class="cov8" title="1">{
+                fw.cancel()
+        }</span>
+
+        // Wait for the watch loop to finish
+        <span class="cov8" title="1">select </span>{
+        case &lt;-fw.done:<span class="cov8" title="1">
+                fw.logger.Info("file watcher stopped")</span>
+        case &lt;-time.After(5 * time.Second):<span class="cov0" title="0">
+                fw.logger.Warn("file watcher did not stop gracefully, forcing close")</span>
+        }
+
+        // Close the watcher
+        <span class="cov8" title="1">if fw.watcher != nil </span><span class="cov8" title="1">{
+                fw.watcher.Close()
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// watchLoop runs in a background goroutine and processes file system events
+func (fw *FileWatcher) watchLoop() <span class="cov8" title="1">{
+        defer close(fw.done)
+
+        for </span><span class="cov8" title="1">{
+                select </span>{
+                case &lt;-fw.ctx.Done():<span class="cov8" title="1">
+                        return</span>
+
+                case event, ok := &lt;-fw.watcher.Events:<span class="cov8" title="1">
+                        if !ok </span><span class="cov0" title="0">{
+                                return
+                        }</span>
+                        <span class="cov8" title="1">fw.handleFileEvent(event)</span>
+
+                case err, ok := &lt;-fw.watcher.Errors:<span class="cov0" title="0">
+                        if !ok </span><span class="cov0" title="0">{
+                                return
+                        }</span>
+                        <span class="cov0" title="0">fw.logger.Error("file watcher error", "error", err)</span>
+                }
+        }
+}
+
+// handleFileEvent processes a single file system event
+func (fw *FileWatcher) handleFileEvent(event fsnotify.Event) <span class="cov8" title="1">{
+        // Only process JSON files
+        if filepath.Ext(event.Name) != ".json" </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">taskID := fileNameToTaskID(event.Name)
+        if taskID == "" </span><span class="cov0" title="0">{
+                return
+        }</span>
+
+        <span class="cov8" title="1">switch </span>{
+        case event.Op&amp;fsnotify.Create == fsnotify.Create:<span class="cov8" title="1">
+                fw.handleTaskCreated(event.Name, taskID)</span>
+
+        case event.Op&amp;fsnotify.Write == fsnotify.Write:<span class="cov8" title="1">
+                fw.handleTaskUpdated(event.Name, taskID)</span>
+
+        case event.Op&amp;fsnotify.Remove == fsnotify.Remove:<span class="cov0" title="0">
+                fw.handleTaskDeleted(taskID)</span>
+        }
+}
+
+// handleTaskCreated processes a task creation event
+func (fw *FileWatcher) handleTaskCreated(filePath string, taskID string) <span class="cov8" title="1">{
+        task, err := fw.loadTaskFromFile(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                fw.logger.Warn("failed to load task after creation", "path", filePath, "error", err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">fw.mu.Lock()
+        fw.trackedFiles[filePath] = task
+        fw.mu.Unlock()
+
+        // Emit event
+        event := pluginsdk.Event{
+                Type:      EventTaskCreated,
+                Source:    PluginSourceName,
+                Timestamp: time.Now(),
+                Payload: map[string]interface{}{
+                        "id":    task.ID,
+                        "title": task.Title,
+                        "status": task.Status,
+                },
+                Version: "1.0",
+        }
+
+        select </span>{
+        case fw.eventChan &lt;- event:<span class="cov8" title="1">
+                fw.logger.Debug("emitted task.created event", "task_id", task.ID)</span>
+        case &lt;-fw.ctx.Done():<span class="cov0" title="0">
+                return</span>
+        }
+}
+
+// handleTaskUpdated processes a task update event
+func (fw *FileWatcher) handleTaskUpdated(filePath string, taskID string) <span class="cov8" title="1">{
+        task, err := fw.loadTaskFromFile(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                fw.logger.Warn("failed to load task after update", "path", filePath, "error", err)
+                return
+        }</span>
+
+        <span class="cov8" title="1">fw.mu.Lock()
+        oldTask := fw.trackedFiles[filePath]
+        fw.trackedFiles[filePath] = task
+        fw.mu.Unlock()
+
+        // Only emit event if status changed
+        if oldTask == nil || oldTask.Status != task.Status </span><span class="cov0" title="0">{
+                event := pluginsdk.Event{
+                        Type:      EventTaskUpdated,
+                        Source:    PluginSourceName,
+                        Timestamp: time.Now(),
+                        Payload: map[string]interface{}{
+                                "id":        task.ID,
+                                "title":     task.Title,
+                                "status":    task.Status,
+                                "old_status": "",
+                        },
+                        Version: "1.0",
+                }
+
+                if oldTask != nil </span><span class="cov0" title="0">{
+                        event.Payload["old_status"] = oldTask.Status
+                }</span>
+
+                <span class="cov0" title="0">select </span>{
+                case fw.eventChan &lt;- event:<span class="cov0" title="0">
+                        fw.logger.Debug("emitted task.updated event", "task_id", task.ID)</span>
+                case &lt;-fw.ctx.Done():<span class="cov0" title="0">
+                        return</span>
+                }
+        }
+}
+
+// handleTaskDeleted processes a task deletion event
+func (fw *FileWatcher) handleTaskDeleted(taskID string) <span class="cov0" title="0">{
+        fw.mu.Lock()
+        delete(fw.trackedFiles, taskIDToFileName(fw.tasksDir, taskID))
+        fw.mu.Unlock()
+
+        event := pluginsdk.Event{
+                Type:      EventTaskDeleted,
+                Source:    PluginSourceName,
+                Timestamp: time.Now(),
+                Payload: map[string]interface{}{
+                        "id": taskID,
+                },
+                Version: "1.0",
+        }
+
+        select </span>{
+        case fw.eventChan &lt;- event:<span class="cov0" title="0">
+                fw.logger.Debug("emitted task.deleted event", "task_id", taskID)</span>
+        case &lt;-fw.ctx.Done():<span class="cov0" title="0">
+                return</span>
+        }
+}
+
+// loadExistingTasks loads all existing task files
+func (fw *FileWatcher) loadExistingTasks() error <span class="cov8" title="1">{
+        entries, err := os.ReadDir(fw.tasksDir)
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">for _, entry := range entries </span><span class="cov0" title="0">{
+                if entry.IsDir() </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">if filepath.Ext(entry.Name()) != ".json" </span><span class="cov0" title="0">{
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">filePath := filepath.Join(fw.tasksDir, entry.Name())
+                task, err := fw.loadTaskFromFile(filePath)
+                if err != nil </span><span class="cov0" title="0">{
+                        fw.logger.Warn("failed to load existing task", "path", filePath, "error", err)
+                        continue</span>
+                }
+
+                <span class="cov0" title="0">fw.mu.Lock()
+                fw.trackedFiles[filePath] = task
+                fw.mu.Unlock()</span>
+        }
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// loadTaskFromFile loads a task from a JSON file
+func (fw *FileWatcher) loadTaskFromFile(filePath string) (*TaskEntity, error) <span class="cov8" title="1">{
+        data, err := os.ReadFile(filePath)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var task TaskEntity
+        if err := json.Unmarshal(data, &amp;task); err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;task, nil</span>
+}
+
+// fileNameToTaskID extracts task ID from file name
+func fileNameToTaskID(filePath string) string <span class="cov8" title="1">{
+        fileName := filepath.Base(filePath)
+        if len(fileName) &gt; 5 </span><span class="cov8" title="1">{ // Remove .json extension
+                return fileName[:len(fileName)-5]
+        }</span>
+        <span class="cov0" title="0">return ""</span>
+}
+
+// taskIDToFileName creates file path from task ID
+func taskIDToFileName(tasksDir, taskID string) string <span class="cov0" title="0">{
+        return filepath.Join(tasksDir, taskID+".json")
+}</span>
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

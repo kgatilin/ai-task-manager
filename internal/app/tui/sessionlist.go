@@ -58,10 +58,11 @@ func (i SessionItem) Description() string {
 
 // SessionListModel is the Bubble Tea model for the session list view
 type SessionListModel struct {
-	list     list.Model
-	sessions []*SessionInfo
-	width    int
-	height   int
+	list         list.Model
+	sessions     []*SessionInfo
+	width        int
+	height       int
+	newEventCount int // Number of unread events from dispatcher
 }
 
 // NewSessionListModel creates a new session list model
@@ -140,7 +141,20 @@ func (m SessionListModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the view
 func (m SessionListModel) View() string {
+	// Build the title with event counter if there are new events
+	title := "DarwinFlow Sessions"
+	if m.newEventCount > 0 {
+		newEventStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("226")) // Yellow for new events
+		title = fmt.Sprintf("%s %s", title, newEventStyle.Render(fmt.Sprintf("(+%d new)", m.newEventCount)))
+	}
+	m.list.Title = title
+
 	return "\n" + m.list.View()
+}
+
+// SetNewEventCount updates the counter of unread events
+func (m *SessionListModel) SetNewEventCount(count int) {
+	m.newEventCount = count
 }
 
 // GetSelectedSession returns the currently selected session

@@ -69,9 +69,13 @@ func uiCommand(args []string) {
 		os.Exit(1)
 	}
 
-	// Run TUI
+	// Create event dispatcher for real-time event streaming
 	ctx := context.Background()
-	if err := tui.Run(ctx, registry, analysisService, logsService, config); err != nil {
+	pluginCtx := app.NewPluginContext(logger, *dbPath, "", repo)
+	eventDispatcher := app.NewEventDispatcher(repo, logger, pluginCtx)
+
+	// Run TUI
+	if err := tui.Run(ctx, registry, analysisService, logsService, config, eventDispatcher); err != nil {
 		fmt.Fprintf(os.Stderr, "Error running UI: %v\n", err)
 		os.Exit(1)
 	}
