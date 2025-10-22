@@ -47,14 +47,23 @@ This template provides a complete starting point for building external DarwinFlo
 The template includes a Makefile with common tasks:
 
 ```bash
-# Build the plugin binary
+# Build both plugin and CLI binaries
 make build
+
+# Build only the CLI wrapper
+make build-cli
 
 # Clean build artifacts
 make clean
 
-# Build and run
+# Build and run the RPC plugin
 make run
+
+# Build and run the CLI (shows help)
+make run-cli
+
+# Test all CLI commands
+make test-cli
 
 # Install to /usr/local/bin (requires sudo)
 sudo make install
@@ -65,7 +74,125 @@ To build manually:
 ```bash
 mkdir -p bin
 go build -o bin/myplugin ./cmd/myplugin
+go build -o bin/myplugin-cli ./cmd/myplugin-cli
 ```
+
+## Local Testing with CLI
+
+The template includes a CLI wrapper (`myplugin-cli`) for testing the plugin locally without DarwinFlow. This tool directly calls plugin methods instead of using JSON-RPC, making it ideal for development and debugging.
+
+### CLI Commands
+
+```bash
+# List all items
+./bin/myplugin-cli list
+
+# Get a specific item by ID
+./bin/myplugin-cli get item-1
+
+# Update an item's field
+./bin/myplugin-cli update item-1 name "New Name"
+./bin/myplugin-cli update item-1 description "Updated description"
+./bin/myplugin-cli update item-1 tags "tag1,tag2,tag3"
+
+# Show plugin information
+./bin/myplugin-cli info
+
+# Show entity types
+./bin/myplugin-cli types
+
+# Show help
+./bin/myplugin-cli help
+```
+
+### Example Output
+
+**List items:**
+```bash
+$ ./bin/myplugin-cli list
+Found 3 items:
+
+{
+  "id": "item-1",
+  "type": "item",
+  "name": "Example Item",
+  "description": "This is an example item from the external plugin.",
+  "tags": ["example", "demo"],
+  "created_at": "2025-10-21T15:30:00Z",
+  "updated_at": "2025-10-21T15:30:00Z",
+  "capabilities": []
+}
+...
+```
+
+**Get specific item:**
+```bash
+$ ./bin/myplugin-cli get item-1
+{
+  "id": "item-1",
+  "type": "item",
+  "name": "Example Item",
+  ...
+}
+```
+
+**Update item (with event):**
+```bash
+$ ./bin/myplugin-cli update item-1 name "Updated Name"
+[15:30:45] [EVENT] type: stream.started | source: myplugin | payload: {"item_count":3}
+[15:30:45] [EVENT] type: item.updated | source: myplugin | payload: {"item_id":"item-1","name":"Updated Name"}
+Item updated successfully:
+{
+  "id": "item-1",
+  "type": "item",
+  "name": "Updated Name",
+  ...
+}
+```
+
+**Plugin info:**
+```bash
+$ ./bin/myplugin-cli info
+Plugin Information:
+  Name:        myplugin
+  Version:     1.0.0
+  Description: Example external plugin template
+  Is Core:     false
+
+Capabilities:
+  - IEntityProvider
+  - IEntityUpdater
+  - IEventEmitter
+```
+
+### Event Monitoring
+
+The CLI automatically monitors and displays events emitted by the plugin:
+
+- Events are displayed to **stderr** with timestamps
+- Command output goes to **stdout** for easy piping
+- Events show type, source, and payload in JSON format
+
+Example:
+```bash
+# Redirect events to a file while viewing output
+./bin/myplugin-cli update item-1 name "New" 2> events.log
+
+# View just events
+./bin/myplugin-cli update item-1 name "New" 2>&1 > /dev/null
+```
+
+### CLI vs RPC Mode
+
+| Feature | CLI Mode | RPC Mode |
+|---------|----------|----------|
+| **Communication** | Direct method calls | JSON-RPC over stdin/stdout |
+| **Use Case** | Local testing, debugging | Production integration |
+| **Events** | Displayed to stderr | Sent via stdout as JSON |
+| **Error Handling** | Printed to stderr | JSON error responses |
+| **Sample Data** | Built-in test data | Configured via init |
+
+**Important**: The CLI is for local testing only. For production use with DarwinFlow, use the RPC plugin binary (`bin/myplugin`).
 
 ## Integration with DarwinFlow
 

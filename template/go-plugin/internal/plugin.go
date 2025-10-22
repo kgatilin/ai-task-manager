@@ -21,12 +21,16 @@ type ItemPlugin struct {
 
 	// eventStreaming indicates whether event emission is active
 	eventStreaming bool
+
+	// eventChannel is used for direct event emission (CLI mode)
+	eventChannel chan pluginsdk.RPCEvent
 }
 
 // NewItemPlugin creates a new ItemPlugin instance.
 func NewItemPlugin() *ItemPlugin {
 	return &ItemPlugin{
-		items: make(map[string]*Item),
+		items:        make(map[string]*Item),
+		eventChannel: make(chan pluginsdk.RPCEvent, 100),
 	}
 }
 
@@ -125,7 +129,8 @@ func (p *ItemPlugin) sendError(id interface{}, code int, message string) {
 
 // emitEvent sends an event to the main process.
 // Events are only sent when event streaming is active.
-// The event is written to stdout with an "event" field to distinguish it from RPC responses.
+// In RPC mode, events are written to stdout.
+// In CLI mode (when eventChannel is buffered), events are sent to the channel only.
 func (p *ItemPlugin) emitEvent(eventType string, payload map[string]interface{}) {
 	if !p.eventStreaming {
 		return
@@ -139,6 +144,144 @@ func (p *ItemPlugin) emitEvent(eventType string, payload map[string]interface{})
 		Payload:   payload,
 	}
 
+	// If event channel is available (CLI mode), send to channel instead of stdout
+	if p.eventChannel != nil && cap(p.eventChannel) > 0 {
+		select {
+		case p.eventChannel <- event:
+		default:
+			// Channel full, skip event
+		}
+		return
+	}
+
+	// RPC mode: write to stdout
 	data, _ := json.Marshal(event)
 	fmt.Fprintf(os.Stdout, "%s\n", string(data))
+}
+
+// --- Public methods for CLI access ---
+
+// SetWorkingDir sets the working directory (for CLI testing)
+func (p *ItemPlugin) SetWorkingDir(dir string) {
+	p.workingDir = dir
+}
+
+// StartEventStreaming enables event emission
+func (p *ItemPlugin) StartEventStreaming() {
+	p.eventStreaming = true
+	// Emit initial event
+	p.emitEvent("stream.started", map[string]interface{}{
+		"item_count": len(p.items),
+	})
+}
+
+// StopEventStreaming disables event emission
+func (p *ItemPlugin) StopEventStreaming() {
+	p.eventStreaming = false
+}
+
+// GetEventChannel returns the event channel for CLI monitoring
+func (p *ItemPlugin) GetEventChannel() <-chan pluginsdk.RPCEvent {
+	return p.eventChannel
+}
+
+// GetInfo returns plugin information (CLI-friendly)
+func (p *ItemPlugin) GetInfo() pluginsdk.PluginInfo {
+	return pluginsdk.PluginInfo{
+		Name:        "myplugin",
+		Version:     "1.0.0",
+		Description: "Example external plugin template",
+		IsCore:      false,
+	}
+}
+
+// GetCapabilities returns plugin capabilities (CLI-friendly)
+func (p *ItemPlugin) GetCapabilities() []string {
+	return []string{
+		"IEntityProvider",
+		"IEntityUpdater",
+		"IEventEmitter",
+	}
+}
+
+// GetEntityTypes returns entity type metadata (CLI-friendly)
+func (p *ItemPlugin) GetEntityTypes() []pluginsdk.EntityTypeInfo {
+	return []pluginsdk.EntityTypeInfo{
+		{
+			Type:              "item",
+			DisplayName:       "Item",
+			DisplayNamePlural: "Items",
+			Capabilities:      []string{},
+			Icon:              "📦",
+			Description:       "A generic item entity",
+		},
+	}
+}
+
+// QueryEntities queries items based on filters (CLI-friendly)
+func (p *ItemPlugin) QueryEntities(query pluginsdk.EntityQuery) []map[string]interface{} {
+	// Only handle queries for "item" entity type
+	if query.EntityType != "item" {
+		return []map[string]interface{}{}
+	}
+
+	// Convert all items to maps
+	items := make([]map[string]interface{}, 0, len(p.items))
+	for _, item := range p.items {
+		items = append(items, item.ToMap())
+	}
+
+	// Apply pagination limit if specified
+	if query.Limit > 0 && len(items) > query.Limit {
+		items = items[:query.Limit]
+	}
+
+	return items
+}
+
+// GetEntity retrieves a specific item by ID (CLI-friendly)
+func (p *ItemPlugin) GetEntity(entityID string) (map[string]interface{}, error) {
+	item, ok := p.items[entityID]
+	if !ok {
+		return nil, fmt.Errorf("item not found: %s", entityID)
+	}
+	return item.ToMap(), nil
+}
+
+// UpdateEntity updates an item's fields (CLI-friendly)
+func (p *ItemPlugin) UpdateEntity(entityID string, fields map[string]interface{}) (map[string]interface{}, error) {
+	item, ok := p.items[entityID]
+	if !ok {
+		return nil, fmt.Errorf("item not found: %s", entityID)
+	}
+
+	// Update fields if provided
+	if name, ok := fields["name"].(string); ok {
+		item.Name = name
+	}
+	if description, ok := fields["description"].(string); ok {
+		item.Description = description
+	}
+	if tags, ok := fields["tags"].([]string); ok {
+		item.Tags = tags
+	} else if tagsInterface, ok := fields["tags"].([]interface{}); ok {
+		// Handle []interface{} from JSON unmarshaling
+		item.Tags = make([]string, 0, len(tagsInterface))
+		for _, tag := range tagsInterface {
+			if tagStr, ok := tag.(string); ok {
+				item.Tags = append(item.Tags, tagStr)
+			}
+		}
+	}
+
+	// Update timestamp
+	item.UpdatedAt = time.Now()
+
+	// Emit update event
+	p.emitEvent("item.updated", map[string]interface{}{
+		"item_id": item.ID,
+		"name":    item.Name,
+	})
+
+	return item.ToMap(), nil
 }
