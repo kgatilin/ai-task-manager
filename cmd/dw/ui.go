@@ -51,8 +51,8 @@ func uiCommand(args []string) {
 
 	// Create services
 	logsService := app.NewLogsService(repo, repo)
-	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
-	analysisService := app.NewAnalysisService(repo, repo, logsService, llmExecutor, logger, config)
+	llm := infra.NewClaudeCodeLLMWithConfig(logger, config)
+	analysisService := app.NewAnalysisService(repo, repo, logsService, llm, logger, config)
 
 	// Create setup service
 	setupService := app.NewSetupService(repo, logger)

@@ -100,8 +100,8 @@ func analyzeCmd(args []string) {
 	// Create services
 	logger.Debug("Creating analysis services")
 	logsService := app.NewLogsService(repo, repo)
-	llmExecutor := app.NewClaudeCLIExecutorWithConfig(logger, config)
-	analysisService := app.NewAnalysisService(repo, repo, logsService, llmExecutor, logger, config)
+	llm := infra.NewClaudeCodeLLMWithConfig(logger, config)
+	analysisService := app.NewAnalysisService(repo, repo, logsService, llm, logger, config)
 
 	// Create command handler
 	handler := app.NewAnalyzeCommandHandler(analysisService, logger, os.Stdout)

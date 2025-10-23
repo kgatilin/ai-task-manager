@@ -24,7 +24,8 @@ func (l *NoOpLogger) Info(format string, args ...interface{})  {}
 func (l *NoOpLogger) Warn(format string, args ...interface{})  {}
 func (l *NoOpLogger) Error(format string, args ...interface{}) {}
 
-// LLMExecutor defines the interface for executing LLM queries
+// Deprecated: Use domain.LLM instead
+// LLMExecutor is kept for backward compatibility
 type LLMExecutor interface {
 	// Execute runs an LLM query with the given prompt and returns the response
 	Execute(ctx context.Context, prompt string) (string, error)
@@ -43,7 +44,7 @@ type AnalysisService struct {
 	eventRepo    domain.EventRepository
 	analysisRepo domain.AnalysisRepository
 	logsService  *LogsService
-	llmExecutor  LLMExecutor
+	llm          domain.LLM
 	logger       Logger
 	config       *domain.Config
 }
@@ -53,7 +54,7 @@ func NewAnalysisService(
 	eventRepo domain.EventRepository,
 	analysisRepo domain.AnalysisRepository,
 	logsService *LogsService,
-	llmExecutor LLMExecutor,
+	llm domain.LLM,
 	logger Logger,
 	config *domain.Config,
 ) *AnalysisService {
@@ -64,7 +65,7 @@ func NewAnalysisService(
 		eventRepo:    eventRepo,
 		analysisRepo: analysisRepo,
 		logsService:  logsService,
-		llmExecutor:  llmExecutor,
+		llm:          llm,
 		logger:       logger,
 		config:       config,
 	}
@@ -112,13 +113,13 @@ func (s *AnalysisService) AnalyzeSessionWithPrompt(ctx context.Context, sessionI
 	s.logger.Debug("Generated prompt with %d characters (%d KB)", len(prompt), len(prompt)/1024)
 
 	// Execute LLM analysis
-	s.logger.Info("Invoking Claude CLI for %s analysis...", promptName)
-	analysisResult, err := s.llmExecutor.Execute(ctx, prompt)
+	s.logger.Info("Invoking LLM for %s analysis...", promptName)
+	analysisResult, err := s.llm.Query(ctx, prompt, nil)
 	if err != nil {
 		s.logger.Error("Failed to execute LLM analysis: %v", err)
 		return nil, fmt.Errorf("failed to execute LLM analysis: %w", err)
 	}
-	s.logger.Debug("Claude CLI returned %d characters", len(analysisResult))
+	s.logger.Debug("LLM returned %d characters", len(analysisResult))
 
 	// Create and save analysis with type
 	s.logger.Debug("Saving analysis to database")

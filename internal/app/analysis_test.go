@@ -8,7 +8,7 @@ import (
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
 )
 
-// MockLLMExecutor is a mock implementation for testing
+// MockLLMExecutor is a mock implementation for testing (deprecated - use MockLLM instead)
 type MockLLMExecutor struct {
 	Response string
 	Error    error
@@ -19,6 +19,39 @@ func (m *MockLLMExecutor) Execute(ctx context.Context, prompt string) (string, e
 		return "", m.Error
 	}
 	return m.Response, nil
+}
+
+// MockLLM is a mock implementation of domain.LLM for testing
+type MockLLM struct {
+	Response    string
+	Error       error
+	ModelValue  string
+	TokenEst    int
+	QueryCalls  int
+	TokensCalls int
+}
+
+func (m *MockLLM) Query(ctx context.Context, prompt string, options *domain.LLMOptions) (string, error) {
+	m.QueryCalls++
+	if m.Error != nil {
+		return "", m.Error
+	}
+	return m.Response, nil
+}
+
+func (m *MockLLM) EstimateTokens(prompt string) int {
+	m.TokensCalls++
+	if m.TokenEst > 0 {
+		return m.TokenEst
+	}
+	return len(prompt) / 4
+}
+
+func (m *MockLLM) GetModel() string {
+	if m.ModelValue != "" {
+		return m.ModelValue
+	}
+	return "claude-3"
 }
 
 // MockAnalysisRepository is a mock for testing
@@ -138,11 +171,11 @@ func TestNewAnalysisService(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "test analysis"}
+	llm := &MockLLM{Response: "test analysis"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	if service == nil {
 		t.Fatal("Expected non-nil AnalysisService")
@@ -153,10 +186,10 @@ func TestNewAnalysisService_WithNilConfig(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "test analysis"}
+	llm := &MockLLM{Response: "test analysis"}
 	logger := &app.NoOpLogger{}
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, nil)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, nil)
 
 	if service == nil {
 		t.Fatal("Expected non-nil AnalysisService even with nil config")
@@ -177,11 +210,11 @@ func TestAnalysisService_AnalyzeSessionWithPrompt(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "This is a test analysis"}
+	llm := &MockLLM{Response: "This is a test analysis"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	analysis, err := service.AnalyzeSessionWithPrompt(ctx, "session-123", "tool_analysis")
 	if err != nil {
@@ -213,11 +246,11 @@ func TestAnalysisService_AnalyzeSessionWithPrompt_NoLogs(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "test analysis"}
+	llm := &MockLLM{Response: "test analysis"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	_, err := service.AnalyzeSessionWithPrompt(ctx, "session-123", "tool_analysis")
 	if err == nil {
@@ -237,11 +270,11 @@ func TestAnalysisService_GetAnalysesBySessionID(t *testing.T) {
 
 	eventRepo := &MockEventRepository{}
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	analyses, err := service.GetAnalysesBySessionID(ctx, "session-123")
 	if err != nil {
@@ -264,11 +297,11 @@ func TestAnalysisService_GetAllSessionIDs(t *testing.T) {
 
 	eventRepo := &MockEventRepository{}
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	sessionIDs, err := service.GetAllSessionIDs(ctx, 10)
 	if err != nil {
@@ -290,11 +323,11 @@ func TestAnalysisService_GetLastSession(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	sessionID, err := service.GetLastSession(ctx)
 	if err != nil {
@@ -314,11 +347,11 @@ func TestAnalysisService_GetLastSession_NoSessions(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	_, err := service.GetLastSession(ctx)
 	if err == nil {
@@ -336,11 +369,11 @@ func TestAnalysisService_AnalyzeMultipleSessions(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "analysis result"}
+	llm := &MockLLM{Response: "analysis result"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	results, errors := service.AnalyzeMultipleSessions(ctx, []string{"session-1"}, "tool_analysis")
 
@@ -372,11 +405,11 @@ func TestAnalysisService_EstimateTokenCount(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	tokenCount, err := service.EstimateTokenCount(ctx, "session-123")
 	if err != nil {
@@ -400,11 +433,11 @@ func TestAnalysisService_SelectSessionsWithinTokenLimit(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	selected, totalTokens, err := service.SelectSessionsWithinTokenLimit(ctx, []string{"session-123"}, 100000)
 	if err != nil {
@@ -432,11 +465,11 @@ func TestAnalysisService_AnalyzeSession(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "test analysis"}
+	llm := &MockLLM{Response: "test analysis"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	analysis, err := service.AnalyzeSession(ctx, "session-123")
 	if err != nil {
@@ -456,11 +489,11 @@ func TestAnalysisService_GetUnanalyzedSessions(t *testing.T) {
 
 	eventRepo := &MockEventRepository{}
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	sessions, err := service.GetUnanalyzedSessions(ctx)
 	if err != nil {
@@ -483,11 +516,11 @@ func TestAnalysisService_GetAnalysis(t *testing.T) {
 
 	eventRepo := &MockEventRepository{}
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	result, err := service.GetAnalysis(ctx, "session-123")
 	if err != nil {
@@ -509,11 +542,11 @@ func TestAnalysisService_AnalyzeMultipleSessionsParallel(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "analysis result"}
+	llm := &MockLLM{Response: "analysis result"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	results, errors := service.AnalyzeMultipleSessionsParallel(ctx, []string{"session-1"}, "tool_analysis")
 
@@ -532,11 +565,11 @@ func TestAnalysisService_AnalyzeMultipleSessionsParallel_Empty(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	results, errors := service.AnalyzeMultipleSessionsParallel(ctx, []string{}, "tool_analysis")
 
@@ -559,13 +592,13 @@ func TestAnalysisService_AnalyzeSessionWithMultiplePrompts(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "analysis result"}
+	llm := &MockLLM{Response: "analysis result"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 	config.Prompts["prompt1"] = "Prompt 1"
 	config.Prompts["prompt2"] = "Prompt 2"
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	results, errors := service.AnalyzeSessionWithMultiplePrompts(ctx, "session-123", []string{"prompt1", "prompt2"})
 
@@ -587,11 +620,11 @@ func TestAnalysisService_SaveToMarkdown(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	filePath, err := service.SaveToMarkdown(ctx, analysis, tmpDir, "test-analysis.md")
 	if err != nil {
@@ -650,11 +683,11 @@ func TestAnalysisService_AnalyzeSessionWithPrompt_UnknownPrompt(t *testing.T) {
 	}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{Response: "analysis"}
+	llm := &MockLLM{Response: "analysis"}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	// Should fall back to tool_analysis when prompt not found
 	analysis, err := service.AnalyzeSessionWithPrompt(ctx, "session-123", "nonexistent_prompt")
@@ -673,11 +706,11 @@ func TestAnalysisService_AnalyzeSessionWithMultiplePrompts_Empty(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	results, errors := service.AnalyzeSessionWithMultiplePrompts(ctx, "session-123", []string{})
 
@@ -699,11 +732,11 @@ func TestAnalysisService_SaveToMarkdown_WithDefaults(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	// Test with default filename (empty string)
 	filePath, err := service.SaveToMarkdown(ctx, analysis, tmpDir, "")
@@ -728,11 +761,11 @@ func TestAnalysisService_SaveToMarkdown_NilAnalysis(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	_, err := service.SaveToMarkdown(ctx, nil, tmpDir, "test.md")
 	if err == nil {
@@ -761,12 +794,12 @@ func TestAnalysisService_SaveToMarkdown_InvalidTemplate(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 	config.UI.FilenameTemplate = "{{.InvalidField}}" // Invalid template
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	_, err := service.SaveToMarkdown(ctx, analysis, tmpDir, "")
 	if err == nil {
@@ -784,11 +817,11 @@ func TestAnalysisService_SaveToMarkdown_ShortSessionID(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	// Test with session ID that's at least 8 characters
 	analysis := domain.NewSessionAnalysis("session-12345678", "test analysis", "claude-3", "prompt1")
@@ -811,12 +844,12 @@ func TestAnalysisService_SaveToMarkdown_WithDefaultOutputDir(t *testing.T) {
 	eventRepo := &MockEventRepository{}
 	analysisRepo := NewMockAnalysisRepository()
 	logsService := app.NewLogsService(eventRepo, eventRepo)
-	llmExecutor := &MockLLMExecutor{}
+	llm := &MockLLM{}
 	logger := &app.NoOpLogger{}
 	config := domain.DefaultConfig()
 	config.UI.DefaultOutputDir = t.TempDir()
 
-	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llmExecutor, logger, config)
+	service := app.NewAnalysisService(eventRepo, analysisRepo, logsService, llm, logger, config)
 
 	// Use empty outputDir to test default behavior
 	filePath, err := service.SaveToMarkdown(ctx, analysis, "", "test.md")
