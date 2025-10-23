@@ -245,9 +245,9 @@ func TestAppModel_UpdateAnalysisComplete(t *testing.T) {
 	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
 	// Send AnalysisCompleteMsg
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisResult: "Test result",
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		Result: "Test result",
 	}
 	msg := tui.AnalysisCompleteMsg{
 		SessionID: "test-session",
@@ -430,10 +430,11 @@ func TestAppModel_UpdateWindowSizeDifferentViews(t *testing.T) {
 			LastEvent:  time.Now(),
 			EventCount: 5,
 			HasAnalysis: true,
-			Analyses: []*domain.SessionAnalysis{
+			Analyses: []*domain.Analysis{
 				{
-					SessionID:      "session-win",
-					AnalysisResult: "test",
+					ViewID:  "session-win",
+					ViewType: "session",
+					Result: "test",
 				},
 			},
 		},
@@ -477,11 +478,12 @@ func TestAppModel_UpdateCurrentView_AllStates(t *testing.T) {
 			LastEvent:  time.Now(),
 			EventCount: 5,
 			HasAnalysis: true,
-			Analyses: []*domain.SessionAnalysis{
+			Analyses: []*domain.Analysis{
 				{
-					SessionID:      "session-all",
-					AnalysisResult: "test result",
-					AnalyzedAt:     time.Now(),
+					ViewID:      "session-all",
+					ViewType:    "session",
+					Result: "test result",
+					Timestamp:     time.Now(),
 				},
 			},
 		},
@@ -718,12 +720,12 @@ func TestAppModel_ViewAnalysisViewer(t *testing.T) {
 	config := &domain.Config{}
 	model := tui.NewAppModel(ctx, nil, nil, nil, config, nil)
 
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session-analysis",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		AnalysisResult: "Test result",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session-analysis",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
+		Result: "Test result",
+		Timestamp:     time.Now(),
 	}
 
 	// Manually trigger the analysis viewer state by creating it
@@ -737,7 +739,7 @@ func TestAppModel_ViewAnalysisViewer(t *testing.T) {
 			LastEvent:  time.Now(),
 			EventCount: 5,
 			HasAnalysis: true,
-			Analyses:   []*domain.SessionAnalysis{analysis},
+			Analyses: []*domain.Analysis{analysis},
 		},
 	}
 
@@ -784,9 +786,10 @@ func TestAppModel_UpdateSessionsLoadedWithDetailRefresh(t *testing.T) {
 	// This tests the showDetailAfterRefresh path
 	updatedModel2, cmd := model.Update(tui.AnalysisCompleteMsg{
 		SessionID: "session-refresh-test",
-		Analysis: &domain.SessionAnalysis{
-			SessionID:      "session-refresh-test",
-			AnalysisResult: "test",
+		Analysis: &domain.Analysis{
+			ViewID:      "session-refresh-test",
+			ViewType:    "session",
+			Result: "test",
 		},
 		Error: nil,
 	})
@@ -875,12 +878,12 @@ func TestSessionDetailModel_UpdateUnknownKey(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_UpdateUnknownKey(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		AnalysisResult: "Test result",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
+		Result: "Test result",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)

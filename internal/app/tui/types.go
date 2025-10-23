@@ -28,9 +28,9 @@ type SessionInfo struct {
 	LastEvent       time.Time
 	EventCount      int
 	AnalysisCount   int
-	Analyses        []*domain.SessionAnalysis
+	Analyses        []*domain.Analysis
 	HasAnalysis     bool
-	LatestAnalysis  *domain.SessionAnalysis
+	LatestAnalysis  *domain.Analysis
 	AnalysisTypes   []string // List of analysis prompt names
 	TokenCount      int      // Estimated token count for markdown log
 }
@@ -44,7 +44,7 @@ type SessionsLoadedMsg struct {
 
 type AnalysisCompleteMsg struct {
 	SessionID string
-	Analysis  *domain.SessionAnalysis
+	Analysis  *domain.Analysis
 	Error     error
 }
 

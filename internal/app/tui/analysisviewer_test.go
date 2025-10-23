@@ -10,13 +10,13 @@ import (
 )
 
 func TestNewAnalysisViewerModel(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		ModelUsed:      "test-model",
-		AnalysisResult: "# Test Analysis\n\nThis is a test analysis result.",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:     "test-session",
+		ViewType:   "session",
+		PromptUsed: "test_prompt",
+		ModelUsed:  "test-model",
+		Result:     "# Test Analysis\n\nThis is a test analysis result.",
+		Timestamp:  time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -28,12 +28,12 @@ func TestNewAnalysisViewerModel(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_Init(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		AnalysisResult: "Test result",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
+		Result: "Test result",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -45,12 +45,12 @@ func TestAnalysisViewerModel_Init(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_UpdateWindowSize(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		AnalysisResult: "Test result",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
+		Result: "Test result",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -69,12 +69,12 @@ func TestAnalysisViewerModel_UpdateWindowSize(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_UpdateEsc(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session-abc",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		AnalysisResult: "Test result",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session-abc",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
+		Result: "Test result",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -101,12 +101,12 @@ func TestAnalysisViewerModel_UpdateEsc(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_UpdateScrolling(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		AnalysisResult: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
+		Result: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -130,12 +130,12 @@ func TestAnalysisViewerModel_UpdateScrolling(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_ViewNotReady(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
-		AnalysisResult: "Test result",
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
+		Result: "Test result",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -149,13 +149,13 @@ func TestAnalysisViewerModel_ViewNotReady(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_ViewReady(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session-xyz",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
+	analysis := &domain.Analysis{
+		ViewID:      "test-session-xyz",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
 		ModelUsed:      "test-model",
-		AnalysisResult: "# Analysis\n\nTest content",
-		AnalyzedAt:     time.Now(),
+		Result: "# Analysis\n\nTest content",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -173,13 +173,13 @@ func TestAnalysisViewerModel_ViewReady(t *testing.T) {
 }
 
 func TestAnalysisViewerModel_UpdateScrollKeys(t *testing.T) {
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
 		ModelUsed:      "test-model",
-		AnalysisResult: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8",
-		AnalyzedAt:     time.Now(),
+		Result: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8",
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -214,10 +214,10 @@ func TestAnalysisViewerModel_FooterScrollPercent(t *testing.T) {
 		longAnalysis += "Analysis line " + string(rune(i)) + "\n"
 	}
 
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisResult: longAnalysis,
-		AnalyzedAt:     time.Now(),
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		Result: longAnalysis,
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -245,13 +245,13 @@ func TestAnalysisViewerModel_RenderContent_Branches(t *testing.T) {
 		longResult += "# Heading\n\nParagraph text here.\n\n"
 	}
 
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session-long-analysis",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
+	analysis := &domain.Analysis{
+		ViewID:      "test-session-long-analysis",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
 		ModelUsed:      "test-model",
-		AnalysisResult: longResult,
-		AnalyzedAt:     time.Now(),
+		Result: longResult,
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)
@@ -277,13 +277,13 @@ func TestAnalysisViewerModel_RenderContent_Branches(t *testing.T) {
 
 func TestAnalysisViewerModel_RenderError(t *testing.T) {
 	// Test with empty analysis result to check error handling
-	analysis := &domain.SessionAnalysis{
-		SessionID:      "test-session",
-		AnalysisType:   "tool_analysis",
-		PromptName:     "test_prompt",
+	analysis := &domain.Analysis{
+		ViewID:      "test-session",
+		ViewType:   "session",
+		PromptUsed:     "test_prompt",
 		ModelUsed:      "test-model",
-		AnalysisResult: "", // Empty result
-		AnalyzedAt:     time.Now(),
+		Result: "", // Empty result
+		Timestamp:     time.Now(),
 	}
 
 	model := tui.NewAnalysisViewerModel(analysis)

@@ -94,6 +94,24 @@ func NewSessionAnalysisWithType(sessionID, analysisResult, modelUsed, promptUsed
 	}
 }
 
+// ToGenericAnalysis converts a SessionAnalysis to a generic Analysis
+func (sa *SessionAnalysis) ToGenericAnalysis() *Analysis {
+	return &Analysis{
+		ID:         sa.ID,
+		ViewID:     sa.SessionID,
+		ViewType:   "session",
+		Timestamp:  sa.AnalyzedAt,
+		Result:     sa.AnalysisResult,
+		ModelUsed:  sa.ModelUsed,
+		PromptUsed: sa.PromptUsed,
+		Metadata: map[string]interface{}{
+			"analysis_type":    sa.AnalysisType,
+			"prompt_name":      sa.PromptName,
+			"patterns_summary": sa.PatternsSummary,
+		},
+	}
+}
+
 // ToolSuggestion represents a suggested tool from analysis
 type ToolSuggestion struct {
 	Name        string

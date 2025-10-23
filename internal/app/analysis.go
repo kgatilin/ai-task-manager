@@ -564,6 +564,11 @@ func (s *AnalysisService) GetAnalysesBySessionID(ctx context.Context, sessionID 
 	return s.analysisRepo.GetAnalysesBySessionID(ctx, sessionID)
 }
 
+// GetAnalysesByViewID retrieves all generic analyses for a view ID (e.g., session ID)
+func (s *AnalysisService) GetAnalysesByViewID(ctx context.Context, viewID string) ([]*domain.Analysis, error) {
+	return s.analysisRepo.FindAnalysisByViewID(ctx, viewID)
+}
+
 // GetAllSessionIDs retrieves all session IDs, ordered by most recent first
 // If limit > 0, returns only the latest N sessions
 func (s *AnalysisService) GetAllSessionIDs(ctx context.Context, limit int) ([]string, error) {

@@ -25,7 +25,7 @@ var (
 
 // AnalysisViewerModel displays the full analysis in a scrollable view
 type AnalysisViewerModel struct {
-	analysis *domain.SessionAnalysis
+	analysis *domain.Analysis
 	viewport viewport.Model
 	width    int
 	height   int
@@ -33,7 +33,7 @@ type AnalysisViewerModel struct {
 }
 
 // NewAnalysisViewerModel creates a new analysis viewer
-func NewAnalysisViewerModel(analysis *domain.SessionAnalysis) AnalysisViewerModel {
+func NewAnalysisViewerModel(analysis *domain.Analysis) AnalysisViewerModel {
 	return AnalysisViewerModel{
 		analysis: analysis,
 	}
@@ -98,7 +98,14 @@ func (m AnalysisViewerModel) View() string {
 }
 
 func (m AnalysisViewerModel) headerView() string {
-	title := fmt.Sprintf("Analysis: %s (%s)", m.analysis.SessionID[:8], m.analysis.PromptName)
+	// For session analyses, display session ID. For other views, display view type
+	var viewInfo string
+	if m.analysis.ViewType == "session" {
+		viewInfo = m.analysis.ViewID[:8]
+	} else {
+		viewInfo = fmt.Sprintf("%s: %s", m.analysis.ViewType, m.analysis.ViewID)
+	}
+	title := fmt.Sprintf("Analysis: %s (%s)", viewInfo, m.analysis.PromptUsed)
 	return viewerTitleStyle.Render(title)
 }
 
@@ -121,11 +128,20 @@ func (m AnalysisViewerModel) renderContent() string {
 
 	// Metadata header
 	b.WriteString(detailHeaderStyle.Render("Metadata") + "\n\n")
-	b.WriteString(fmt.Sprintf("Session ID:  %s\n", m.analysis.SessionID))
-	b.WriteString(fmt.Sprintf("Type:        %s\n", m.analysis.AnalysisType))
-	b.WriteString(fmt.Sprintf("Prompt:      %s\n", m.analysis.PromptName))
+	b.WriteString(fmt.Sprintf("View ID:     %s\n", m.analysis.ViewID))
+	b.WriteString(fmt.Sprintf("View Type:   %s\n", m.analysis.ViewType))
+	b.WriteString(fmt.Sprintf("Prompt:      %s\n", m.analysis.PromptUsed))
 	b.WriteString(fmt.Sprintf("Model:       %s\n", m.analysis.ModelUsed))
-	b.WriteString(fmt.Sprintf("Analyzed At: %s\n\n", m.analysis.AnalyzedAt.Format("2006-01-02 15:04:05")))
+	b.WriteString(fmt.Sprintf("Analyzed At: %s\n", m.analysis.Timestamp.Format("2006-01-02 15:04:05")))
+
+	// Display metadata if present
+	if len(m.analysis.Metadata) > 0 {
+		b.WriteString("\nAdditional Metadata:\n")
+		for key, value := range m.analysis.Metadata {
+			b.WriteString(fmt.Sprintf("  %s: %v\n", key, value))
+		}
+	}
+	b.WriteString("\n")
 
 	// Render analysis content as markdown
 	b.WriteString(detailHeaderStyle.Render("Analysis Result") + "\n\n")
@@ -137,16 +153,16 @@ func (m AnalysisViewerModel) renderContent() string {
 	)
 
 	if err == nil {
-		renderedMarkdown, err := renderer.Render(m.analysis.AnalysisResult)
+		renderedMarkdown, err := renderer.Render(m.analysis.Result)
 		if err == nil {
 			b.WriteString(renderedMarkdown)
 		} else {
 			// Fallback to raw text if rendering fails
-			b.WriteString(fmt.Sprintf("[Render error: %v]\n%s", err, m.analysis.AnalysisResult))
+			b.WriteString(fmt.Sprintf("[Render error: %v]\n%s", err, m.analysis.Result))
 		}
 	} else {
 		// Fallback to raw text if renderer creation fails
-		b.WriteString(fmt.Sprintf("[Renderer creation error: %v]\n%s", err, m.analysis.AnalysisResult))
+		b.WriteString(fmt.Sprintf("[Renderer creation error: %v]\n%s", err, m.analysis.Result))
 	}
 
 	b.WriteString("\n")

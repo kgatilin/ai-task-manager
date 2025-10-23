@@ -191,12 +191,12 @@ func TestSessionDetailModel_UpdateReanalyze(t *testing.T) {
 		LastEvent:  time.Now(),
 		EventCount: 5,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-session-456",
-				AnalysisType:   "tool_analysis",
-				PromptName:     "test_prompt",
-				AnalysisResult: "test result",
+				ViewID:      "test-session-456",
+				ViewType: "session",
+				PromptUsed:     "test_prompt",
+				Result: "test result",
 			},
 		},
 	}
@@ -375,10 +375,10 @@ func TestSessionDetailModel_FooterView_AllPaths(t *testing.T) {
 		LastEvent:  time.Now(),
 		EventCount: 5,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-with-analysis",
-				AnalysisResult: "test",
+				ViewID:      "test-with-analysis",
+				Result: "test",
 			},
 		},
 	}
@@ -400,10 +400,10 @@ func TestSessionDetailModel_FooterView_AllPaths(t *testing.T) {
 		LastEvent:  time.Now(),
 		EventCount: 100,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-long",
-				AnalysisResult: string(make([]byte, 5000)), // Very long
+				ViewID:      "test-long",
+				Result: string(make([]byte, 5000)), // Very long
 			},
 		},
 	}
@@ -437,22 +437,22 @@ func TestSessionDetailModel_RenderContent_CompleteCoverage(t *testing.T) {
 		TokenCount:    50000, // With token count
 		HasAnalysis:   true,
 		AnalysisCount: 2,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-multi",
-				AnalysisType:   "analysis_type_1",
-				PromptName:     "prompt_1",
+				ViewID:      "test-multi",
+				ViewType: "analysis_type_1",
+				PromptUsed:     "prompt_1",
 				ModelUsed:      "model_1",
-				AnalysisResult: preview, // Exactly 300 chars
-				AnalyzedAt:     time.Now().Add(-1 * time.Hour),
+				Result: preview, // Exactly 300 chars
+				Timestamp:     time.Now().Add(-1 * time.Hour),
 			},
 			{
-				SessionID:      "test-multi",
-				AnalysisType:   "analysis_type_2",
-				PromptName:     "prompt_2",
+				ViewID: "test-multi",
+				ViewType: "analysis_type_2",
+				PromptUsed:     "prompt_2",
 				ModelUsed:      "model_2",
-				AnalysisResult: string(make([]byte, 500)), // > 300, will truncate
-				AnalyzedAt:     time.Now(),
+				Result: string(make([]byte, 500)), // > 300, will truncate
+				Timestamp:     time.Now(),
 			},
 		},
 	}
@@ -500,10 +500,10 @@ func TestSessionDetailModel_RenderDifferentConfigurations(t *testing.T) {
 		LastEvent:   time.Now(),
 		EventCount:  5,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-300",
-				AnalysisResult: preview300, // Exactly 300 chars
+				ViewID:      "test-300",
+				Result: preview300, // Exactly 300 chars
 			},
 		},
 	}
@@ -527,10 +527,10 @@ func TestSessionDetailModel_RenderDifferentConfigurations(t *testing.T) {
 		LastEvent:   time.Now(),
 		EventCount:  5,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-301",
-				AnalysisResult: preview301, // 301 chars - should truncate
+				ViewID:      "test-301",
+				Result: preview301, // 301 chars - should truncate
 			},
 		},
 	}
@@ -583,13 +583,13 @@ func TestSessionDetailModel_UpdateOtherKeys(t *testing.T) {
 		LastEvent:  time.Now(),
 		EventCount: 10,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-session",
-				AnalysisType:   "tool_analysis",
-				PromptName:     "test_prompt",
-				AnalysisResult: "Long analysis result\n" + string(make([]byte, 1000)),
-				AnalyzedAt:     time.Now(),
+				ViewID:      "test-session",
+				ViewType: "session",
+				PromptUsed:     "test_prompt",
+				Result: "Long analysis result\n" + string(make([]byte, 1000)),
+				Timestamp:     time.Now(),
 			},
 		},
 	}
@@ -671,10 +671,10 @@ func TestSessionDetailModel_ScrollPercent(t *testing.T) {
 		LastEvent:  time.Now(),
 		EventCount: 5,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-scroll",
-				AnalysisResult: longContent,
+				ViewID:      "test-scroll",
+				Result: longContent,
 			},
 		},
 	}
@@ -740,22 +740,22 @@ func TestSessionDetailModel_RenderContent_AllBranches(t *testing.T) {
 		TokenCount:    5000,
 		HasAnalysis:   true,
 		AnalysisCount: 2,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-session-with-analysis",
-				AnalysisType:   "type1",
-				PromptName:     "prompt1",
+				ViewID:      "test-session-with-analysis",
+				ViewType: "type1",
+				PromptUsed:     "prompt1",
 				ModelUsed:      "model1",
-				AnalysisResult: "Short result",
-				AnalyzedAt:     time.Now(),
+				Result: "Short result",
+				Timestamp:     time.Now(),
 			},
 			{
-				SessionID:      "test-session-with-analysis",
-				AnalysisType:   "type2",
-				PromptName:     "prompt2",
+				ViewID: "test-session-with-analysis",
+				ViewType: "type2",
+				PromptUsed:     "prompt2",
 				ModelUsed:      "model2",
-				AnalysisResult: "Another short result",
-				AnalyzedAt:     time.Now(),
+				Result: "Another short result",
+				Timestamp:     time.Now(),
 			},
 		},
 	}
@@ -779,14 +779,14 @@ func TestSessionDetailModel_RenderWithTokenCount(t *testing.T) {
 		EventCount: 10,
 		TokenCount: 50000, // Large token count to test rendering
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-session",
-				AnalysisType:   "tool_analysis",
-				PromptName:     "test_prompt",
+				ViewID:      "test-session",
+				ViewType: "session",
+				PromptUsed:     "test_prompt",
 				ModelUsed:      "test-model",
-				AnalysisResult: "Test analysis result with some content",
-				AnalyzedAt:     time.Now(),
+				Result: "Test analysis result with some content",
+				Timestamp:     time.Now(),
 			},
 		},
 	}
@@ -845,30 +845,30 @@ func TestSessionDetailModel_MultipleAnalyses(t *testing.T) {
 		EventCount:    10,
 		AnalysisCount: 3,
 		HasAnalysis:   true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-session-multi",
-				AnalysisType:   "analysis_1",
-				PromptName:     "prompt_1",
+				ViewID:      "test-session-multi",
+				ViewType: "analysis_1",
+				PromptUsed:     "prompt_1",
 				ModelUsed:      "model_1",
-				AnalysisResult: "Result 1 with some content",
-				AnalyzedAt:     time.Now().Add(-2 * time.Hour),
+				Result: "Result 1 with some content",
+				Timestamp:     time.Now().Add(-2 * time.Hour),
 			},
 			{
-				SessionID:      "test-session-multi",
-				AnalysisType:   "analysis_2",
-				PromptName:     "prompt_2",
+				ViewID: "test-session-multi",
+				ViewType: "analysis_2",
+				PromptUsed:     "prompt_2",
 				ModelUsed:      "model_2",
-				AnalysisResult: "Result 2 with different content",
-				AnalyzedAt:     time.Now().Add(-1 * time.Hour),
+				Result: "Result 2 with different content",
+				Timestamp:     time.Now().Add(-1 * time.Hour),
 			},
 			{
-				SessionID:      "test-session-multi",
-				AnalysisType:   "analysis_3",
-				PromptName:     "prompt_3",
+				ViewID: "test-session-multi",
+				ViewType: "analysis_3",
+				PromptUsed:     "prompt_3",
 				ModelUsed:      "model_3",
-				AnalysisResult: "Result 3 with more content here",
-				AnalyzedAt:     time.Now(),
+				Result: "Result 3 with more content here",
+				Timestamp:     time.Now(),
 			},
 		},
 	}
@@ -900,13 +900,13 @@ func TestSessionDetailModel_LongAnalysisPreview(t *testing.T) {
 		LastEvent:   time.Now(),
 		EventCount:  5,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-session-long",
-				AnalysisType:   "tool_analysis",
-				PromptName:     "test_prompt",
-				AnalysisResult: longResult, // > 300 chars to trigger truncation
-				AnalyzedAt:     time.Now(),
+				ViewID:      "test-session-long",
+				ViewType: "session",
+				PromptUsed:     "test_prompt",
+				Result: longResult, // > 300 chars to trigger truncation
+				Timestamp:     time.Now(),
 			},
 		},
 	}
@@ -956,14 +956,14 @@ func TestSessionDetailModel_View_AfterInit(t *testing.T) {
 		LastEvent:  time.Now(),
 		EventCount: 5,
 		HasAnalysis: true,
-		Analyses: []*domain.SessionAnalysis{
+		Analyses: []*domain.Analysis{
 			{
-				SessionID:      "test-session",
-				AnalysisType:   "tool_analysis",
-				PromptName:     "test_prompt",
+				ViewID:      "test-session",
+				ViewType: "session",
+				PromptUsed:     "test_prompt",
 				ModelUsed:      "test-model",
-				AnalysisResult: "Test result",
-				AnalyzedAt:     time.Now(),
+				Result: "Test result",
+				Timestamp:     time.Now(),
 			},
 		},
 		TokenCount: 1500,

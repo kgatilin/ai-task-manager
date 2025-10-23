@@ -287,8 +287,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.saveToMarkdown(msg.SessionID)
 
 	case ViewAnalysisMsg:
-		// Get the analysis for this session
-		analyses, err := m.analysisService.GetAnalysesBySessionID(m.ctx, msg.SessionID)
+		// Get the analysis for this session (using generic analysis)
+		analyses, err := m.analysisService.GetAnalysesByViewID(m.ctx, msg.SessionID)
 		if err != nil || len(analyses) == 0 {
 			m.err = fmt.Errorf("no analysis found for session")
 			return m, nil
@@ -456,8 +456,8 @@ func (m *AppModel) loadSessions() tea.Msg {
 			HasAnalysis:   getBoolField(fields, "has_analysis", false),
 		}
 
-		// Get analyses from analysis service (still needed for detailed analysis data)
-		analyses, err := m.analysisService.GetAnalysesBySessionID(m.ctx, entity.GetID())
+		// Get analyses from analysis service (using generic analysis)
+		analyses, err := m.analysisService.GetAnalysesByViewID(m.ctx, entity.GetID())
 		if err == nil {
 			sessionInfo.Analyses = analyses
 			if len(analyses) > 0 {
@@ -510,10 +510,14 @@ func getStringSliceField(fields map[string]interface{}, key string) []string {
 
 func (m *AppModel) analyzeSession(sessionID, promptName string) tea.Cmd {
 	return func() tea.Msg {
-		analysis, err := m.analysisService.AnalyzeSessionWithPrompt(m.ctx, sessionID, promptName)
+		sessionAnalysis, err := m.analysisService.AnalyzeSessionWithPrompt(m.ctx, sessionID, promptName)
+		var genericAnalysis *domain.Analysis
+		if sessionAnalysis != nil {
+			genericAnalysis = sessionAnalysis.ToGenericAnalysis()
+		}
 		return AnalysisCompleteMsg{
 			SessionID: sessionID,
-			Analysis:  analysis,
+			Analysis:  genericAnalysis,
 			Error:     err,
 		}
 	}
