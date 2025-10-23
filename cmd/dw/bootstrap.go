@@ -49,6 +49,12 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 		return nil, fmt.Errorf("failed to create repository: %w", err)
 	}
 
+	// 3b. Initialize database schema (including analyses table)
+	ctx := context.Background()
+	if err := repo.Initialize(ctx); err != nil {
+		return nil, fmt.Errorf("failed to initialize database: %w", err)
+	}
+
 	// 4. Load config (keep internally, cmd doesn't need it)
 	configLoader := infra.NewConfigLoader(logger)
 	config, err := configLoader.LoadConfig(configPath)
