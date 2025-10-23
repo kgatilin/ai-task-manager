@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/kgatilin/darwinflow-pub/internal/domain"
 )
@@ -15,8 +16,9 @@ import (
 // ClaudeCodeLLM implements the domain.LLM interface using the Claude CLI tool
 // It wraps the claude command-line tool for AI interactions
 type ClaudeCodeLLM struct {
-	logger *Logger
-	config *domain.Config
+	logger      *Logger
+	config      *domain.Config
+	errorLogger *ErrorLogger
 }
 
 // NewClaudeCodeLLM creates a new Claude Code LLM instance with default config
@@ -111,10 +113,50 @@ func (l *ClaudeCodeLLM) Query(ctx context.Context, prompt string, options *domai
 	if l.logger != nil {
 		l.logger.Debug("Running Claude CLI command...")
 	}
-	if err := cmd.Run(); err != nil {
+
+	startTime := time.Now()
+	err := cmd.Run()
+	duration := time.Since(startTime)
+
+	if err != nil {
 		if l.logger != nil {
 			l.logger.Error("Claude CLI command failed: %v", err)
 		}
+
+		// Log detailed error to error log file
+		if l.errorLogger != nil {
+			exitCode := -1
+			if cmd.ProcessState != nil {
+				exitCode = cmd.ProcessState.ExitCode()
+			}
+
+			// Estimate token count
+			tokenEstimate := l.EstimateTokens(prompt)
+
+			// Sanitize command for logging (avoid logging full prompt)
+			sanitizedCmd := "claude"
+			if model != "" {
+				sanitizedCmd += " --model " + model
+			}
+			if systemPromptMode != "" {
+				sanitizedCmd += " --system-prompt-mode " + systemPromptMode
+			}
+			if len(allowedTools) > 0 {
+				sanitizedCmd += " --allowed-tools " + strings.Join(allowedTools, ",")
+			}
+
+			l.errorLogger.LogError("LLM_EXECUTION_FAILED", map[string]interface{}{
+				"model":          model,
+				"tokens_estimate": tokenEstimate,
+				"duration_ms":    duration.Milliseconds(),
+				"exit_code":      exitCode,
+				"stdout":         stdout.String(),
+				"stderr":         stderr.String(),
+				"command":        sanitizedCmd,
+				"prompt_length":  len(prompt),
+			}, err)
+		}
+
 		return "", fmt.Errorf("claude command failed: %w, stderr: %s", err, stderr.String())
 	}
 	if l.logger != nil {
@@ -134,4 +176,9 @@ func (l *ClaudeCodeLLM) EstimateTokens(prompt string) int {
 // GetModel returns the currently configured model
 func (l *ClaudeCodeLLM) GetModel() string {
 	return l.config.Analysis.Model
+}
+
+// SetErrorLogger sets the error logger for detailed error logging
+func (l *ClaudeCodeLLM) SetErrorLogger(errorLogger *ErrorLogger) {
+	l.errorLogger = errorLogger
 }

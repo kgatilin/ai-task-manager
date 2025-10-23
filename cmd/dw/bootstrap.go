@@ -70,38 +70,51 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 		logger.SetLevel(logLevel)
 	}
 
-	// 5. Create app services
+	// 5. Create error logger
+	errorLogger, err := infra.NewErrorLogger(dbPath)
+	if err != nil {
+		logger.Warn("Failed to create error logger: %v", err)
+		// Continue without error logging (non-fatal)
+	}
+
+	// 6. Create app services
 	logsService := app.NewLogsService(repo, repo)
 	llm := infra.NewClaudeCodeLLMWithConfig(logger, config)
+	if errorLogger != nil {
+		llm.SetErrorLogger(errorLogger)
+	}
 	analysisService := app.NewAnalysisService(repo, repo, logsService, llm, logger, config)
+	if errorLogger != nil {
+		analysisService.SetErrorLogger(errorLogger)
+	}
 
 	// Set the session view factory using the claude_code plugin
 	analysisService.SetSessionViewFactory(func(sessionID string, events []pluginsdk.Event) pluginsdk.AnalysisView {
 		return claude_code.NewSessionView(sessionID, events)
 	})
 
-	// 6. Create setup service (for framework-level initialization)
+	// 7. Create setup service (for framework-level initialization)
 	// SetupService handles framework infrastructure only (database, schema, etc.)
 	// Plugin-specific setup (hooks, etc.) is handled by plugin init commands
 	setupService := app.NewSetupService(repo, logger)
 
-	// 7. Get working directory
+	// 8. Get working directory
 	workingDir, err := os.Getwd()
 	if err != nil {
 		workingDir = "."
 	}
 
-	// 8. Create event bus - share the same database connection
+	// 9. Create event bus - share the same database connection
 	// Note: The bus_events table is created in SQLiteEventRepository.Initialize()
 	// So we just create the in-memory event bus with the shared repo
 	// Create a separate bus repo that wraps the DB connection
 	busRepo := infra.NewSQLiteEventBusRepositoryFromRepo(repo)
 	eventBus := infra.NewInMemoryEventBus(busRepo)
 
-	// 9. Create plugin registry
+	// 10. Create plugin registry
 	pluginRegistry := app.NewPluginRegistry(logger)
 
-	// 10. Register built-in plugins (cmd layer handles plugin imports)
+	// 11. Register built-in plugins (cmd layer handles plugin imports)
 	if err := RegisterBuiltInPlugins(
 		pluginRegistry,
 		analysisService,
@@ -116,7 +129,7 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 		return nil, fmt.Errorf("failed to register built-in plugins: %w", err)
 	}
 
-	// 10. Load external plugins from .darwinflow/plugins.yaml
+	// 12. Load external plugins from .darwinflow/plugins.yaml
 	// dbPath is .darwinflow/logs/events.db, so we need to go up two levels to .darwinflow
 	pluginsConfigPath := filepath.Join(filepath.Dir(filepath.Dir(dbPath)), "plugins.yaml")
 	if _, err := os.Stat(pluginsConfigPath); err == nil {
@@ -152,7 +165,7 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 		}
 	}
 
-	// 11. Create command registry
+	// 13. Create command registry
 	commandRegistry := app.NewCommandRegistry(pluginRegistry, logger)
 
 	return &AppServices{

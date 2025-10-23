@@ -58,10 +58,23 @@ func uiCommand(args []string) {
 		os.Exit(1)
 	}
 
+	// Create error logger
+	errorLogger, err := infra.NewErrorLogger(*dbPath)
+	if err != nil {
+		logger.Warn("Failed to create error logger: %v", err)
+		// Continue without error logging (non-fatal)
+	}
+
 	// Create services
 	logsService := app.NewLogsService(repo, repo)
 	llm := infra.NewClaudeCodeLLMWithConfig(logger, config)
+	if errorLogger != nil {
+		llm.SetErrorLogger(errorLogger)
+	}
 	analysisService := app.NewAnalysisService(repo, repo, logsService, llm, logger, config)
+	if errorLogger != nil {
+		analysisService.SetErrorLogger(errorLogger)
+	}
 
 	// Set the session view factory using the claude_code plugin
 	analysisService.SetSessionViewFactory(func(sessionID string, events []pluginsdk.Event) pluginsdk.AnalysisView {

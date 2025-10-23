@@ -45,6 +45,12 @@ type Logger interface {
 // This allows the service to work with views without importing plugin packages directly
 type SessionViewFactory func(sessionID string, events []pluginsdk.Event) pluginsdk.AnalysisView
 
+// ErrorLogger interface for logging detailed errors
+type ErrorLogger interface {
+	LogError(category string, context map[string]interface{}, err error)
+	GetLogPath() string
+}
+
 // AnalysisService handles session analysis operations
 type AnalysisService struct {
 	eventRepo         domain.EventRepository
@@ -54,6 +60,7 @@ type AnalysisService struct {
 	logger            Logger
 	config            *domain.Config
 	sessionViewFactory SessionViewFactory // Injected factory for creating session views
+	errorLogger       ErrorLogger         // Optional error logger for detailed error logging
 }
 
 // NewAnalysisService creates a new analysis service
@@ -85,6 +92,11 @@ func (s *AnalysisService) SetSessionViewFactory(factory SessionViewFactory) {
 	s.sessionViewFactory = factory
 }
 
+// SetErrorLogger sets the error logger for detailed error logging
+func (s *AnalysisService) SetErrorLogger(errorLogger ErrorLogger) {
+	s.errorLogger = errorLogger
+}
+
 // AnalyzeSession analyzes a specific session with the default analysis prompt
 // This is kept for backward compatibility - uses "tool_analysis" prompt
 func (s *AnalysisService) AnalyzeSession(ctx context.Context, sessionID string) (*domain.SessionAnalysis, error) {
@@ -104,6 +116,12 @@ func (s *AnalysisService) AnalyzeSessionWithPrompt(ctx context.Context, sessionI
 	events, err := s.eventRepo.FindByQuery(ctx, query)
 	if err != nil {
 		s.logger.Error("Failed to get session events: %v", err)
+		if s.errorLogger != nil {
+			s.errorLogger.LogError("ANALYSIS_QUERY_FAILED", map[string]interface{}{
+				"session_id":  sessionID,
+				"prompt_name": promptName,
+			}, err)
+		}
 		return nil, fmt.Errorf("failed to get session events: %w", err)
 	}
 
@@ -155,6 +173,14 @@ func (s *AnalysisService) AnalyzeSessionWithPrompt(ctx context.Context, sessionI
 	// Call the view-based analysis method
 	analysis, err := s.AnalyzeView(ctx, sessionView, promptName)
 	if err != nil {
+		if s.errorLogger != nil {
+			s.errorLogger.LogError("ANALYSIS_VIEW_FAILED", map[string]interface{}{
+				"session_id":  sessionID,
+				"prompt_name": promptName,
+				"view_type":   sessionView.GetType(),
+				"event_count": len(pluginEvents),
+			}, err)
+		}
 		return nil, err
 	}
 
@@ -181,6 +207,13 @@ func (s *AnalysisService) AnalyzeSessionWithPrompt(ctx context.Context, sessionI
 	// (The generic Analysis was already saved by AnalyzeView)
 	if err := s.analysisRepo.SaveAnalysis(ctx, sessionAnalysis); err != nil {
 		s.logger.Error("Failed to save session analysis: %v", err)
+		if s.errorLogger != nil {
+			s.errorLogger.LogError("ANALYSIS_SAVE_FAILED", map[string]interface{}{
+				"session_id":  sessionID,
+				"prompt_name": promptName,
+				"analysis_id": sessionAnalysis.ID,
+			}, err)
+		}
 		return nil, fmt.Errorf("failed to save session analysis: %w", err)
 	}
 
@@ -216,6 +249,18 @@ func (s *AnalysisService) AnalyzeView(ctx context.Context, view pluginsdk.Analys
 	analysisResult, err := s.llm.Query(ctx, prompt, nil)
 	if err != nil {
 		s.logger.Error("Failed to execute LLM analysis: %v", err)
+		// Log to error file with error log location
+		if s.errorLogger != nil {
+			s.errorLogger.LogError("LLM_QUERY_FAILED", map[string]interface{}{
+				"view_id":      view.GetID(),
+				"view_type":    view.GetType(),
+				"prompt_name":  promptName,
+				"prompt_size":  len(prompt),
+				"model":        s.config.Analysis.Model,
+			}, err)
+			// Include error log location in error message
+			return nil, fmt.Errorf("failed to execute LLM analysis: %w (detailed error logged to %s)", err, s.errorLogger.GetLogPath())
+		}
 		return nil, fmt.Errorf("failed to execute LLM analysis: %w", err)
 	}
 	s.logger.Debug("LLM returned %d characters", len(analysisResult))
