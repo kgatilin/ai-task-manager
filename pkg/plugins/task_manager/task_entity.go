@@ -9,22 +9,26 @@ import (
 // It implements IExtensible and ITrackable interfaces.
 type TaskEntity struct {
 	ID          string    `json:"id"`
+	TrackID     string    `json:"track_id"` // Parent track ID
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Status      string    `json:"status"` // todo, in-progress, done
 	Priority    string    `json:"priority"`
+	Branch      string    `json:"branch"` // Git branch name (optional)
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // NewTaskEntity creates a new task entity
-func NewTaskEntity(id, title, description, status, priority string, createdAt, updatedAt time.Time) *TaskEntity {
+func NewTaskEntity(id, trackID, title, description, status, priority, branch string, createdAt, updatedAt time.Time) *TaskEntity {
 	return &TaskEntity{
 		ID:          id,
+		TrackID:     trackID,
 		Title:       title,
 		Description: description,
 		Status:      status,
 		Priority:    priority,
+		Branch:      branch,
 		CreatedAt:   createdAt,
 		UpdatedAt:   updatedAt,
 	}
@@ -57,10 +61,12 @@ func (t *TaskEntity) GetField(name string) interface{} {
 func (t *TaskEntity) GetAllFields() map[string]interface{} {
 	return map[string]interface{}{
 		"id":          t.ID,
+		"track_id":    t.TrackID,
 		"title":       t.Title,
 		"description": t.Description,
 		"status":      t.Status,
 		"priority":    t.Priority,
+		"branch":      t.Branch,
 		"created_at":  t.CreatedAt,
 		"updated_at":  t.UpdatedAt,
 		"progress":    t.GetProgress(),

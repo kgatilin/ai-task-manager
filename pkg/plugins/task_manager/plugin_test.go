@@ -111,10 +111,12 @@ func TestTaskEntityGetters(t *testing.T) {
 	now := time.Now().UTC()
 	entity := task_manager.NewTaskEntity(
 		"task-123",
+		"track-test",
 		"Test Task",
 		"Test Description",
 		"todo",
 		"high",
+		"",
 		now,
 		now,
 	)
@@ -151,7 +153,7 @@ func TestTaskEntityProgress(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		entity := task_manager.NewTaskEntity("id", "title", "desc", test.status, "medium", now, now)
+		entity := task_manager.NewTaskEntity("id", "track-test", "title", "desc", test.status, "medium", "", now, now)
 		progress := entity.GetProgress()
 		if progress != test.expected {
 			t.Errorf("for status %q, expected progress %.1f, got %.1f", test.status, test.expected, progress)
@@ -390,7 +392,7 @@ func TestUpdateCommand(t *testing.T) {
 	taskID := "task-456"
 	taskFile := filepath.Join(tasksDir, taskID+".json")
 	now := time.Now().UTC()
-	task := task_manager.NewTaskEntity(taskID, "Test Task", "Description", "todo", "medium", now, now)
+	task := task_manager.NewTaskEntity(taskID, "track-test", "Test Task", "Description", "todo", "medium", "", now, now)
 
 	data, err := task_manager.MarshalTask(task)
 	if err != nil {
@@ -499,7 +501,7 @@ func TestUpdateEntity(t *testing.T) {
 	taskID := "task-123"
 	taskFile := filepath.Join(tasksDir, taskID+".json")
 	now := time.Now().UTC()
-	task := task_manager.NewTaskEntity(taskID, "Test Task", "Description", "todo", "medium", now, now)
+	task := task_manager.NewTaskEntity(taskID, "track-test", "Test Task", "Description", "todo", "medium", "", now, now)
 
 	data, err := task_manager.MarshalTask(task)
 	if err != nil {

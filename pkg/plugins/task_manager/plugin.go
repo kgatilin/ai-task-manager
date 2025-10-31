@@ -2,6 +2,7 @@ package task_manager
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -21,15 +22,18 @@ var (
 
 // TaskManagerPlugin provides task management with real-time file watching.
 // It implements Plugin, IEntityProvider, ICommandProvider, and IEventEmitter interfaces.
+// It can optionally use a RoadmapRepository for hierarchical roadmap storage.
 type TaskManagerPlugin struct {
 	logger      pluginsdk.Logger
 	workingDir  string
 	tasksDir    string
 	fileWatcher *FileWatcher
 	eventBus    pluginsdk.EventBus
+	// Optional: Database repository for hierarchical roadmap model
+	repository RoadmapRepository
 }
 
-// NewTaskManagerPlugin creates a new task manager plugin
+// NewTaskManagerPlugin creates a new task manager plugin with file-based storage
 // eventBus is passed as interface{} to allow cmd package to avoid importing pluginsdk.
 func NewTaskManagerPlugin(logger pluginsdk.Logger, workingDir string, eventBus interface{}) (*TaskManagerPlugin, error) {
 	tasksDir := filepath.Join(workingDir, ".darwinflow", "tasks")
@@ -54,6 +58,65 @@ func NewTaskManagerPlugin(logger pluginsdk.Logger, workingDir string, eventBus i
 		fileWatcher: fileWatcher,
 		eventBus:    eb,
 	}, nil
+}
+
+// NewTaskManagerPluginWithDatabase creates a new task manager plugin with SQLite database support
+// for hierarchical roadmap storage. The database connection is owned by the caller.
+// eventBus is passed as interface{} to allow cmd package to avoid importing pluginsdk.
+func NewTaskManagerPluginWithDatabase(
+	logger pluginsdk.Logger,
+	workingDir string,
+	db *sql.DB,
+	eventBus interface{},
+) (*TaskManagerPlugin, error) {
+	tasksDir := filepath.Join(workingDir, ".darwinflow", "tasks")
+
+	// Initialize database schema
+	if err := InitSchema(db); err != nil {
+		return nil, fmt.Errorf("failed to initialize database schema: %w", err)
+	}
+
+	// Migrate existing file-based tasks if any exist
+	if err := MigrateFromFileStorage(db, tasksDir); err != nil {
+		return nil, fmt.Errorf("failed to migrate tasks from file storage: %w", err)
+	}
+
+	fileWatcher, err := NewFileWatcher(logger, tasksDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file watcher: %w", err)
+	}
+
+	// Type assert eventBus to pluginsdk.EventBus
+	var eb pluginsdk.EventBus
+	if eventBus != nil {
+		if bus, ok := eventBus.(pluginsdk.EventBus); ok {
+			eb = bus
+		}
+	}
+
+	// Create base repository and wrap with event emission
+	baseRepository := NewSQLiteRoadmapRepository(db, logger)
+	var repository RoadmapRepository = baseRepository
+
+	// Wrap with event-emitting decorator if eventBus is available
+	if eb != nil {
+		repository = NewEventEmittingRepository(baseRepository, eb, logger)
+	}
+
+	return &TaskManagerPlugin{
+		logger:      logger,
+		workingDir:  workingDir,
+		tasksDir:    tasksDir,
+		fileWatcher: fileWatcher,
+		eventBus:    eb,
+		repository:  repository,
+	}, nil
+}
+
+// GetRepository returns the optional RoadmapRepository for database operations
+// Returns nil if the plugin was initialized without database support
+func (p *TaskManagerPlugin) GetRepository() RoadmapRepository {
+	return p.repository
 }
 
 // GetInfo returns metadata about this plugin (SDK interface)
@@ -210,6 +273,39 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&CreateCommand{plugin: p},
 		&ListCommand{plugin: p},
 		&UpdateCommand{plugin: p},
+		// Roadmap commands
+		&RoadmapInitCommand{Plugin: p},
+		&RoadmapShowCommand{Plugin: p},
+		&RoadmapUpdateCommand{Plugin: p},
+		// Track commands
+		&TrackCreateCommand{Plugin: p},
+		&TrackListCommand{Plugin: p},
+		&TrackShowCommand{Plugin: p},
+		&TrackUpdateCommand{Plugin: p},
+		&TrackDeleteCommand{Plugin: p},
+		&TrackAddDependencyCommand{Plugin: p},
+		&TrackRemoveDependencyCommand{Plugin: p},
+		// Task commands (database-backed hierarchical model)
+		&TaskCreateCommand{Plugin: p},
+		&TaskListCommand{Plugin: p},
+		&TaskShowCommand{Plugin: p},
+		&TaskUpdateCommand{Plugin: p},
+		&TaskDeleteCommand{Plugin: p},
+		&TaskMoveCommand{Plugin: p},
+		&TaskMigrateCommand{Plugin: p},
+		// Iteration commands
+		&IterationCreateCommand{Plugin: p},
+		&IterationListCommand{Plugin: p},
+		&IterationShowCommand{Plugin: p},
+		&IterationCurrentCommand{Plugin: p},
+		&IterationUpdateCommand{Plugin: p},
+		&IterationDeleteCommand{Plugin: p},
+		&IterationAddTaskCommand{Plugin: p},
+		&IterationRemoveTaskCommand{Plugin: p},
+		&IterationStartCommand{Plugin: p},
+		&IterationCompleteCommand{Plugin: p},
+		// TUI command
+		&TUICommand{Plugin: p},
 	}
 }
 
