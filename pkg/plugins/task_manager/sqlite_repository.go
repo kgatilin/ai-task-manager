@@ -150,7 +150,7 @@ func (r *SQLiteRoadmapRepository) SaveTrack(ctx context.Context, track *TrackEnt
 	// Insert track
 	_, err = tx.ExecContext(
 		ctx,
-		"INSERT INTO tracks (id, roadmap_id, title, description, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO tracks (id, roadmap_id, title, description, status, rank, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		track.ID, track.RoadmapID, track.Title, track.Description, track.Status, track.Rank, track.CreatedAt, track.UpdatedAt,
 	)
 	if err != nil {
@@ -182,7 +182,7 @@ func (r *SQLiteRoadmapRepository) GetTrack(ctx context.Context, id string) (*Tra
 
 	err := r.db.QueryRowContext(
 		ctx,
-		"SELECT id, roadmap_id, title, description, status, priority, created_at, updated_at FROM tracks WHERE id = ?",
+		"SELECT id, roadmap_id, title, description, status, rank, created_at, updated_at FROM tracks WHERE id = ?",
 		id,
 	).Scan(&track.ID, &track.RoadmapID, &track.Title, &track.Description, &track.Status, &track.Rank, &track.CreatedAt, &track.UpdatedAt)
 
@@ -205,7 +205,7 @@ func (r *SQLiteRoadmapRepository) GetTrack(ctx context.Context, id string) (*Tra
 
 // ListTracks returns all tracks for a roadmap, optionally filtered.
 func (r *SQLiteRoadmapRepository) ListTracks(ctx context.Context, roadmapID string, filters TrackFilters) ([]*TrackEntity, error) {
-	query := "SELECT id, roadmap_id, title, description, status, priority, created_at, updated_at FROM tracks WHERE roadmap_id = ?"
+	query := "SELECT id, roadmap_id, title, description, status, rank, created_at, updated_at FROM tracks WHERE roadmap_id = ?"
 	args := []interface{}{roadmapID}
 
 	// Add status filter if provided
@@ -231,7 +231,7 @@ func (r *SQLiteRoadmapRepository) ListTracks(ctx context.Context, roadmapID stri
 			placeholders += "?"
 			args = append(args, filters.Priority[i])
 		}
-		query += " AND priority IN (" + placeholders + ")"
+		query += " AND rank IN (" + placeholders + ")"
 	}
 
 	query += " ORDER BY id"
@@ -279,7 +279,7 @@ func (r *SQLiteRoadmapRepository) UpdateTrack(ctx context.Context, track *TrackE
 	// Update track fields
 	result, err := tx.ExecContext(
 		ctx,
-		"UPDATE tracks SET title = ?, description = ?, status = ?, priority = ?, updated_at = ? WHERE id = ?",
+		"UPDATE tracks SET title = ?, description = ?, status = ?, rank = ?, updated_at = ? WHERE id = ?",
 		track.Title, track.Description, track.Status, track.Rank, track.UpdatedAt, track.ID,
 	)
 	if err != nil {
@@ -495,7 +495,7 @@ func (r *SQLiteRoadmapRepository) SaveTask(ctx context.Context, task *TaskEntity
 
 	_, err = r.db.ExecContext(
 		ctx,
-		"INSERT INTO tasks (id, track_id, title, description, status, priority, branch, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO tasks (id, track_id, title, description, status, rank, branch, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		task.ID, task.TrackID, task.Title, task.Description, task.Status, task.Rank, task.Branch, task.CreatedAt, task.UpdatedAt,
 	)
 	if err != nil {
@@ -512,7 +512,7 @@ func (r *SQLiteRoadmapRepository) GetTask(ctx context.Context, id string) (*Task
 
 	err := r.db.QueryRowContext(
 		ctx,
-		"SELECT id, track_id, title, description, status, priority, branch, created_at, updated_at FROM tasks WHERE id = ?",
+		"SELECT id, track_id, title, description, status, rank, branch, created_at, updated_at FROM tasks WHERE id = ?",
 		id,
 	).Scan(&task.ID, &task.TrackID, &task.Title, &task.Description, &task.Status, &task.Rank, &branch, &task.CreatedAt, &task.UpdatedAt)
 
@@ -532,7 +532,7 @@ func (r *SQLiteRoadmapRepository) GetTask(ctx context.Context, id string) (*Task
 
 // ListTasks returns all tasks matching the filters.
 func (r *SQLiteRoadmapRepository) ListTasks(ctx context.Context, filters TaskFilters) ([]*TaskEntity, error) {
-	query := "SELECT id, track_id, title, description, status, priority, branch, created_at, updated_at FROM tasks WHERE 1=1"
+	query := "SELECT id, track_id, title, description, status, rank, branch, created_at, updated_at FROM tasks WHERE 1=1"
 	args := []interface{}{}
 
 	// Add track filter if provided
@@ -564,7 +564,7 @@ func (r *SQLiteRoadmapRepository) ListTasks(ctx context.Context, filters TaskFil
 			placeholders += "?"
 			args = append(args, filters.Priority[i])
 		}
-		query += " AND priority IN (" + placeholders + ")"
+		query += " AND rank IN (" + placeholders + ")"
 	}
 
 	query += " ORDER BY id"
@@ -603,7 +603,7 @@ func (r *SQLiteRoadmapRepository) ListTasks(ctx context.Context, filters TaskFil
 func (r *SQLiteRoadmapRepository) UpdateTask(ctx context.Context, task *TaskEntity) error {
 	result, err := r.db.ExecContext(
 		ctx,
-		"UPDATE tasks SET track_id = ?, title = ?, description = ?, status = ?, priority = ?, branch = ?, updated_at = ? WHERE id = ?",
+		"UPDATE tasks SET track_id = ?, title = ?, description = ?, status = ?, rank = ?, branch = ?, updated_at = ? WHERE id = ?",
 		task.TrackID, task.Title, task.Description, task.Status, task.Rank, task.Branch, task.UpdatedAt, task.ID,
 	)
 	if err != nil {

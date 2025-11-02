@@ -11,7 +11,7 @@ import (
 
 const (
 	// SchemaVersion is the current database schema version
-	SchemaVersion = 3
+	SchemaVersion = 4
 )
 
 // SQL table creation statements
@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     title TEXT NOT NULL,
     description TEXT,
     status TEXT NOT NULL,
-    priority TEXT NOT NULL,
+    rank INTEGER NOT NULL DEFAULT 500,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
     FOREIGN KEY(roadmap_id) REFERENCES roadmaps(id) ON DELETE CASCADE
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     title TEXT NOT NULL,
     description TEXT,
     status TEXT NOT NULL,
-    priority TEXT NOT NULL,
+    rank INTEGER NOT NULL DEFAULT 500,
     branch TEXT,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS iterations (
     name TEXT NOT NULL,
     goal TEXT,
     status TEXT NOT NULL,
+    rank INTEGER NOT NULL DEFAULT 500,
     deliverable TEXT,
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
@@ -119,6 +120,10 @@ CREATE INDEX IF NOT EXISTS idx_tracks_roadmap_id ON tracks(roadmap_id)
 CREATE INDEX IF NOT EXISTS idx_tracks_status ON tracks(status)
 `
 
+	createTracksRankIndex = `
+CREATE INDEX IF NOT EXISTS idx_tracks_rank ON tracks(rank)
+`
+
 	createTasksTrackIDIndex = `
 CREATE INDEX IF NOT EXISTS idx_tasks_track_id ON tasks(track_id)
 `
@@ -127,8 +132,16 @@ CREATE INDEX IF NOT EXISTS idx_tasks_track_id ON tasks(track_id)
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)
 `
 
+	createTasksRankIndex = `
+CREATE INDEX IF NOT EXISTS idx_tasks_rank ON tasks(rank)
+`
+
 	createIterationsStatusIndex = `
 CREATE INDEX IF NOT EXISTS idx_iterations_status ON iterations(status)
+`
+
+	createIterationsRankIndex = `
+CREATE INDEX IF NOT EXISTS idx_iterations_rank ON iterations(rank)
 `
 
 	createIterationTasksIterationIndex = `
@@ -177,6 +190,25 @@ CREATE INDEX IF NOT EXISTS idx_adrs_status ON adrs(status)
 // InitSchema initializes the database schema with all required tables and indexes.
 // It's safe to call multiple times (uses IF NOT EXISTS).
 func InitSchema(db *sql.DB) error {
+	// First create project_metadata table if it doesn't exist
+	if _, err := db.Exec(createProjectMetadataTable); err != nil {
+		return fmt.Errorf("failed to create project_metadata table: %w", err)
+	}
+
+	// Check if we need to migrate from version 3 to version 4 (priority -> rank)
+	var currentVersion int
+	err := db.QueryRow("SELECT CAST(value AS INTEGER) FROM project_metadata WHERE key = 'schema_version'").Scan(&currentVersion)
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("failed to check schema version: %w", err)
+	}
+
+	// If we have version 3, run migration
+	if currentVersion == 3 {
+		if err := migrateV3ToV4(db); err != nil {
+			return fmt.Errorf("failed to migrate from v3 to v4: %w", err)
+		}
+	}
+
 	statements := []string{
 		createRoadmapsTable,
 		createTracksTable,
@@ -189,9 +221,12 @@ func InitSchema(db *sql.DB) error {
 		createADRsTable,
 		createTracksRoadmapIDIndex,
 		createTracksStatusIndex,
+		createTracksRankIndex,
 		createTasksTrackIDIndex,
 		createTasksStatusIndex,
+		createTasksRankIndex,
 		createIterationsStatusIndex,
+		createIterationsRankIndex,
 		createIterationTasksIterationIndex,
 		createIterationTasksTaskIndex,
 		createAcceptanceCriteriaTaskIDIndex,
@@ -204,6 +239,12 @@ func InitSchema(db *sql.DB) error {
 		if _, err := db.Exec(stmt); err != nil {
 			return fmt.Errorf("failed to create schema: %w", err)
 		}
+	}
+
+	// Update schema version
+	_, err = db.Exec("INSERT OR REPLACE INTO project_metadata (key, value) VALUES ('schema_version', ?)", SchemaVersion)
+	if err != nil {
+		return fmt.Errorf("failed to update schema version: %w", err)
 	}
 
 	return nil
@@ -298,7 +339,7 @@ func MigrateFromFileStorage(db *sql.DB, tasksDir string) error {
 		}
 
 		_, err = db.Exec(
-			"INSERT INTO tracks (id, roadmap_id, title, description, status, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT INTO tracks (id, roadmap_id, title, description, status, rank, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 			track.ID, track.RoadmapID, track.Title, track.Description, track.Status, track.Rank, track.CreatedAt, track.UpdatedAt,
 		)
 		if err != nil {
@@ -327,7 +368,7 @@ func MigrateFromFileStorage(db *sql.DB, tasksDir string) error {
 
 		// Insert into database (force legacy track assignment)
 		_, err = db.Exec(
-			"INSERT INTO tasks (id, track_id, title, description, status, priority, branch, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"INSERT INTO tasks (id, track_id, title, description, status, rank, branch, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			oldTask.ID, legacyTrackID, oldTask.Title, oldTask.Description, oldTask.Status, oldTask.Rank, oldTask.Branch, oldTask.CreatedAt, oldTask.UpdatedAt,
 		)
 		if err != nil {
