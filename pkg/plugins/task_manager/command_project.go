@@ -25,7 +25,7 @@ type ProjectCreateCommand struct {
 }
 
 func (c *ProjectCreateCommand) GetName() string {
-	return "project.create"
+	return "project create"
 }
 
 func (c *ProjectCreateCommand) GetDescription() string {
@@ -108,7 +108,7 @@ type ProjectListCommand struct {
 }
 
 func (c *ProjectListCommand) GetName() string {
-	return "project.list"
+	return "project list"
 }
 
 func (c *ProjectListCommand) GetDescription() string {
@@ -206,7 +206,7 @@ type ProjectSwitchCommand struct {
 }
 
 func (c *ProjectSwitchCommand) GetName() string {
-	return "project.switch"
+	return "project switch"
 }
 
 func (c *ProjectSwitchCommand) GetDescription() string {
@@ -275,7 +275,7 @@ type ProjectShowCommand struct {
 }
 
 func (c *ProjectShowCommand) GetName() string {
-	return "project.show"
+	return "project show"
 }
 
 func (c *ProjectShowCommand) GetDescription() string {
@@ -323,7 +323,7 @@ type ProjectDeleteCommand struct {
 }
 
 func (c *ProjectDeleteCommand) GetName() string {
-	return "project.delete"
+	return "project delete"
 }
 
 func (c *ProjectDeleteCommand) GetDescription() string {

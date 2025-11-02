@@ -89,26 +89,27 @@ func main() {
 		// Try plugin commands: dw <plugin-name> <command> [args]
 		cmdCtx := app.NewCommandContext(services.Logger, services.DBPath, services.WorkingDir, services.EventRepo, os.Stdout, os.Stdin)
 		if len(args) > 0 {
-			// Try as: dw <plugin> <command> [args]
-			err := services.CommandRegistry.ExecuteCommand(ctx, command, args[0], args[1:], cmdCtx)
-			if err == nil {
-				return
-			}
-			// If command execution failed, check if it's because plugin/command doesn't exist
-			// or if it's an actual execution error
-			if isPluginOrCommandNotFound(err) {
-				// Try single-word fallback
-				if err := services.CommandRegistry.ExecuteCommand(ctx, command, "", args, cmdCtx); err == nil {
+			// Try multi-word commands first (e.g., "project create")
+			// Start from longest possible command and work backwards
+			for i := len(args); i >= 1; i-- {
+				cmdName := strings.Join(args[:i], " ")
+				cmdArgs := args[i:]
+
+				err := services.CommandRegistry.ExecuteCommand(ctx, command, cmdName, cmdArgs, cmdCtx)
+				if err == nil {
 					return
 				}
-			} else {
-				// Command exists but failed - show error and help
-				fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-				printCommandHelp(services, command, args[0])
-				os.Exit(1)
+
+				// If command was found but execution failed, show error
+				if !isPluginOrCommandNotFound(err) {
+					fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+					printCommandHelp(services, command, cmdName)
+					os.Exit(1)
+				}
+				// Otherwise, try shorter command prefix
 			}
 		}
-		// Try as: dw <command> (single-word plugin command)
+		// Try as: dw <command> (single-word plugin command with no subcommand)
 		if err := services.CommandRegistry.ExecuteCommand(ctx, command, "", args, cmdCtx); err == nil {
 			return
 		}

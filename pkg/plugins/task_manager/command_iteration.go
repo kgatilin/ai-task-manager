@@ -25,7 +25,7 @@ type IterationCreateCommand struct {
 }
 
 func (c *IterationCreateCommand) GetName() string {
-	return "iteration.create"
+	return "iteration create"
 }
 
 func (c *IterationCreateCommand) GetDescription() string {
@@ -165,7 +165,7 @@ type IterationListCommand struct {
 }
 
 func (c *IterationListCommand) GetName() string {
-	return "iteration.list"
+	return "iteration list"
 }
 
 func (c *IterationListCommand) GetDescription() string {
@@ -269,7 +269,7 @@ type IterationShowCommand struct {
 }
 
 func (c *IterationShowCommand) GetName() string {
-	return "iteration.show"
+	return "iteration show"
 }
 
 func (c *IterationShowCommand) GetDescription() string {
@@ -397,7 +397,7 @@ type IterationCurrentCommand struct {
 }
 
 func (c *IterationCurrentCommand) GetName() string {
-	return "iteration.current"
+	return "iteration current"
 }
 
 func (c *IterationCurrentCommand) GetDescription() string {
@@ -512,7 +512,7 @@ type IterationUpdateCommand struct {
 }
 
 func (c *IterationUpdateCommand) GetName() string {
-	return "iteration.update"
+	return "iteration update"
 }
 
 func (c *IterationUpdateCommand) GetDescription() string {
@@ -652,7 +652,7 @@ type IterationDeleteCommand struct {
 }
 
 func (c *IterationDeleteCommand) GetName() string {
-	return "iteration.delete"
+	return "iteration delete"
 }
 
 func (c *IterationDeleteCommand) GetDescription() string {
@@ -757,7 +757,7 @@ type IterationAddTaskCommand struct {
 }
 
 func (c *IterationAddTaskCommand) GetName() string {
-	return "iteration.add-task"
+	return "iteration add-task"
 }
 
 func (c *IterationAddTaskCommand) GetDescription() string {
@@ -862,7 +862,7 @@ type IterationRemoveTaskCommand struct {
 }
 
 func (c *IterationRemoveTaskCommand) GetName() string {
-	return "iteration.remove-task"
+	return "iteration remove-task"
 }
 
 func (c *IterationRemoveTaskCommand) GetDescription() string {
@@ -932,7 +932,7 @@ type IterationStartCommand struct {
 }
 
 func (c *IterationStartCommand) GetName() string {
-	return "iteration.start"
+	return "iteration start"
 }
 
 func (c *IterationStartCommand) GetDescription() string {
@@ -1016,7 +1016,7 @@ type IterationCompleteCommand struct {
 }
 
 func (c *IterationCompleteCommand) GetName() string {
-	return "iteration.complete"
+	return "iteration complete"
 }
 
 func (c *IterationCompleteCommand) GetDescription() string {

@@ -611,19 +611,19 @@ func TestRoadmapCommandGetters(t *testing.T) {
 		{
 			name:        "RoadmapInitCommand",
 			cmd:         &task_manager.RoadmapInitCommand{},
-			expectedName: "roadmap.init",
+			expectedName: "roadmap init",
 			expectedDesc: "Initialize a new roadmap",
 		},
 		{
 			name:        "RoadmapShowCommand",
 			cmd:         &task_manager.RoadmapShowCommand{},
-			expectedName: "roadmap.show",
+			expectedName: "roadmap show",
 			expectedDesc: "Display the current roadmap",
 		},
 		{
 			name:        "RoadmapUpdateCommand",
 			cmd:         &task_manager.RoadmapUpdateCommand{},
-			expectedName: "roadmap.update",
+			expectedName: "roadmap update",
 			expectedDesc: "Update the current roadmap",
 		},
 	}

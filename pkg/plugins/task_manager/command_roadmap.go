@@ -16,7 +16,7 @@ type RoadmapInitCommand struct {
 }
 
 func (c *RoadmapInitCommand) GetName() string {
-	return "roadmap.init"
+	return "roadmap init"
 }
 
 func (c *RoadmapInitCommand) GetDescription() string {
@@ -131,7 +131,7 @@ type RoadmapShowCommand struct {
 }
 
 func (c *RoadmapShowCommand) GetName() string {
-	return "roadmap.show"
+	return "roadmap show"
 }
 
 func (c *RoadmapShowCommand) GetDescription() string {
@@ -207,7 +207,7 @@ type RoadmapUpdateCommand struct {
 }
 
 func (c *RoadmapUpdateCommand) GetName() string {
-	return "roadmap.update"
+	return "roadmap update"
 }
 
 func (c *RoadmapUpdateCommand) GetDescription() string {

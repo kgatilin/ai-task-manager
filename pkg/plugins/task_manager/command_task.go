@@ -25,7 +25,7 @@ type TaskCreateCommand struct {
 }
 
 func (c *TaskCreateCommand) GetName() string {
-	return "task.create"
+	return "task create"
 }
 
 func (c *TaskCreateCommand) GetDescription() string {
@@ -106,11 +106,12 @@ func (c *TaskCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 		return fmt.Errorf("--track and --title are required")
 	}
 
-	// Ensure repository exists
-	repo := c.Plugin.GetRepository()
-	if repo == nil {
-		return fmt.Errorf("task manager not initialized with database support")
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	// Verify track exists
 	track, err := repo.GetTrack(ctx, c.trackID)
@@ -167,7 +168,7 @@ type TaskListCommand struct {
 }
 
 func (c *TaskListCommand) GetName() string {
-	return "task.list"
+	return "task list"
 }
 
 func (c *TaskListCommand) GetDescription() string {
@@ -236,11 +237,12 @@ func (c *TaskListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 		}
 	}
 
-	// Ensure repository exists
-	repo := c.Plugin.GetRepository()
-	if repo == nil {
-		return fmt.Errorf("task manager not initialized with database support")
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	// Build filters
 	filters := TaskFilters{
@@ -310,7 +312,7 @@ type TaskShowCommand struct {
 }
 
 func (c *TaskShowCommand) GetName() string {
-	return "task.show"
+	return "task show"
 }
 
 func (c *TaskShowCommand) GetDescription() string {
@@ -346,11 +348,12 @@ func (c *TaskShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 
 	c.taskID = args[0]
 
-	// Ensure repository exists
-	repo := c.Plugin.GetRepository()
-	if repo == nil {
-		return fmt.Errorf("task manager not initialized with database support")
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	// Get task
 	task, err := repo.GetTask(ctx, c.taskID)
@@ -413,7 +416,7 @@ type TaskUpdateCommand struct {
 }
 
 func (c *TaskUpdateCommand) GetName() string {
-	return "task.update"
+	return "task update"
 }
 
 func (c *TaskUpdateCommand) GetDescription() string {
@@ -505,11 +508,12 @@ func (c *TaskUpdateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 		return fmt.Errorf("at least one flag must be provided to update")
 	}
 
-	// Ensure repository exists
-	repo := c.Plugin.GetRepository()
-	if repo == nil {
-		return fmt.Errorf("task manager not initialized with database support")
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	// Get existing task
 	task, err := repo.GetTask(ctx, c.taskID)
@@ -566,7 +570,7 @@ type TaskDeleteCommand struct {
 }
 
 func (c *TaskDeleteCommand) GetName() string {
-	return "task.delete"
+	return "task delete"
 }
 
 func (c *TaskDeleteCommand) GetDescription() string {
@@ -612,11 +616,12 @@ func (c *TaskDeleteCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 		}
 	}
 
-	// Ensure repository exists
-	repo := c.Plugin.GetRepository()
-	if repo == nil {
-		return fmt.Errorf("task manager not initialized with database support")
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	// Get task to verify exists
 	task, err := repo.GetTask(ctx, c.taskID)
@@ -670,7 +675,7 @@ type TaskMoveCommand struct {
 }
 
 func (c *TaskMoveCommand) GetName() string {
-	return "task.move"
+	return "task move"
 }
 
 func (c *TaskMoveCommand) GetDescription() string {
@@ -720,11 +725,12 @@ func (c *TaskMoveCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 		return fmt.Errorf("--track is required")
 	}
 
-	// Ensure repository exists
-	repo := c.Plugin.GetRepository()
-	if repo == nil {
-		return fmt.Errorf("task manager not initialized with database support")
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
 	}
+	defer cleanup()
 
 	// Get task
 	task, err := repo.GetTask(ctx, c.taskID)
@@ -783,7 +789,7 @@ type TaskMigrateCommand struct {
 }
 
 func (c *TaskMigrateCommand) GetName() string {
-	return "task.migrate"
+	return "task migrate"
 }
 
 func (c *TaskMigrateCommand) GetDescription() string {

@@ -25,7 +25,7 @@ type TrackCreateCommand struct {
 }
 
 func (c *TrackCreateCommand) GetName() string {
-	return "track.create"
+	return "track create"
 }
 
 func (c *TrackCreateCommand) GetDescription() string {
@@ -170,7 +170,7 @@ type TrackListCommand struct {
 }
 
 func (c *TrackListCommand) GetName() string {
-	return "track.list"
+	return "track list"
 }
 
 func (c *TrackListCommand) GetDescription() string {
@@ -302,7 +302,7 @@ type TrackShowCommand struct {
 }
 
 func (c *TrackShowCommand) GetName() string {
-	return "track.show"
+	return "track show"
 }
 
 func (c *TrackShowCommand) GetDescription() string {
@@ -394,7 +394,7 @@ type TrackUpdateCommand struct {
 }
 
 func (c *TrackUpdateCommand) GetName() string {
-	return "track.update"
+	return "track update"
 }
 
 func (c *TrackUpdateCommand) GetDescription() string {
@@ -536,7 +536,7 @@ type TrackDeleteCommand struct {
 }
 
 func (c *TrackDeleteCommand) GetName() string {
-	return "track.delete"
+	return "track delete"
 }
 
 func (c *TrackDeleteCommand) GetDescription() string {
@@ -635,7 +635,7 @@ type TrackAddDependencyCommand struct {
 }
 
 func (c *TrackAddDependencyCommand) GetName() string {
-	return "track.add-dependency"
+	return "track add-dependency"
 }
 
 func (c *TrackAddDependencyCommand) GetDescription() string {
@@ -740,7 +740,7 @@ type TrackRemoveDependencyCommand struct {
 }
 
 func (c *TrackRemoveDependencyCommand) GetName() string {
-	return "track.remove-dependency"
+	return "track remove-dependency"
 }
 
 func (c *TrackRemoveDependencyCommand) GetDescription() string {
