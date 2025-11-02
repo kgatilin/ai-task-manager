@@ -1165,7 +1165,7 @@ func (r *SQLiteRoadmapRepository) GetProjectCode(ctx context.Context) string {
 }
 
 // GetNextSequenceNumber retrieves the next sequence number for an entity type.
-// Entity types: "task", "track", "iter"
+// Entity types: "task", "track", "iter", "ac", "adr"
 func (r *SQLiteRoadmapRepository) GetNextSequenceNumber(ctx context.Context, entityType string) (int, error) {
 	var maxNum int
 	var query string
@@ -1184,6 +1184,12 @@ func (r *SQLiteRoadmapRepository) GetNextSequenceNumber(ctx context.Context, ent
 			return 0, fmt.Errorf("failed to get max iteration number: %w", err)
 		}
 		return maxNum + 1, nil
+	case "ac":
+		// Parse existing AC IDs to find max number
+		query = "SELECT id FROM acceptance_criteria"
+	case "adr":
+		// Parse existing ADR IDs to find max number
+		query = "SELECT id FROM adrs"
 	default:
 		return 0, fmt.Errorf("%w: invalid entity type: %s", pluginsdk.ErrInvalidArgument, entityType)
 	}
