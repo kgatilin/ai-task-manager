@@ -202,6 +202,34 @@ func InitSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to check schema version: %w", err)
 	}
 
+	// If no version found, check if we have old tables with priority column
+	if err == sql.ErrNoRows || currentVersion == 0 {
+		// Check if tracks table exists and has priority column
+		var hasPriorityColumn bool
+		rows, err := db.Query("PRAGMA table_info(tracks)")
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var cid int
+				var name, typ string
+				var notnull, pk int
+				var dfltValue sql.NullString
+				if err := rows.Scan(&cid, &name, &typ, &notnull, &dfltValue, &pk); err == nil {
+					if name == "priority" {
+						hasPriorityColumn = true
+						break
+					}
+				}
+			}
+			rows.Close()
+		}
+
+		// If we found priority column, it's a v3 database that needs migration
+		if hasPriorityColumn {
+			currentVersion = 3
+		}
+	}
+
 	// If we have version 3, run migration
 	if currentVersion == 3 {
 		if err := migrateV3ToV4(db); err != nil {
