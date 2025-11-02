@@ -58,6 +58,12 @@ func createRoadmapTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to initialize schema: %v", err)
 	}
 
+	// Set default project code for tests
+	_, err = db.Exec("INSERT INTO project_metadata (key, value) VALUES (?, ?)", "project_code", "TEST")
+	if err != nil {
+		t.Fatalf("failed to set project code: %v", err)
+	}
+
 	return db
 }
 
@@ -647,3 +653,250 @@ func (s *stubLogger) Info(msg string, args ...interface{}) {}
 func (s *stubLogger) Warn(msg string, args ...interface{}) {}
 func (s *stubLogger) Error(msg string, args ...interface{}) {}
 func (s *stubLogger) Debug(msg string, args ...interface{}) {}
+// ============================================================================
+// RoadmapFullCommand Tests
+// ============================================================================
+
+func TestRoadmapFullCommand_BasicExecution(t *testing.T) {
+	plugin, tmpDir, trackID := setupTestWithRoadmapAndTrack(t)
+	ctx := context.Background()
+
+	// Create a task
+	taskCmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	taskCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := taskCmd.Execute(ctx, taskCtx, []string{
+		"--track", trackID,
+		"--title", "Test Task",
+		"--description", "Test description",
+		"--priority", "high",
+	})
+	if err != nil {
+		t.Fatalf("failed to create task: %v", err)
+	}
+
+	// Execute roadmap full command
+	fullCmd := &task_manager.RoadmapFullCommand{Plugin: plugin}
+	fullCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	if err := fullCmd.Execute(ctx, fullCtx, []string{}); err != nil {
+		t.Fatalf("RoadmapFullCommand failed: %v", err)
+	}
+
+	output := fullCtx.stdout.String()
+
+	// Verify output contains expected sections
+	if !strings.Contains(output, "Vision") {
+		t.Error("Output missing Vision section")
+	}
+	if !strings.Contains(output, "Success Criteria") {
+		t.Error("Output missing Success Criteria section")
+	}
+	if !strings.Contains(output, "Tracks") {
+		t.Error("Output missing Tracks section")
+	}
+	if !strings.Contains(output, "Test Track") {
+		t.Error("Output missing track title")
+	}
+	if !strings.Contains(output, "Test Task") {
+		t.Error("Output missing task title")
+	}
+}
+
+func TestRoadmapFullCommand_VerboseFlag(t *testing.T) {
+	plugin, tmpDir, trackID := setupTestWithRoadmapAndTrack(t)
+	ctx := context.Background()
+
+	// Create a task with description
+	taskCmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	taskCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := taskCmd.Execute(ctx, taskCtx, []string{
+		"--track", trackID,
+		"--title", "Test Task",
+		"--description", "Detailed task description",
+		"--priority", "high",
+	})
+	if err != nil {
+		t.Fatalf("failed to create task: %v", err)
+	}
+
+	// Execute with --verbose
+	fullCmd := &task_manager.RoadmapFullCommand{Plugin: plugin}
+	fullCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	if err := fullCmd.Execute(ctx, fullCtx, []string{"--verbose"}); err != nil {
+		t.Fatalf("RoadmapFullCommand with --verbose failed: %v", err)
+	}
+
+	output := fullCtx.stdout.String()
+
+	// Verbose should include descriptions
+	if !strings.Contains(output, "Test vision") {
+		t.Error("Verbose output missing vision text")
+	}
+	if !strings.Contains(output, "Test description") {
+		t.Error("Verbose output missing track description")
+	}
+	if !strings.Contains(output, "Detailed task description") {
+		t.Error("Verbose output missing task description")
+	}
+}
+
+func TestRoadmapFullCommand_SectionsFilter(t *testing.T) {
+	plugin, tmpDir, _ := setupTestWithRoadmapAndTrack(t)
+	ctx := context.Background()
+
+	// Execute with --sections filter
+	fullCmd := &task_manager.RoadmapFullCommand{Plugin: plugin}
+	fullCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	if err := fullCmd.Execute(ctx, fullCtx, []string{"--sections", "vision,tracks"}); err != nil {
+		t.Fatalf("RoadmapFullCommand with --sections failed: %v", err)
+	}
+
+	output := fullCtx.stdout.String()
+
+	// Should include requested sections
+	if !strings.Contains(output, "Vision") {
+		t.Error("Output missing Vision section")
+	}
+	if !strings.Contains(output, "Tracks") {
+		t.Error("Output missing Tracks section")
+	}
+	// Should not include iterations or backlog (not requested)
+	// Note: These sections might not appear at all if empty, so we just verify the requested ones are present
+}
+
+func TestRoadmapFullCommand_WithIteration(t *testing.T) {
+	plugin, tmpDir, trackID := setupTestWithRoadmapAndTrack(t)
+	ctx := context.Background()
+
+	// Create a task
+	taskCmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	taskCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := taskCmd.Execute(ctx, taskCtx, []string{
+		"--track", trackID,
+		"--title", "Test Task",
+		"--priority", "high",
+	})
+	if err != nil {
+		t.Fatalf("failed to create task: %v", err)
+	}
+
+	// Extract task ID from output
+	taskOutput := taskCtx.stdout.String()
+	taskIDPrefix := "ID:"
+	taskIDStart := indexOf(taskOutput, taskIDPrefix)
+	if taskIDStart == -1 {
+		t.Fatalf("failed to find task ID in output: %s", taskOutput)
+	}
+	taskIDStart += len(taskIDPrefix)
+	taskIDEnd := indexOf(taskOutput[taskIDStart:], "\n")
+	if taskIDEnd == -1 {
+		taskIDEnd = len(taskOutput)
+	} else {
+		taskIDEnd += taskIDStart
+	}
+	taskID := trimSpace(taskOutput[taskIDStart:taskIDEnd])
+
+	// Create iteration
+	iterCmd := &task_manager.IterationCreateCommand{Plugin: plugin}
+	iterCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = iterCmd.Execute(ctx, iterCtx, []string{
+		"--name", "Test Iteration",
+		"--goal", "Test goal",
+		"--deliverable", "Test deliverable",
+	})
+	if err != nil {
+		t.Fatalf("failed to create iteration: %v", err)
+	}
+
+	// Add task to iteration
+	addTaskCmd := &task_manager.IterationAddTaskCommand{Plugin: plugin}
+	addTaskCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = addTaskCmd.Execute(ctx, addTaskCtx, []string{"1", taskID})
+	if err != nil {
+		t.Fatalf("failed to add task to iteration: %v", err)
+	}
+
+	// Execute roadmap full
+	fullCmd := &task_manager.RoadmapFullCommand{Plugin: plugin}
+	fullCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	if err := fullCmd.Execute(ctx, fullCtx, []string{}); err != nil {
+		t.Fatalf("RoadmapFullCommand failed: %v", err)
+	}
+
+	output := fullCtx.stdout.String()
+
+	// Verify iteration appears
+	if !strings.Contains(output, "Iterations") {
+		t.Error("Output missing Iterations section")
+	}
+	if !strings.Contains(output, "Test Iteration") {
+		t.Error("Output missing iteration name")
+	}
+	if !strings.Contains(output, "Test Task") {
+		t.Error("Output missing task in iteration")
+	}
+}
+
+func TestRoadmapFullCommand_NoRoadmap(t *testing.T) {
+	plugin, tmpDir := setupTestPlugin(t)
+	ctx := context.Background()
+
+	// Execute without creating roadmap
+	fullCmd := &task_manager.RoadmapFullCommand{Plugin: plugin}
+	fullCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err := fullCmd.Execute(ctx, fullCtx, []string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := fullCtx.stdout.String()
+
+	// Should display helpful message
+	if !strings.Contains(output, "No roadmap found") {
+		t.Error("Expected 'No roadmap found' message")
+	}
+}

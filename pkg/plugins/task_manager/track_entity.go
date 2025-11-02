@@ -80,11 +80,20 @@ func NewTrackEntity(id, roadmapID, title, description, status, priority string, 
 	}, nil
 }
 
-// isValidTrackID validates track ID format (track-<slug>)
+// isValidTrackID validates track ID format
+// Accepts both old format (track-<slug>) and new format (<CODE>-track-<number>)
 func isValidTrackID(id string) bool {
-	pattern := `^track-[a-z0-9]+(-[a-z0-9]+)*$`
-	regex := regexp.MustCompile(pattern)
-	return regex.MatchString(id)
+	// New format: <CODE>-track-<number> (e.g., DW-track-1, PROD-track-123)
+	newPattern := `^[A-Z0-9]+-track-[0-9]+$`
+	newRegex := regexp.MustCompile(newPattern)
+	if newRegex.MatchString(id) {
+		return true
+	}
+
+	// Old format: track-<slug> (for backward compatibility)
+	oldPattern := `^track-[a-z0-9]+(-[a-z0-9]+)*$`
+	oldRegex := regexp.MustCompile(oldPattern)
+	return oldRegex.MatchString(id)
 }
 
 // IExtensible implementation

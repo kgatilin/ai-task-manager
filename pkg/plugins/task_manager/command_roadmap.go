@@ -312,3 +312,342 @@ func (c *RoadmapUpdateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 
 	return nil
 }
+
+// RoadmapFullCommand displays the complete roadmap overview
+type RoadmapFullCommand struct {
+	Plugin   *TaskManagerPlugin
+	project  string
+	verbose  bool
+	format   string
+	sections []string
+}
+
+func (c *RoadmapFullCommand) GetName() string {
+	return "roadmap full"
+}
+
+func (c *RoadmapFullCommand) GetDescription() string {
+	return "Display complete roadmap overview in LLM-optimized format"
+}
+
+func (c *RoadmapFullCommand) GetUsage() string {
+	return "dw task-manager roadmap full [--verbose] [--format json] [--sections <list>]"
+}
+
+func (c *RoadmapFullCommand) GetHelp() string {
+	return `Displays the complete roadmap overview in LLM-optimized markdown format.
+
+Shows:
+  - Vision and success criteria
+  - All tracks with their tasks (titles only by default)
+  - All iterations with assigned tasks and progress
+  - Backlog (tasks not in any iteration)
+
+Flags:
+  --verbose             Include task descriptions and additional details
+  --format <format>     Output format (default: markdown)
+                        Values: markdown, json
+  --sections <list>     Only show specific sections (comma-separated)
+                        Values: vision, tracks, iterations, backlog
+
+Examples:
+  # Basic overview
+  dw task-manager roadmap full
+
+  # Verbose with full details
+  dw task-manager roadmap full --verbose
+
+  # Only show tracks and iterations
+  dw task-manager roadmap full --sections tracks,iterations
+
+  # Output as JSON
+  dw task-manager roadmap full --format json
+
+Notes:
+  - Uses status icons: ✅ (complete), ⏸️ (planned/in-progress), ○ (todo)
+  - Optimized for LLM consumption
+  - JSON format includes all metadata`
+}
+
+func (c *RoadmapFullCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
+	// Parse flags
+	c.format = "markdown"
+	c.sections = nil
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--project":
+			if i+1 < len(args) {
+				c.project = args[i+1]
+				i++
+			}
+		case "--verbose":
+			c.verbose = true
+		case "--format":
+			if i+1 < len(args) {
+				c.format = args[i+1]
+				i++
+			}
+		case "--sections":
+			if i+1 < len(args) {
+				c.sections = splitSections(args[i+1])
+				i++
+			}
+		}
+	}
+
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Get active roadmap
+	roadmap, err := repo.GetActiveRoadmap(ctx)
+	if err != nil {
+		if errors.Is(err, pluginsdk.ErrNotFound) {
+			fmt.Fprintf(cmdCtx.GetStdout(), "No roadmap found.\n")
+			fmt.Fprintf(cmdCtx.GetStdout(), "Run 'dw task-manager roadmap init' to create one.\n")
+			return nil
+		}
+		return fmt.Errorf("failed to get roadmap: %w", err)
+	}
+
+	// Get all tracks
+	tracks, err := repo.ListTracks(ctx, roadmap.ID, TrackFilters{})
+	if err != nil {
+		return fmt.Errorf("failed to list tracks: %w", err)
+	}
+
+	// Get all tasks
+	tasks, err := repo.ListTasks(ctx, TaskFilters{})
+	if err != nil {
+		return fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	// Get all iterations
+	iterations, err := repo.ListIterations(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list iterations: %w", err)
+	}
+
+	// Format output based on requested format
+	if c.format == "json" {
+		return c.outputJSON(cmdCtx, roadmap, tracks, tasks, iterations)
+	}
+
+	return c.outputMarkdown(ctx, cmdCtx, roadmap, tracks, tasks, iterations, repo)
+}
+
+func (c *RoadmapFullCommand) outputJSON(cmdCtx pluginsdk.CommandContext, roadmap *RoadmapEntity, tracks []*TrackEntity, tasks []*TaskEntity, iterations []*IterationEntity) error {
+	output := map[string]interface{}{
+		"roadmap":    roadmap,
+		"tracks":     tracks,
+		"tasks":      tasks,
+		"iterations": iterations,
+	}
+
+	// Use fmt.Sprintf to format the output
+	data := fmt.Sprintf("%v", output)
+	fmt.Fprintf(cmdCtx.GetStdout(), "%s\n", data)
+	return nil
+}
+
+func (c *RoadmapFullCommand) outputMarkdown(ctx context.Context, cmdCtx pluginsdk.CommandContext, roadmap *RoadmapEntity, tracks []*TrackEntity, tasks []*TaskEntity, iterations []*IterationEntity, repo RoadmapRepository) error {
+	stdout := cmdCtx.GetStdout()
+
+	// Vision section
+	if c.shouldShowSection("vision") {
+		fmt.Fprintf(stdout, "# Roadmap: %s\n\n", roadmap.ID)
+		fmt.Fprintf(stdout, "## Vision\n%s\n\n", roadmap.Vision)
+		fmt.Fprintf(stdout, "## Success Criteria\n%s\n\n", roadmap.SuccessCriteria)
+	}
+
+	// Tracks section
+	if c.shouldShowSection("tracks") {
+		fmt.Fprintf(stdout, "## Tracks\n\n")
+		for _, track := range tracks {
+			statusIcon := getStatusIcon(track.Status)
+			fmt.Fprintf(stdout, "### %s %s\n", statusIcon, track.Title)
+			fmt.Fprintf(stdout, "**ID**: %s | **Status**: %s | **Priority**: %s\n", track.ID, track.Status, track.Priority)
+
+			if c.verbose && track.Description != "" {
+				fmt.Fprintf(stdout, "**Description**: %s\n", track.Description)
+			}
+
+			// Get tasks for this track
+			trackTasks := filterTasksByTrack(tasks, track.ID)
+			if len(trackTasks) > 0 {
+				fmt.Fprintf(stdout, "**Progress**: %d/%d tasks complete\n", countCompleteTasks(trackTasks), len(trackTasks))
+				fmt.Fprintf(stdout, "**Tasks**:\n")
+				for _, task := range trackTasks {
+					taskIcon := getStatusIcon(task.Status)
+					fmt.Fprintf(stdout, "- %s %s", taskIcon, task.Title)
+					if c.verbose && task.Description != "" {
+						fmt.Fprintf(stdout, " - %s", task.Description)
+					}
+					fmt.Fprintf(stdout, "\n")
+				}
+			}
+			fmt.Fprintf(stdout, "\n")
+		}
+	}
+
+	// Iterations section
+	if c.shouldShowSection("iterations") {
+		fmt.Fprintf(stdout, "## Iterations\n\n")
+		for _, iter := range iterations {
+			statusIcon := getStatusIcon(iter.Status)
+			fmt.Fprintf(stdout, "### %s Iteration %d: %s\n", statusIcon, iter.Number, iter.Name)
+			fmt.Fprintf(stdout, "**Status**: %s | **Goal**: %s\n", iter.Status, iter.Goal)
+
+			if c.verbose && iter.Deliverable != "" {
+				fmt.Fprintf(stdout, "**Deliverable**: %s\n", iter.Deliverable)
+			}
+
+			// Get tasks for this iteration
+			iterTasks := filterTasksByIDs(tasks, iter.TaskIDs)
+			if len(iterTasks) > 0 {
+				fmt.Fprintf(stdout, "**Progress**: %d/%d tasks complete (%.0f%%)\n",
+					countCompleteTasks(iterTasks), len(iterTasks),
+					float64(countCompleteTasks(iterTasks))/float64(len(iterTasks))*100)
+				fmt.Fprintf(stdout, "**Tasks**:\n")
+				for _, task := range iterTasks {
+					taskIcon := getStatusIcon(task.Status)
+					fmt.Fprintf(stdout, "- %s %s", taskIcon, task.Title)
+					if c.verbose && task.Description != "" {
+						fmt.Fprintf(stdout, " - %s", task.Description)
+					}
+					fmt.Fprintf(stdout, "\n")
+				}
+			}
+			fmt.Fprintf(stdout, "\n")
+		}
+	}
+
+	// Backlog section
+	if c.shouldShowSection("backlog") {
+		backlogTasks := getBacklogTasks(tasks, iterations)
+		if len(backlogTasks) > 0 {
+			fmt.Fprintf(stdout, "## Backlog\n\n")
+			fmt.Fprintf(stdout, "%d tasks not assigned to any iteration:\n\n", len(backlogTasks))
+			for _, task := range backlogTasks {
+				taskIcon := getStatusIcon(task.Status)
+				fmt.Fprintf(stdout, "- %s %s", taskIcon, task.Title)
+				if c.verbose && task.Description != "" {
+					fmt.Fprintf(stdout, " - %s", task.Description)
+				}
+				fmt.Fprintf(stdout, "\n")
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *RoadmapFullCommand) shouldShowSection(section string) bool {
+	if c.sections == nil {
+		return true
+	}
+	for _, s := range c.sections {
+		if s == section {
+			return true
+		}
+	}
+	return false
+}
+
+// Helper functions for roadmap full command
+
+func filterTasksByTrack(tasks []*TaskEntity, trackID string) []*TaskEntity {
+	var result []*TaskEntity
+	for _, task := range tasks {
+		if task.TrackID == trackID {
+			result = append(result, task)
+		}
+	}
+	return result
+}
+
+func filterTasksByIDs(tasks []*TaskEntity, taskIDs []string) []*TaskEntity {
+	var result []*TaskEntity
+	taskMap := make(map[string]*TaskEntity)
+	for _, task := range tasks {
+		taskMap[task.ID] = task
+	}
+	for _, id := range taskIDs {
+		if task, ok := taskMap[id]; ok {
+			result = append(result, task)
+		}
+	}
+	return result
+}
+
+func countCompleteTasks(tasks []*TaskEntity) int {
+	count := 0
+	for _, task := range tasks {
+		if task.Status == "done" {
+			count++
+		}
+	}
+	return count
+}
+
+func getBacklogTasks(tasks []*TaskEntity, iterations []*IterationEntity) []*TaskEntity {
+	// Build set of all task IDs in iterations
+	inIteration := make(map[string]bool)
+	for _, iter := range iterations {
+		for _, taskID := range iter.TaskIDs {
+			inIteration[taskID] = true
+		}
+	}
+
+	// Return tasks not in any iteration
+	var backlog []*TaskEntity
+	for _, task := range tasks {
+		if !inIteration[task.ID] {
+			backlog = append(backlog, task)
+		}
+	}
+	return backlog
+}
+
+func splitSections(sectionStr string) []string {
+	var sections []string
+	for _, s := range splitString(sectionStr, ",") {
+		trimmed := trimSpace(s)
+		if trimmed != "" {
+			sections = append(sections, trimmed)
+		}
+	}
+	return sections
+}
+
+func splitString(s, sep string) []string {
+	if s == "" {
+		return nil
+	}
+	var result []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if string(s[i]) == sep {
+			result = append(result, s[start:i])
+			start = i + 1
+		}
+	}
+	result = append(result, s[start:])
+	return result
+}
+
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n') {
+		end--
+	}
+	return s[start:end]
+}

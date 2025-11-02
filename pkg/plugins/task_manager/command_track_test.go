@@ -47,7 +47,6 @@ func TestTrackCreateCommand_Success(t *testing.T) {
 	}
 
 	err = cmd.Execute(ctx, cmdCtx, []string{
-		"--id", "track-plugin-system",
 		"--title", "Plugin System",
 		"--description", "Implement plugin architecture",
 		"--priority", "high",
@@ -62,8 +61,23 @@ func TestTrackCreateCommand_Success(t *testing.T) {
 		t.Errorf("expected success message, got: %s", output)
 	}
 
+	// Extract track ID from output (format: "ID:          <ID>")
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(output, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", output)
+	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(output[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(output)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(output[trackIDStart:trackIDEnd])
+
 	// Verify track was saved
-	track, err := repo.GetTrack(ctx, "track-plugin-system")
+	track, err := repo.GetTrack(ctx, trackID)
 	if err != nil {
 		t.Errorf("failed to retrieve saved track: %v", err)
 	}
@@ -72,7 +86,7 @@ func TestTrackCreateCommand_Success(t *testing.T) {
 	}
 }
 
-func TestTrackCreateCommand_MissingId(t *testing.T) {
+func TestTrackCreateCommand_MissingTitle(t *testing.T) {
 	plugin, tmpDir := setupTestPlugin(t)
 	ctx := context.Background()
 
@@ -84,11 +98,11 @@ func TestTrackCreateCommand_MissingId(t *testing.T) {
 	}
 
 	err := cmd.Execute(ctx, cmdCtx, []string{
-		"--title", "Plugin System",
+		"--description", "Some description",
 	})
 
-	if err == nil || !strings.Contains(err.Error(), "--id and --title are required") {
-		t.Errorf("expected error about missing id, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "--title is required") {
+		t.Errorf("expected error about missing title, got: %v", err)
 	}
 }
 

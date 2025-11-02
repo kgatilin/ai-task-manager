@@ -214,6 +214,31 @@ func (m *MockRepository) GetTrackWithTasks(ctx context.Context, trackID string) 
 	return nil, pluginsdk.ErrNotFound
 }
 
+func (m *MockRepository) GetProjectMetadata(ctx context.Context, key string) (string, error) {
+	return "", pluginsdk.ErrNotFound
+}
+
+func (m *MockRepository) SetProjectMetadata(ctx context.Context, key, value string) error {
+	return nil
+}
+
+func (m *MockRepository) GetProjectCode(ctx context.Context) string {
+	return "TEST"
+}
+
+func (m *MockRepository) GetNextSequenceNumber(ctx context.Context, entityType string) (int, error) {
+	switch entityType {
+	case "task":
+		return len(m.tasks) + 1, nil
+	case "track":
+		return len(m.tracks) + 1, nil
+	case "iter":
+		return len(m.iterations) + 1, nil
+	default:
+		return 0, pluginsdk.ErrInvalidArgument
+	}
+}
+
 // NewMockLogger creates a new mock logger
 func NewMockLogger() *MockLogger {
 	return &MockLogger{}

@@ -290,6 +290,7 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&RoadmapInitCommand{Plugin: p},
 		&RoadmapShowCommand{Plugin: p},
 		&RoadmapUpdateCommand{Plugin: p},
+		&RoadmapFullCommand{Plugin: p},
 		// Track commands
 		&TrackCreateCommand{Plugin: p},
 		&TrackListCommand{Plugin: p},
@@ -319,6 +320,8 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&IterationCompleteCommand{Plugin: p},
 		// TUI command
 		&TUICommand{Plugin: p},
+		// Migration commands
+		&MigrateIDsCommand{Plugin: p},
 	}
 }
 

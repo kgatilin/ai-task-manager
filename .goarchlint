@@ -132,6 +132,9 @@ overrides:
         shared_external_imports:
             exclusions:
                 - github.com/google/uuid
+                - github.com/charmbracelet/bubbletea  # TUI framework (shared UI utility)
+                - github.com/charmbracelet/lipgloss   # TUI styling (shared UI utility)
+                - github.com/mattn/go-sqlite3         # SQLite driver (shared infrastructure)
         directories_import:
             cmd:
                 - internal/app

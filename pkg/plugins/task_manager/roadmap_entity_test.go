@@ -159,8 +159,8 @@ func TestRoadmapEntityIExtensible(t *testing.T) {
 	}
 
 	fields := roadmap.GetAllFields()
-	if fields == nil || len(fields) == 0 {
-		t.Error("GetAllFields() returned empty or nil map")
+	if len(fields) == 0 {
+		t.Error("GetAllFields() returned empty map")
 	}
 
 	if roadmap.GetField("id") == nil {

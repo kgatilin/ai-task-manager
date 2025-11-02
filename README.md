@@ -221,17 +221,27 @@ dw task-manager roadmap show
 dw task-manager roadmap update \
   --vision "Updated vision" \
   --success-criteria "New criteria"
+
+# View complete roadmap overview (NEW in v2)
+dw task-manager roadmap full                          # Full overview with all sections
+dw task-manager roadmap full --verbose                # Include descriptions
+dw task-manager roadmap full --sections vision,tracks # Filter specific sections
+dw task-manager roadmap full --format json            # JSON output
+
+# Migrate timestamp IDs to human-readable format (NEW in v2)
+dw task-manager migrate-ids              # Migrate all IDs (track-123 → DW-track-1)
+dw task-manager migrate-ids --dry-run    # Preview without making changes
 ```
 
 **Track Commands (Major Work Areas):**
 
 ```bash
-# Create a track
+# Create a track (ID auto-generated in v2)
 dw task-manager track create \
-  --id track-framework-core \
   --title "Framework Core" \
   --description "Core framework implementation" \
   --priority high
+# Output: Track created with ID: DW-track-1
 
 # List all tracks (with filtering)
 dw task-manager track list
@@ -295,13 +305,13 @@ dw task-manager iteration list
 # Show iteration details
 dw task-manager iteration show 1
 
-# Show current iteration
+# Show current iteration (or next 3 planned if none current - NEW in v2)
 dw task-manager iteration current
 
 # Update iteration
 dw task-manager iteration update 1 --name "Sprint 1"
 
-# Add/remove tasks
+# Add/remove tasks (supports multiple tasks in one command - NEW in v2)
 dw task-manager iteration add-task 1 task-fc-003 task-fc-005
 dw task-manager iteration remove-task 1 task-fc-003
 

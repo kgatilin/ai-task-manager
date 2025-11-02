@@ -11,7 +11,7 @@ import (
 
 const (
 	// SchemaVersion is the current database schema version
-	SchemaVersion = 1
+	SchemaVersion = 2
 )
 
 // SQL table creation statements
@@ -89,6 +89,13 @@ CREATE TABLE IF NOT EXISTS iteration_tasks (
 )
 `
 
+	createProjectMetadataTable = `
+CREATE TABLE IF NOT EXISTS project_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+)
+`
+
 	// Indexes for common queries
 	createTracksRoadmapIDIndex = `
 CREATE INDEX IF NOT EXISTS idx_tracks_roadmap_id ON tracks(roadmap_id)
@@ -129,6 +136,7 @@ func InitSchema(db *sql.DB) error {
 		createTasksTable,
 		createIterationsTable,
 		createIterationTasksTable,
+		createProjectMetadataTable,
 		createTracksRoadmapIDIndex,
 		createTracksStatusIndex,
 		createTasksTrackIDIndex,

@@ -22,6 +22,7 @@ var projectNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 type ProjectCreateCommand struct {
 	Plugin      *TaskManagerPlugin
 	projectName string
+	projectCode string
 }
 
 func (c *ProjectCreateCommand) GetName() string {
@@ -33,7 +34,7 @@ func (c *ProjectCreateCommand) GetDescription() string {
 }
 
 func (c *ProjectCreateCommand) GetUsage() string {
-	return "dw task-manager project create <project-name>"
+	return "dw task-manager project create <project-name> [--code <code>]"
 }
 
 func (c *ProjectCreateCommand) GetHelp() string {
@@ -45,18 +46,24 @@ Project names must be alphanumeric with hyphens or underscores only.
 Arguments:
   <project-name>  Name of the project to create (required)
 
+Flags:
+  --code <code>   Project code for human-readable IDs (optional, default: uppercase first 2-3 letters of project name)
+                  Examples: DW, PROD, TEST
+
 Examples:
-  # Create a test project
+  # Create a test project with default code (TE)
   dw task-manager project create test
 
-  # Create a product project
-  dw task-manager project create my-product
+  # Create a project with custom code
+  dw task-manager project create darwinflow --code DW
 
-  # Create a project with underscores
-  dw task-manager project create real_work
+  # Create a product project with custom code
+  dw task-manager project create my-product --code PROD
 
 Notes:
   - Project name must be alphanumeric with hyphens/underscores only
+  - Project code is used for human-readable IDs (e.g., DW-task-1, PROD-track-5)
+  - If not specified, code defaults to uppercase first 2-3 letters of project name
   - Project databases are stored in .darwinflow/projects/<name>/roadmap.db
   - Use 'project switch' to change active project
   - Use '--project <name>' flag to override active project on any command`
@@ -68,9 +75,27 @@ func (c *ProjectCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 	}
 	c.projectName = args[0]
 
+	// Parse flags
+	for i := 1; i < len(args); i++ {
+		if args[i] == "--code" && i+1 < len(args) {
+			c.projectCode = args[i+1]
+			i++
+		}
+	}
+
 	// Validate project name
 	if !projectNameRegex.MatchString(c.projectName) {
 		return fmt.Errorf("invalid project name: must be alphanumeric with hyphens or underscores only")
+	}
+
+	// Generate default project code if not provided
+	if c.projectCode == "" {
+		c.projectCode = generateDefaultProjectCode(c.projectName)
+	}
+
+	// Validate project code (alphanumeric, uppercase recommended)
+	if !regexp.MustCompile(`^[A-Z0-9]+$`).MatchString(c.projectCode) {
+		return fmt.Errorf("invalid project code: must be alphanumeric uppercase (e.g., DW, PROD, TEST)")
 	}
 
 	// Check if project already exists
@@ -91,12 +116,48 @@ func (c *ProjectCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 	}
 	defer db.Close()
 
+	// Store project code in metadata
+	repo := NewSQLiteRoadmapRepository(db, c.Plugin.logger)
+	if err := repo.SetProjectMetadata(ctx, "project_code", c.projectCode); err != nil {
+		return fmt.Errorf("failed to set project code: %w", err)
+	}
+
 	fmt.Fprintf(cmdCtx.GetStdout(), "Project created successfully: %s\n", c.projectName)
+	fmt.Fprintf(cmdCtx.GetStdout(), "Project code: %s\n", c.projectCode)
 	fmt.Fprintf(cmdCtx.GetStdout(), "Database: %s\n", filepath.Join(projectDir, "roadmap.db"))
+	fmt.Fprintf(cmdCtx.GetStdout(), "\nEntity IDs will use format: %s-<type>-<number>\n", c.projectCode)
+	fmt.Fprintf(cmdCtx.GetStdout(), "Examples: %s-task-1, %s-track-1, %s-iter-1\n", c.projectCode, c.projectCode, c.projectCode)
 	fmt.Fprintf(cmdCtx.GetStdout(), "\nTo switch to this project, run:\n")
 	fmt.Fprintf(cmdCtx.GetStdout(), "  dw task-manager project switch %s\n", c.projectName)
 
 	return nil
+}
+
+// generateDefaultProjectCode generates a default project code from the project name.
+// Takes the first 2-3 uppercase letters from the name.
+func generateDefaultProjectCode(projectName string) string {
+	// Remove hyphens and underscores, convert to uppercase
+	code := strings.ToUpper(strings.ReplaceAll(strings.ReplaceAll(projectName, "-", ""), "_", ""))
+
+	// Extract only letters
+	var letters string
+	for _, ch := range code {
+		if ch >= 'A' && ch <= 'Z' {
+			letters += string(ch)
+		}
+	}
+
+	// Take first 2-3 letters
+	if len(letters) >= 3 {
+		return letters[:3]
+	} else if len(letters) >= 2 {
+		return letters[:2]
+	} else if len(letters) >= 1 {
+		return letters
+	}
+
+	// Fallback to "DW" if no letters found
+	return "DW"
 }
 
 // ============================================================================

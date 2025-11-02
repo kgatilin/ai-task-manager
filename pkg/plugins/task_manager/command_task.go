@@ -69,7 +69,7 @@ Notes:
 }
 
 func (c *TaskCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
-	// Parse flags
+	// Parse flags FIRST to get project name
 	c.priority = "medium" // default
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -106,24 +106,31 @@ func (c *TaskCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 		return fmt.Errorf("--track and --title are required")
 	}
 
-	// Get repository for project
+	// Get repository for project AFTER parsing flags
 	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	// Verify track exists
+	// Verify track exists with helpful error message
 	track, err := repo.GetTrack(ctx, c.trackID)
 	if err != nil {
 		if errors.Is(err, pluginsdk.ErrNotFound) {
+			fmt.Fprintf(cmdCtx.GetStdout(), "Error: Track \"%s\" not found\n", c.trackID)
+			fmt.Fprintf(cmdCtx.GetStdout(), "Hint: Use 'dw task-manager track list' to see available tracks\n")
 			return fmt.Errorf("track not found: %s", c.trackID)
 		}
 		return fmt.Errorf("failed to verify track: %w", err)
 	}
 
-	// Generate task ID (timestamp-based)
-	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
+	// Generate task ID using project code and sequence number
+	projectCode := repo.GetProjectCode(ctx)
+	nextNum, err := repo.GetNextSequenceNumber(ctx, "task")
+	if err != nil {
+		return fmt.Errorf("failed to generate task ID: %w", err)
+	}
+	taskID := fmt.Sprintf("%s-task-%d", projectCode, nextNum)
 
 	// Create task
 	task := NewTaskEntity(
@@ -524,6 +531,44 @@ func (c *TaskUpdateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 		return fmt.Errorf("failed to retrieve task: %w", err)
 	}
 
+	// Validate status change to "done"
+	if c.status == "done" && task.Status != "done" {
+		// Get the parent track
+		track, err := repo.GetTrack(ctx, task.TrackID)
+		if err != nil {
+			return fmt.Errorf("failed to retrieve parent track: %w", err)
+		}
+
+		// TODO: Future - Check if all acceptance criteria are verified
+		// This is a placeholder for when AC feature is implemented
+		// Example validation:
+		// unverifiedAC := getUnverifiedAcceptanceCriteria(ctx, repo, c.taskID)
+		// if len(unverifiedAC) > 0 {
+		//     fmt.Fprintf(cmdCtx.GetStdout(), "Error: Cannot mark task as done - acceptance criteria not verified:\n")
+		//     for _, ac := range unverifiedAC {
+		//         fmt.Fprintf(cmdCtx.GetStdout(), "  - %s: %s\n", ac.ID, ac.Description)
+		//     }
+		//     fmt.Fprintf(cmdCtx.GetStdout(), "Hint: Use 'dw task-manager ac verify <ac-id>' to verify criteria\n")
+		//     return fmt.Errorf("acceptance criteria not verified")
+		// }
+
+		// TODO: Future - Check if track has ADR (when ADR feature exists and is configured)
+		// This is a placeholder for when ADR feature is implemented
+		// Example validation:
+		// hasADR, err := trackHasADR(ctx, repo, track.ID)
+		// if err != nil {
+		//     return fmt.Errorf("failed to check ADR status: %w", err)
+		// }
+		// if !hasADR {
+		//     fmt.Fprintf(cmdCtx.GetStdout(), "Error: Cannot mark task as done - track \"%s\" has no ADR\n", track.ID)
+		//     fmt.Fprintf(cmdCtx.GetStdout(), "Hint: Use 'dw task-manager adr create %s' to create an ADR\n", track.ID)
+		//     return fmt.Errorf("track has no ADR")
+		// }
+
+		// Log that validation would occur here in future
+		_ = track // Use track to avoid unused variable warning
+	}
+
 	// Update fields
 	if c.title != "" {
 		task.Title = c.title
@@ -783,7 +828,6 @@ func (c *TaskMoveCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 
 type TaskMigrateCommand struct {
 	Plugin  *TaskManagerPlugin
-	project string
 	taskID  string
 	trackID string
 }

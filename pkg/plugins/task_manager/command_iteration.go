@@ -63,7 +63,8 @@ Notes:
   - Iteration number is auto-incremented starting from 1
   - Initial status is set to 'planned'
   - No tasks are added initially (use iteration add-task)
-  - Only one iteration can have status 'current' at a time`
+  - Only one iteration can have status 'current' at a time
+  - Deadline support is planned for a future iteration (will require schema update)`
 }
 
 func (c *IterationCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
@@ -434,8 +435,59 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 	iteration, err := repo.GetCurrentIteration(ctx)
 	if err != nil {
 		if errors.Is(err, pluginsdk.ErrNotFound) {
-			fmt.Fprintf(cmdCtx.GetStdout(), "No current iteration.\n")
-			fmt.Fprintf(cmdCtx.GetStdout(), "Start one with 'dw task-manager iteration start <number>'\n")
+			// No current iteration - show next 3 planned iterations
+			iterations, err := repo.ListIterations(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to list iterations: %w", err)
+			}
+
+			// Filter for planned iterations
+			var plannedIterations []*IterationEntity
+			for _, iter := range iterations {
+				if iter.Status == "planned" {
+					plannedIterations = append(plannedIterations, iter)
+				}
+			}
+
+			fmt.Fprintf(cmdCtx.GetStdout(), "No current iteration.\n\n")
+
+			if len(plannedIterations) > 0 {
+				fmt.Fprintf(cmdCtx.GetStdout(), "Next planned iterations:\n")
+				limit := 3
+				if len(plannedIterations) < limit {
+					limit = len(plannedIterations)
+				}
+
+				for i := 0; i < limit; i++ {
+					iter := plannedIterations[i]
+					// Get tasks for progress calculation
+					tasks, err := repo.GetIterationTasks(ctx, iter.Number)
+					if err != nil {
+						return fmt.Errorf("failed to get iteration tasks: %w", err)
+					}
+
+					completedCount := 0
+					for _, task := range tasks {
+						if task.Status == "done" {
+							completedCount++
+						}
+					}
+
+					completePct := 0
+					if len(tasks) > 0 {
+						completePct = (completedCount * 100) / len(tasks)
+					}
+
+					fmt.Fprintf(cmdCtx.GetStdout(), "%d. %s - %s (%d tasks, %d%% complete)\n",
+						i+1, iter.Name, iter.Goal, len(tasks), completePct)
+				}
+
+				fmt.Fprintf(cmdCtx.GetStdout(), "\nHint: Use 'dw task-manager iteration start <number>' to start an iteration\n")
+			} else {
+				fmt.Fprintf(cmdCtx.GetStdout(), "No planned iterations available.\n")
+				fmt.Fprintf(cmdCtx.GetStdout(), "Hint: Use 'dw task-manager iteration create' to create an iteration\n")
+			}
+
 			return nil
 		}
 		return fmt.Errorf("failed to get current iteration: %w", err)
@@ -777,14 +829,15 @@ Arguments:
 
 Examples:
   # Add single task
-  dw task-manager iteration add-task 1 task-fc-001
+  dw task-manager iteration add-task 1 DW-task-1
 
-  # Add multiple tasks
-  dw task-manager iteration add-task 1 task-fc-001 task-fc-002 task-fc-003
+  # Add multiple tasks in one command
+  dw task-manager iteration add-task 1 DW-task-1 DW-task-2 DW-task-3
 
 Notes:
-  - All task IDs must exist and belong to the same track
-  - Task cannot already be in the iteration
+  - Multiple tasks can be added in a single command
+  - All task IDs must exist
+  - Tasks already in the iteration will be skipped with a warning
   - Run 'dw task-manager task list' to see available tasks`
 }
 

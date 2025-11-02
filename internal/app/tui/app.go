@@ -15,12 +15,6 @@ import (
 
 var (
 	spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	errorStyle   = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("196")).
-			Bold(true).
-			Padding(1).
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("196"))
 )
 
 // AppModel is the main orchestrator for the TUI

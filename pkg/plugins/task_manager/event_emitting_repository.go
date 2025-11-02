@@ -321,6 +321,30 @@ func (e *EventEmittingRepository) GetTrackWithTasks(ctx context.Context, trackID
 }
 
 // ============================================================================
+// Project Metadata Operations
+// ============================================================================
+
+// GetProjectMetadata retrieves a metadata value by key (read-only, no event).
+func (e *EventEmittingRepository) GetProjectMetadata(ctx context.Context, key string) (string, error) {
+	return e.repo.GetProjectMetadata(ctx, key)
+}
+
+// SetProjectMetadata sets a metadata value by key (write-only, no event).
+func (e *EventEmittingRepository) SetProjectMetadata(ctx context.Context, key, value string) error {
+	return e.repo.SetProjectMetadata(ctx, key, value)
+}
+
+// GetProjectCode retrieves the project code (read-only, no event).
+func (e *EventEmittingRepository) GetProjectCode(ctx context.Context) string {
+	return e.repo.GetProjectCode(ctx)
+}
+
+// GetNextSequenceNumber retrieves the next sequence number for an entity type (read-only, no event).
+func (e *EventEmittingRepository) GetNextSequenceNumber(ctx context.Context, entityType string) (int, error) {
+	return e.repo.GetNextSequenceNumber(ctx, entityType)
+}
+
+// ============================================================================
 // Event Emission Helpers
 // ============================================================================
 

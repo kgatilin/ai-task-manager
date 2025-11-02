@@ -16,55 +16,54 @@ import (
 // ============================================================================
 
 func TestTaskCreateCommand_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	db := createRoadmapTestDB(t)
-	defer db.Close()
-
-	plugin, err := task_manager.NewTaskManagerPluginWithDatabase(
-		&stubLogger{},
-		tmpDir,
-		db,
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	// Setup: Create roadmap and track
-	repo := plugin.GetRepository()
+	plugin, tmpDir := setupTestPlugin(t)
 	ctx := context.Background()
 
-	roadmap, err := task_manager.NewRoadmapEntity(
-		"roadmap-test",
-		"Test vision",
-		"Test criteria",
-		time.Now().UTC(),
-		time.Now().UTC(),
-	)
+	// Setup: Create roadmap and track using commands
+	roadmapCmd := &task_manager.RoadmapInitCommand{Plugin: plugin}
+	roadmapCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := roadmapCmd.Execute(ctx, roadmapCtx, []string{
+		"--vision", "Test vision",
+		"--success-criteria", "Test criteria",
+	})
 	if err != nil {
 		t.Fatalf("failed to create roadmap: %v", err)
 	}
-	if err := repo.SaveRoadmap(ctx, roadmap); err != nil {
-		t.Fatalf("failed to save roadmap: %v", err)
-	}
 
-	track, err := task_manager.NewTrackEntity(
-		"track-test",
-		"roadmap-test",
-		"Test Track",
-		"Test description",
-		"not-started",
-		"high",
-		[]string{},
-		time.Now().UTC(),
-		time.Now().UTC(),
-	)
+	trackCmd := &task_manager.TrackCreateCommand{Plugin: plugin}
+	trackCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = trackCmd.Execute(ctx, trackCtx, []string{
+		"--title", "Test Track",
+		"--description", "Test description",
+		"--priority", "high",
+	})
 	if err != nil {
 		t.Fatalf("failed to create track: %v", err)
 	}
-	if err := repo.SaveTrack(ctx, track); err != nil {
-		t.Fatalf("failed to save track: %v", err)
+
+	// Extract track ID from output (format: "ID:          <ID>")
+	trackOutput := trackCtx.stdout.String()
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(trackOutput, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", trackOutput)
 	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(trackOutput[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(trackOutput)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(trackOutput[trackIDStart:trackIDEnd])
 
 	// Execute command
 	cmd := &task_manager.TaskCreateCommand{Plugin: plugin}
@@ -75,7 +74,7 @@ func TestTaskCreateCommand_Success(t *testing.T) {
 	}
 
 	err = cmd.Execute(ctx, cmdCtx, []string{
-		"--track", "track-test",
+		"--track", trackID,
 		"--title", "Implement feature",
 		"--description", "Add new feature",
 		"--priority", "high",
@@ -94,21 +93,27 @@ func TestTaskCreateCommand_Success(t *testing.T) {
 	}
 
 	// Verify task was saved
-	tasks, err := repo.ListTasks(ctx, task_manager.TaskFilters{TrackID: "track-test"})
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+
+	tasks, err := repo.ListTasks(ctx, task_manager.TaskFilters{TrackID: trackID})
 	if err != nil {
 		t.Fatalf("failed to list tasks: %v", err)
 	}
 	if len(tasks) != 1 {
 		t.Errorf("expected 1 task, got %d", len(tasks))
 	}
-	if tasks[0].Title != "Implement feature" {
-		t.Errorf("expected title 'Implement feature', got '%s'", tasks[0].Title)
-	}
-	if tasks[0].Priority != "high" {
-		t.Errorf("expected priority 'high', got '%s'", tasks[0].Priority)
-	}
-	if tasks[0].Status != "todo" {
-		t.Errorf("expected status 'todo', got '%s'", tasks[0].Status)
+	if len(tasks) > 0 {
+		if tasks[0].Title != "Implement feature" {
+			t.Errorf("expected title 'Implement feature', got '%s'", tasks[0].Title)
+		}
+		if tasks[0].Priority != "high" {
+			t.Errorf("expected priority 'high', got '%s'", tasks[0].Priority)
+		}
+		if tasks[0].Status != "todo" {
+			t.Errorf("expected status 'todo', got '%s'", tasks[0].Status)
+		}
 	}
 }
 
@@ -256,71 +261,70 @@ func TestTaskListCommand_NoTasks(t *testing.T) {
 }
 
 func TestTaskListCommand_ListAllTasks(t *testing.T) {
-	tmpDir := t.TempDir()
-	db := createRoadmapTestDB(t)
-	defer db.Close()
-
-	plugin, err := task_manager.NewTaskManagerPluginWithDatabase(
-		&stubLogger{},
-		tmpDir,
-		db,
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	// Setup: Create roadmap, track, and tasks
-	repo := plugin.GetRepository()
+	plugin, tmpDir := setupTestPlugin(t)
 	ctx := context.Background()
 
-	roadmap, err := task_manager.NewRoadmapEntity(
-		"roadmap-test",
-		"Test vision",
-		"Test criteria",
-		time.Now().UTC(),
-		time.Now().UTC(),
-	)
+	// Setup: Create roadmap and track using commands
+	roadmapCmd := &task_manager.RoadmapInitCommand{Plugin: plugin}
+	roadmapCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := roadmapCmd.Execute(ctx, roadmapCtx, []string{
+		"--vision", "Test vision",
+		"--success-criteria", "Test criteria",
+	})
 	if err != nil {
 		t.Fatalf("failed to create roadmap: %v", err)
 	}
-	if err := repo.SaveRoadmap(ctx, roadmap); err != nil {
-		t.Fatalf("failed to save roadmap: %v", err)
-	}
 
-	track, err := task_manager.NewTrackEntity(
-		"track-test",
-		"roadmap-test",
-		"Test Track",
-		"Test description",
-		"not-started",
-		"high",
-		[]string{},
-		time.Now().UTC(),
-		time.Now().UTC(),
-	)
+	trackCmd := &task_manager.TrackCreateCommand{Plugin: plugin}
+	trackCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = trackCmd.Execute(ctx, trackCtx, []string{
+		"--title", "Test Track",
+		"--description", "Test description",
+		"--priority", "high",
+	})
 	if err != nil {
 		t.Fatalf("failed to create track: %v", err)
 	}
-	if err := repo.SaveTrack(ctx, track); err != nil {
-		t.Fatalf("failed to save track: %v", err)
+
+	// Extract track ID from output
+	trackOutput := trackCtx.stdout.String()
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(trackOutput, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", trackOutput)
 	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(trackOutput[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(trackOutput)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(trackOutput[trackIDStart:trackIDEnd])
 
 	// Create multiple tasks
 	for i := 0; i < 3; i++ {
-		task := task_manager.NewTaskEntity(
-			"task-test-"+string(rune(i)),
-			"track-test",
-			"Task "+string(rune(i+49)),
-			"",
-			"todo",
-			"medium",
-			"",
-			time.Now().UTC(),
-			time.Now().UTC(),
-		)
-		if err := repo.SaveTask(ctx, task); err != nil {
-			t.Fatalf("failed to save task: %v", err)
+		taskCmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+		taskCtx := &mockCommandContext{
+			workingDir: tmpDir,
+			stdout:     &bytes.Buffer{},
+			logger:     &stubLogger{},
+		}
+		err = taskCmd.Execute(ctx, taskCtx, []string{
+			"--track", trackID,
+			"--title", "Task " + string(rune(i+49)),
+			"--priority", "medium",
+		})
+		if err != nil {
+			t.Fatalf("failed to create task: %v", err)
 		}
 	}
 

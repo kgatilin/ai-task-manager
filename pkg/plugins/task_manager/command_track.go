@@ -33,7 +33,7 @@ func (c *TrackCreateCommand) GetDescription() string {
 }
 
 func (c *TrackCreateCommand) GetUsage() string {
-	return "dw task-manager track create --id <id> --title <title> [--description <desc>] [--priority <priority>]"
+	return "dw task-manager track create --title <title> [--description <desc>] [--priority <priority>]"
 }
 
 func (c *TrackCreateCommand) GetHelp() string {
@@ -44,7 +44,6 @@ All tracks must belong to an active roadmap - create one first with
 'dw task-manager roadmap init'.
 
 Flags:
-  --id <id>                Track ID (required, format: track-<slug>)
   --title <title>          Track title (required)
   --description <desc>     Track description (optional)
   --priority <priority>    Track priority (optional, default: medium)
@@ -52,17 +51,16 @@ Flags:
 
 Examples:
   # Create a basic track
-  dw task-manager track create --id track-plugin-system --title "Plugin System"
+  dw task-manager track create --title "Plugin System"
 
   # Create with full details
   dw task-manager track create \
-    --id track-plugin-system \
     --title "Plugin System" \
     --description "Implement extensible plugin architecture" \
     --priority high
 
 Notes:
-  - Track ID must follow convention: track-<slug> (alphanumeric with hyphens)
+  - Track ID is auto-generated in format: <PROJECT_CODE>-track-<number> (e.g., DW-track-1)
   - An active roadmap must exist (create with 'dw task-manager roadmap init')
   - Initial status is automatically set to 'not-started'
   - No dependencies are added initially (use track add-dependency)`
@@ -76,11 +74,6 @@ func (c *TrackCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comma
 		case "--project":
 			if i+1 < len(args) {
 				c.project = args[i+1]
-				i++
-			}
-		case "--id":
-			if i+1 < len(args) {
-				c.id = args[i+1]
 				i++
 			}
 		case "--title":
@@ -102,8 +95,8 @@ func (c *TrackCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comma
 	}
 
 	// Validate required flags
-	if c.id == "" || c.title == "" {
-		return fmt.Errorf("--id and --title are required")
+	if c.title == "" {
+		return fmt.Errorf("--title is required")
 	}
 
 	// Get repository for project
@@ -121,6 +114,14 @@ func (c *TrackCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comma
 		}
 		return fmt.Errorf("failed to get active roadmap: %w", err)
 	}
+
+	// Generate track ID
+	projectCode := repo.GetProjectCode(ctx)
+	nextNum, err := repo.GetNextSequenceNumber(ctx, "track")
+	if err != nil {
+		return fmt.Errorf("failed to generate track ID: %w", err)
+	}
+	c.id = fmt.Sprintf("%s-track-%d", projectCode, nextNum)
 
 	// Create track with initial status
 	now := time.Now().UTC()

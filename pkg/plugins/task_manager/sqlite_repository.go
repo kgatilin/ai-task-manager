@@ -1122,3 +1122,98 @@ func (r *SQLiteRoadmapRepository) getIterationTaskIDs(ctx context.Context, itera
 
 	return taskIDs, nil
 }
+
+// ============================================================================
+// Project Metadata Operations
+// ============================================================================
+
+// GetProjectMetadata retrieves a metadata value by key.
+func (r *SQLiteRoadmapRepository) GetProjectMetadata(ctx context.Context, key string) (string, error) {
+	var value string
+	err := r.db.QueryRowContext(ctx, "SELECT value FROM project_metadata WHERE key = ?", key).Scan(&value)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("%w: metadata key %s not found", pluginsdk.ErrNotFound, key)
+		}
+		return "", fmt.Errorf("failed to query metadata: %w", err)
+	}
+	return value, nil
+}
+
+// SetProjectMetadata sets a metadata value by key.
+func (r *SQLiteRoadmapRepository) SetProjectMetadata(ctx context.Context, key, value string) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		"INSERT OR REPLACE INTO project_metadata (key, value) VALUES (?, ?)",
+		key, value,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set metadata: %w", err)
+	}
+	return nil
+}
+
+// GetProjectCode retrieves the project code (e.g., "DW" for darwinflow).
+// Returns "DW" as default if not set.
+func (r *SQLiteRoadmapRepository) GetProjectCode(ctx context.Context) string {
+	code, err := r.GetProjectMetadata(ctx, "project_code")
+	if err != nil {
+		// Return default if not set
+		return "DW"
+	}
+	return code
+}
+
+// GetNextSequenceNumber retrieves the next sequence number for an entity type.
+// Entity types: "task", "track", "iter"
+func (r *SQLiteRoadmapRepository) GetNextSequenceNumber(ctx context.Context, entityType string) (int, error) {
+	var maxNum int
+	var query string
+
+	switch entityType {
+	case "task":
+		// Parse existing task IDs to find max number
+		query = "SELECT id FROM tasks"
+	case "track":
+		// Parse existing track IDs to find max number
+		query = "SELECT id FROM tracks"
+	case "iter":
+		// For iterations, use the number column directly
+		err := r.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(number), 0) FROM iterations").Scan(&maxNum)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get max iteration number: %w", err)
+		}
+		return maxNum + 1, nil
+	default:
+		return 0, fmt.Errorf("%w: invalid entity type: %s", pluginsdk.ErrInvalidArgument, entityType)
+	}
+
+	// For tasks and tracks, we need to parse IDs
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query %s IDs: %w", entityType, err)
+	}
+	defer rows.Close()
+
+	maxNum = 0
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return 0, fmt.Errorf("failed to scan ID: %w", err)
+		}
+
+		// Parse the numeric part from IDs like "DW-task-123" or "DW-track-5"
+		// Format: {CODE}-{entity}-{number}
+		var num int
+		_, err := fmt.Sscanf(id, "%*[^-]-%*[^-]-%d", &num)
+		if err == nil && num > maxNum {
+			maxNum = num
+		}
+	}
+
+	if err = rows.Err(); err != nil {
+		return 0, fmt.Errorf("error iterating IDs: %w", err)
+	}
+
+	return maxNum + 1, nil
+}
