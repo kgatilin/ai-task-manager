@@ -232,6 +232,7 @@ func (m AppModel) getRoadmapListHotkeys() []HotkeyGroup {
 			Name: "Navigation",
 			Hotkeys: []Hotkey{
 				{Keys: []string{"j", "k", "↑", "↓"}, Description: fmt.Sprintf("Select %s", navTarget)},
+				{Keys: []string{"Ctrl+j", "Ctrl+k"}, Description: "Scroll View"},
 				{Keys: []string{"Tab"}, Description: "Switch Selection Mode"},
 				{Keys: []string{"Enter"}, Description: "View Details"},
 			},
@@ -714,6 +715,10 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.roadmapViewport.GotoTop()
 	case "end":
 		m.roadmapViewport.GotoBottom()
+	case "ctrl+j":
+		m.roadmapViewport.LineDown(3)
+	case "ctrl+k":
+		m.roadmapViewport.LineUp(3)
 	}
 
 	return m, nil
@@ -893,22 +898,24 @@ func (m *AppModel) renderRoadmapList() string {
 
 	// TM-task-45: Vision and success criteria with formatting (hide roadmap ID)
 	if m.roadmap != nil {
-		fieldLabelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
-		fieldValueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+		headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("141"))
+		contentStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
 		availableWidth := m.width
 		if availableWidth <= 0 {
 			availableWidth = 80
 		}
-		contentWidth := availableWidth - 10
+		contentWidth := availableWidth - 4
 
-		visionLabel := fieldLabelStyle.Render("Vision:")
+		// Vision as header with content below
+		s += headerStyle.Render("# Vision") + "\n"
 		visionText := wrapText(m.roadmap.Vision, contentWidth)
-		s += visionLabel + " " + fieldValueStyle.Render(visionText) + "\n"
+		s += contentStyle.Render(visionText) + "\n\n"
 
-		criteriaLabel := fieldLabelStyle.Render("Success Criteria:")
+		// Success Criteria as header with content below
+		s += headerStyle.Render("# Success Criteria") + "\n"
 		criteriaText := wrapText(m.roadmap.SuccessCriteria, contentWidth)
-		s += criteriaLabel + " " + fieldValueStyle.Render(criteriaText) + "\n\n"
+		s += contentStyle.Render(criteriaText) + "\n\n"
 	}
 
 	// TM-task-48: Show non-completed iterations on main view
