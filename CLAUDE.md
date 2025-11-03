@@ -88,23 +88,10 @@ dw task-manager ac fail TM-ac-X --feedback "..."
 **Creating New Work:**
 
 ```bash
-# Create a new task in a track
-dw task-manager task create --track TM-track-X --title "..." --priority high
+# 1. Create a new track
+dw task-manager track create --title "..." --description "..." --rank 100
 
-# Create a new iteration
-dw task-manager iteration create --name "..." --goal "..." --deliverable "..."
-
-# Add tasks to iteration
-dw task-manager iteration add-task <iter-num> TM-task-1 TM-task-2
-
-# Start working on iteration
-dw task-manager iteration start <iter-num>
-```
-
-**Architecture Decision Records (ADRs):**
-
-```bash
-# Create ADR for a track
+# 2. Create ADR for the track (REQUIRED before implementation)
 dw task-manager adr create <track-id> \
   --title "..." \
   --context "..." \
@@ -112,14 +99,29 @@ dw task-manager adr create <track-id> \
   --consequences "..." \
   --alternatives "..."
 
+# 3. Update ADR status to 'accepted' after review
+dw task-manager adr update <adr-id> --status accepted
+
+# 4. Create tasks in the track with acceptance criteria
+dw task-manager task create --track TM-track-X --title "..." --rank 100
+dw task-manager ac add TM-task-X --description "..."
+
+# 5. Create iteration and add tasks
+dw task-manager iteration create --name "..." --goal "..." --deliverable "..."
+dw task-manager iteration add-task <iter-num> TM-task-1 TM-task-2
+
+# 6. Start working on iteration
+dw task-manager iteration start <iter-num>
+```
+
+**Architecture Decision Records (ADRs) - Additional Commands:**
+
+```bash
 # List all ADRs
 dw task-manager adr list
 
 # Show ADR details
 dw task-manager adr show TM-adr-X
-
-# Update ADR (change status to accepted)
-dw task-manager adr update TM-adr-X --status accepted
 
 # Mark ADR as superseded
 dw task-manager adr supersede TM-adr-X --superseded-by TM-adr-Y
@@ -137,12 +139,11 @@ dw task-manager track list-missing-adrs
 **Priority Guidance**: Work on current iteration first → critical/high priority tracks → planned iterations.
 
 **Best Practices**:
+- **ALWAYS create ADR immediately after creating a track** (before any implementation)
 - Update task status as you work (don't batch updates)
 - Verify all acceptance criteria before marking task "done"
 - Use `dw task-manager iteration current` to stay focused
 - Check track dependencies before starting new tracks
-- Create ADR for each track documenting key architectural decisions
-- Update ADR status to 'accepted' once decision is finalized
 
 ---
 
@@ -270,8 +271,9 @@ For substantial refactorings or multi-package features:
 - [ ] Update README.md (if commands/features changed)
 - [ ] Update CLAUDE.md (if workflow/architecture changed)
 - [ ] Run `go-arch-lint docs` (if architecture/API changed)
-- [ ] Create/update ADR if architectural decisions were made
 - [ ] Commit with concise message
+
+**Note**: ADRs should be created during task preparation (before implementation), not after.
 
 ### Roadmap Tracking
 
@@ -444,10 +446,11 @@ go-arch-lint docs  # Regenerates docs/arch-index.md
 - [ ] README.md updated (if user-facing changes)
 - [ ] CLAUDE.md updated (if workflow changes)
 - [ ] Package CLAUDE.md updated (if package responsibilities changed)
-- [ ] ADR created/updated (if architectural decisions made)
 - [ ] Architecture docs regenerated (if needed)
 - [ ] All tests pass
 - [ ] Linter passes (zero violations)
+
+**Note**: ADRs should be created during track creation (before implementation), not during documentation phase.
 
 ---
 
