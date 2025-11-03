@@ -787,11 +787,11 @@ func (r *SQLiteRoadmapRepository) GetCurrentIteration(ctx context.Context) (*Ite
 	return &iteration, nil
 }
 
-// ListIterations returns all iterations, ordered by number.
+// ListIterations returns all iterations, ordered by rank (then number).
 func (r *SQLiteRoadmapRepository) ListIterations(ctx context.Context) ([]*IterationEntity, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
-		"SELECT number, name, goal, status, deliverable, started_at, completed_at, created_at, updated_at FROM iterations ORDER BY number",
+		"SELECT number, name, goal, status, deliverable, started_at, completed_at, created_at, updated_at FROM iterations ORDER BY rank, number",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query iterations: %w", err)
