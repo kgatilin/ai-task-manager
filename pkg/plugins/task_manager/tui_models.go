@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
@@ -26,6 +27,26 @@ const (
 	ViewError
 	ViewLoading
 )
+
+// ItemSelectionType determines which list is active for selection in the roadmap view
+type ItemSelectionType int
+
+const (
+	SelectTracks ItemSelectionType = iota
+	SelectIterations
+)
+
+// Hotkey represents a single keyboard shortcut
+type Hotkey struct {
+	Keys        []string // Key combinations (e.g., ["j", "↓"])
+	Description string   // What the hotkey does
+}
+
+// HotkeyGroup represents a category of related hotkeys
+type HotkeyGroup struct {
+	Name    string
+	Hotkeys []Hotkey
+}
 
 // AppModel is the main TUI application model
 type AppModel struct {
@@ -64,13 +85,22 @@ type AppModel struct {
 	selectedTrackIdx     int
 	selectedTaskIdx      int
 	selectedIterationIdx int
+	selectedItemType     ItemSelectionType // Tracks which list is active for selection (tracks vs iterations)
 	width                int
 	height               int
+
+	// Viewport for scrolling
+	roadmapViewport viewport.Model
 
 	// View mode toggles
 	showFullRoadmap      bool // Toggle between tracks-only and full roadmap view
 	showCompletedTracks  bool // Toggle showing completed tracks
 	showCompletedIters   bool // Toggle showing completed iterations
+
+	// Full roadmap data
+	iterationTasksByNumber map[int][]*TaskEntity   // Tasks for each iteration
+	trackTasksByID         map[string][]*TaskEntity // Tasks for each track
+	backlogTasks           []*TaskEntity            // Tasks not in any iteration/track
 
 	// Timestamps for debouncing
 	lastUpdate time.Time
@@ -123,13 +153,20 @@ type ACsLoadedMsg struct {
 	Error error
 }
 
+type FullRoadmapDataLoadedMsg struct {
+	IterationTasks map[int][]*TaskEntity
+	TrackTasks     map[string][]*TaskEntity
+	BacklogTasks   []*TaskEntity
+	Error          error
+}
+
 // NewAppModel creates a new TUI app model
 func NewAppModel(
 	ctx context.Context,
 	repository RoadmapRepository,
 	logger pluginsdk.Logger,
 ) *AppModel {
-	return &AppModel{
+	m := &AppModel{
 		ctx:             ctx,
 		repository:      repository,
 		logger:          logger,
@@ -138,7 +175,13 @@ func NewAppModel(
 		selectedTaskIdx: 0,
 		lastUpdate:      time.Now(),
 		projectName:     "default",
+		selectedItemType:        SelectIterations,
+		iterationTasksByNumber:  make(map[int][]*TaskEntity),
+		trackTasksByID:          make(map[string][]*TaskEntity),
+		backlogTasks:            make([]*TaskEntity, 0),
 	}
+	m.roadmapViewport = viewport.New(80, 24) // Default size, will be updated on window resize
+	return m
 }
 
 // NewAppModelWithProject creates a new TUI app model with project name
@@ -148,7 +191,7 @@ func NewAppModelWithProject(
 	logger pluginsdk.Logger,
 	projectName string,
 ) *AppModel {
-	return &AppModel{
+	m := &AppModel{
 		ctx:             ctx,
 		repository:      repository,
 		logger:          logger,
@@ -157,7 +200,109 @@ func NewAppModelWithProject(
 		selectedTaskIdx: 0,
 		lastUpdate:      time.Now(),
 		projectName:     projectName,
+		selectedItemType:        SelectIterations,
+		iterationTasksByNumber:  make(map[int][]*TaskEntity),
+		trackTasksByID:          make(map[string][]*TaskEntity),
+		backlogTasks:            make([]*TaskEntity, 0),
 	}
+	m.roadmapViewport = viewport.New(80, 24) // Default size, will be updated on window resize
+	return m
+}
+
+// getRoadmapListHotkeys returns the hotkey groups for the roadmap list view
+func (m AppModel) getRoadmapListHotkeys() []HotkeyGroup {
+	// Dynamic description based on current selection mode
+	var navTarget string
+	if m.selectedItemType == SelectTracks {
+		navTarget = "Tracks"
+	} else {
+		navTarget = "Iterations"
+	}
+
+	// Dynamic view mode description
+	var viewMode string
+	if m.showFullRoadmap {
+		viewMode = "Hide Details"
+	} else {
+		viewMode = "Show Details"
+	}
+
+	return []HotkeyGroup{
+		{
+			Name: "Navigation",
+			Hotkeys: []Hotkey{
+				{Keys: []string{"j", "k", "↑", "↓"}, Description: fmt.Sprintf("Select %s", navTarget)},
+				{Keys: []string{"Tab"}, Description: "Switch Selection Mode"},
+				{Keys: []string{"Enter"}, Description: "View Details"},
+			},
+		},
+		{
+			Name: "Views",
+			Hotkeys: []Hotkey{
+				{Keys: []string{"i"}, Description: "Iterations View"},
+				{Keys: []string{"v"}, Description: viewMode},
+				{Keys: []string{"t"}, Description: "Toggle Completed Tracks"},
+				{Keys: []string{"c"}, Description: "Toggle Completed Iterations"},
+			},
+		},
+		{
+			Name: "General",
+			Hotkeys: []Hotkey{
+				{Keys: []string{"r"}, Description: "Refresh"},
+				{Keys: []string{"q", "Ctrl+C"}, Description: "Quit"},
+			},
+		},
+	}
+}
+
+// formatHotkeyGroups formats hotkey groups for display, with multi-line wrapping
+func formatHotkeyGroups(groups []HotkeyGroup, width int, style lipgloss.Style) string {
+	// Format all hotkeys first
+	var formatted []string
+	for _, group := range groups {
+		for _, hotkey := range group.Hotkeys {
+			// Combine keys with "/"
+			keys := strings.Join(hotkey.Keys, "/")
+			// Format as "keys:description"
+			formatted = append(formatted, fmt.Sprintf("%s:%s", keys, hotkey.Description))
+		}
+	}
+
+	// Join with " | " separator
+	separator := " | "
+
+	// Build output with wrapping
+	var lines []string
+	var currentLine strings.Builder
+
+	for i, item := range formatted {
+		// Check if adding this item would exceed width
+		testLine := currentLine.String()
+		if i > 0 && len(testLine) > 0 {
+			testLine += separator
+		}
+		testLine += item
+
+		// If first item or fits on current line, add it
+		if currentLine.Len() == 0 || len(testLine) <= width {
+			if currentLine.Len() > 0 {
+				currentLine.WriteString(separator)
+			}
+			currentLine.WriteString(item)
+		} else {
+			// Start new line
+			lines = append(lines, style.Render(currentLine.String()))
+			currentLine.Reset()
+			currentLine.WriteString(item)
+		}
+	}
+
+	// Add final line
+	if currentLine.Len() > 0 {
+		lines = append(lines, style.Render(currentLine.String()))
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 // Init initializes the application
@@ -243,6 +388,57 @@ func (m *AppModel) loadIterationDetail(iterationNum int) tea.Cmd {
 	}
 }
 
+// loadFullRoadmapData loads all tasks for iterations, tracks, and backlog
+func (m *AppModel) loadFullRoadmapData() tea.Cmd {
+	return func() tea.Msg {
+		// Load all tasks
+		allTasks, err := m.repository.ListTasks(m.ctx, TaskFilters{})
+		if err != nil {
+			return FullRoadmapDataLoadedMsg{Error: err}
+		}
+
+		// Create a map of tasks by ID for quick lookup
+		tasksByID := make(map[string]*TaskEntity)
+		for _, task := range allTasks {
+			tasksByID[task.ID] = task
+		}
+
+		// Initialize maps
+		iterationTasks := make(map[int][]*TaskEntity)
+		trackTasks := make(map[string][]*TaskEntity)
+		assignedTaskIDs := make(map[string]bool) // Track which tasks are assigned to iterations
+		var backlogTasks []*TaskEntity
+
+		// Group tasks by iteration (from iteration's task IDs)
+		for _, iter := range m.iterations {
+			for _, taskID := range iter.TaskIDs {
+				if task, exists := tasksByID[taskID]; exists {
+					iterationTasks[iter.Number] = append(iterationTasks[iter.Number], task)
+					assignedTaskIDs[taskID] = true
+				}
+			}
+		}
+
+		// Group tasks by track
+		for _, task := range allTasks {
+			trackTasks[task.TrackID] = append(trackTasks[task.TrackID], task)
+		}
+
+		// Collect backlog tasks (tasks not assigned to any iteration)
+		for _, task := range allTasks {
+			if !assignedTaskIDs[task.ID] {
+				backlogTasks = append(backlogTasks, task)
+			}
+		}
+
+		return FullRoadmapDataLoadedMsg{
+			IterationTasks: iterationTasks,
+			TrackTasks:     trackTasks,
+			BacklogTasks:   backlogTasks,
+		}
+	}
+}
+
 // Update processes messages and updates state
 func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -297,6 +493,10 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Update viewport size (leave room for help text at bottom)
+		m.roadmapViewport.Width = msg.Width
+		m.roadmapViewport.Height = msg.Height - 3 // Reserve 3 lines for help text
+		return m, nil
 
 	case RoadmapLoadedMsg:
 		if msg.Error != nil {
@@ -377,6 +577,18 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedACIdx = 0
 		m.lastUpdate = time.Now()
 
+	case FullRoadmapDataLoadedMsg:
+		if msg.Error != nil {
+			m.currentView = ViewError
+			m.error = msg.Error
+		} else {
+			m.iterationTasksByNumber = msg.IterationTasks
+			m.trackTasksByID = msg.TrackTasks
+			m.backlogTasks = msg.BacklogTasks
+			m.currentView = ViewRoadmapList
+		}
+		return m, nil
+
 	case ErrorMsg:
 		m.currentView = ViewError
 		m.error = msg.Error
@@ -388,53 +600,122 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleRoadmapListKeys processes key presses on roadmap list view
 func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
+	// Tab: Toggle between selecting tracks and iterations
+	case "tab":
+		if m.selectedItemType == SelectTracks {
+			m.selectedItemType = SelectIterations
+			// Reset iteration selection to 0
+			m.selectedIterationIdx = 0
+		} else {
+			m.selectedItemType = SelectTracks
+			// Reset track selection to 0
+			m.selectedTrackIdx = 0
+		}
+
+	// Navigation: j/k or arrow keys
 	case "j", "down":
-		if m.selectedTrackIdx < len(m.tracks)-1 {
-			m.selectedTrackIdx++
-		}
-	case "k", "up":
-		if m.selectedTrackIdx > 0 {
-			m.selectedTrackIdx--
-		}
-	case " ": // Space bar - verify selected AC
-		if m.selectedACIdx < len(m.acs) {
-			ac := m.acs[m.selectedACIdx]
-			// Only verify if not already verified
-			if ac.Status != ACStatusVerified && ac.Status != ACStatusAutomaticallyVerified {
-				ac.Status = ACStatusVerified
-				ac.UpdatedAt = time.Now()
-				
-				// Update in repository
-				if err := m.repository.UpdateAC(m.ctx, ac); err != nil {
-					m.logger.Error("Failed to verify AC", "error", err)
-				} else {
-					// Reload ACs to reflect the change
-					return m, m.loadACs(m.currentTrack.ID)
+		if m.selectedItemType == SelectTracks {
+			// Navigate tracks
+			activeTracks := []*TrackEntity{}
+			for _, track := range m.tracks {
+				if track.Status != "complete" && track.Status != "done" {
+					activeTracks = append(activeTracks, track)
 				}
 			}
+			if len(activeTracks) > 0 && m.selectedTrackIdx < len(activeTracks)-1 {
+				m.selectedTrackIdx++
+			}
+		} else {
+			// Navigate iterations
+			activeIterations := []*IterationEntity{}
+			for _, iter := range m.iterations {
+				if iter.Status != "complete" {
+					activeIterations = append(activeIterations, iter)
+				}
+			}
+			if len(activeIterations) > 0 && m.selectedIterationIdx < len(activeIterations)-1 {
+				m.selectedIterationIdx++
+			}
 		}
+
+	case "k", "up":
+		if m.selectedItemType == SelectTracks {
+			// Navigate tracks
+			if m.selectedTrackIdx > 0 {
+				m.selectedTrackIdx--
+			}
+		} else {
+			// Navigate iterations
+			if m.selectedIterationIdx > 0 {
+				m.selectedIterationIdx--
+			}
+		}
+
+	// Enter: View details of selected item
 	case "enter":
-		if m.selectedTrackIdx < len(m.tracks) {
-			trackID := m.tracks[m.selectedTrackIdx].ID
-			m.currentView = ViewLoading
-			return m, m.loadTrackDetail(trackID)
+		if m.selectedItemType == SelectTracks {
+			// View track detail
+			activeTracks := []*TrackEntity{}
+			for _, track := range m.tracks {
+				if track.Status != "complete" && track.Status != "done" {
+					activeTracks = append(activeTracks, track)
+				}
+			}
+			if len(activeTracks) > 0 && m.selectedTrackIdx < len(activeTracks) {
+				return m, m.loadTrackDetail(activeTracks[m.selectedTrackIdx].ID)
+			}
+		} else {
+			// View iteration detail
+			activeIterations := []*IterationEntity{}
+			for _, iter := range m.iterations {
+				if iter.Status != "complete" {
+					activeIterations = append(activeIterations, iter)
+				}
+			}
+			if len(activeIterations) > 0 && m.selectedIterationIdx < len(activeIterations) {
+				return m, m.loadIterationDetail(activeIterations[m.selectedIterationIdx].Number)
+			}
 		}
+
+	// Refresh roadmap data
 	case "r":
-		m.currentView = ViewLoading
-		return m, m.loadRoadmap
+		return m, func() tea.Msg {
+			return m.loadRoadmap()
+		}
+
+	// Switch to iterations list view
 	case "i":
-		m.currentView = ViewLoading
-		return m, m.loadIterations
+		m.currentView = ViewIterationList
+		return m, nil
+
+	// Toggle full roadmap view (vision/criteria)
 	case "v":
-		// Toggle full roadmap view
 		m.showFullRoadmap = !m.showFullRoadmap
+		// If turning on full view and data not loaded, load it
+		if m.showFullRoadmap && len(m.iterationTasksByNumber) == 0 && len(m.trackTasksByID) == 0 {
+			m.currentView = ViewLoading
+			return m, m.loadFullRoadmapData()
+		}
+
+	// Toggle completed tracks
 	case "t":
-		// Toggle completed tracks view
 		m.showCompletedTracks = !m.showCompletedTracks
+
+	// Toggle completed iterations
 	case "c":
-		// Toggle completed iterations view
 		m.showCompletedIters = !m.showCompletedIters
+
+	// Viewport scrolling
+	case "pgdown":
+		m.roadmapViewport.PageDown()
+	case "pgup":
+		m.roadmapViewport.PageUp()
+	case "home":
+		m.roadmapViewport.GotoTop()
+	case "end":
+		m.roadmapViewport.GotoBottom()
 	}
+
 	return m, nil
 }
 
@@ -611,7 +892,7 @@ func (m *AppModel) renderRoadmapList() string {
 	s += titleStyle.Render(fmt.Sprintf("Project: %s", m.projectName)) + "\n\n"
 
 	// TM-task-45: Vision and success criteria with formatting (hide roadmap ID)
-	if m.roadmap != nil && m.showFullRoadmap {
+	if m.roadmap != nil {
 		fieldLabelStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("86"))
 		fieldValueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 
@@ -646,10 +927,31 @@ func (m *AppModel) renderRoadmapList() string {
 
 	if len(nonCompletedIterations) > 0 {
 		s += sectionHeaderStyle.Render("Active Iterations:") + "\n"
-		for _, iter := range nonCompletedIterations {
+		for idx, iter := range nonCompletedIterations {
 			statusIcon := m.formatIterationStatus(iter.Status)
-			s += trackItemStyle.Render(fmt.Sprintf("%s Iteration %d: %s (%d tasks)",
-				statusIcon, iter.Number, iter.Name, len(iter.TaskIDs))) + "\n"
+
+			// Apply selection highlighting if this iteration is selected
+			var line string
+			if m.selectedItemType == SelectIterations && idx == m.selectedIterationIdx {
+				line = fmt.Sprintf("→ %s Iteration %d: %s (%d tasks)",
+					statusIcon, iter.Number, iter.Name, len(iter.TaskIDs))
+				s += selectedTrackStyle.Render(line) + "\n"
+			} else {
+				line = fmt.Sprintf("  %s Iteration %d: %s (%d tasks)",
+					statusIcon, iter.Number, iter.Name, len(iter.TaskIDs))
+				s += trackItemStyle.Render(line) + "\n"
+			}
+
+			// If full view is enabled, show tasks for this iteration
+			if m.showFullRoadmap {
+				tasks := m.iterationTasksByNumber[iter.Number]
+				if len(tasks) > 0 {
+					for _, task := range tasks {
+						taskLine := fmt.Sprintf("    %s %s", task.ID, task.Title)
+						s += completedStyle.Render(taskLine) + "\n"
+					}
+				}
+			}
 		}
 		s += "\n"
 	}
@@ -679,12 +981,26 @@ func (m *AppModel) renderRoadmapList() string {
 		for i, track := range activeTracks {
 			statusIcon := getStatusIcon(track.Status)
 			priorityIcon := getPriorityIcon(track.Rank)
-			line := fmt.Sprintf("%s %s %s - %s", statusIcon, priorityIcon, track.ID, track.Title)
 
-			if i == m.selectedTrackIdx {
+			// Apply selection highlighting if this track is selected
+			var line string
+			if m.selectedItemType == SelectTracks && i == m.selectedTrackIdx {
+				line = fmt.Sprintf("→ %s %s %s - %s", statusIcon, priorityIcon, track.ID, track.Title)
 				s += selectedTrackStyle.Render(line) + "\n"
 			} else {
+				line = fmt.Sprintf("  %s %s %s - %s", statusIcon, priorityIcon, track.ID, track.Title)
 				s += trackItemStyle.Render(line) + "\n"
+			}
+
+			// If full view is enabled, show tasks for this track
+			if m.showFullRoadmap {
+				tasks := m.trackTasksByID[track.ID]
+				if len(tasks) > 0 {
+					for _, task := range tasks {
+						taskLine := fmt.Sprintf("    %s %s", task.ID, task.Title)
+						s += completedStyle.Render(taskLine) + "\n"
+					}
+				}
 			}
 		}
 	} else {
@@ -700,16 +1016,25 @@ func (m *AppModel) renderRoadmapList() string {
 		}
 	}
 
-	// TM-task-46: Help text with view toggle indicators
-	s += "\n"
-	viewMode := "Tracks"
-	if m.showFullRoadmap {
-		viewMode = "Full"
+	// Backlog (only in full view)
+	if m.showFullRoadmap && len(m.backlogTasks) > 0 {
+		s += "\n" + sectionHeaderStyle.Render("Backlog:") + "\n"
+		for _, task := range m.backlogTasks {
+			taskLine := fmt.Sprintf("  %s %s", task.ID, task.Title)
+			s += trackItemStyle.Render(taskLine) + "\n"
+		}
 	}
-	helpText := fmt.Sprintf("j/k↑/↓:Nav | Enter:View | i:Iters | v:Toggle %s | t:CompletedTracks | c:CompletedIters | r:Refresh | q:Quit", viewMode)
-	s += helpStyle.Render(helpText)
 
-	return s
+	// Set viewport content
+	m.roadmapViewport.SetContent(s)
+
+	// Render viewport
+	viewportView := m.roadmapViewport.View()
+
+	// Add hotkeys below viewport
+	hotkeys := m.getRoadmapListHotkeys()
+	helpText := formatHotkeyGroups(hotkeys, m.width-4, helpStyle)
+	return viewportView + "\n" + helpText
 }
 
 // renderTrackDetail renders the track detail view

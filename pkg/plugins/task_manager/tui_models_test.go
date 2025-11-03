@@ -669,13 +669,14 @@ func TestNavigationToIterationList(t *testing.T) {
 	})
 	model.SetTracks([]*tm.TrackEntity{})
 	model.SetCurrentView(tm.ViewRoadmapList)
+	model.SetIterations([]*tm.IterationEntity{iter1})
 
 	// Press 'i' to go to iteration list
-	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+	updatedModel, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
 
-	// Should return a command (loadIterations)
-	if cmd == nil {
-		t.Fatal("Expected command for loading iterations")
+	// Should switch to iteration list view
+	if updatedModel.(*tm.AppModel).GetCurrentView() != tm.ViewIterationList {
+		t.Fatalf("Expected ViewIterationList, got %d", updatedModel.(*tm.AppModel).GetCurrentView())
 	}
 }
 

@@ -44,24 +44,45 @@ DarwinFlow uses a plugin-based architecture:
 # Check current iteration and tasks
 dw task-manager iteration current
 
-# View all iterations (find next planned work)
-dw task-manager iteration list
+# View all tasks (with status filtering)
+dw task-manager task list                    # All tasks
+dw task-manager task list --status todo      # Backlog
+dw task-manager task list --status in-progress  # Active work
 
-# View roadmap with tracks and priorities
-dw task-manager track list
+# View track details and tasks
+dw task-manager track show TM-track-X
 
-# Browse interactively
-dw task-manager tui
+# View task details (including acceptance criteria)
+dw task-manager task show TM-task-X
 ```
 
 **Working on Tasks:**
 
 ```bash
-# Start a task
+# Start a task (todo → in-progress)
 dw task-manager task update TM-task-X --status in-progress
 
-# Complete a task
+# Complete a task (in-progress → done)
 dw task-manager task update TM-task-X --status done
+
+# Return to backlog (in-progress → todo)
+dw task-manager task update TM-task-X --status todo
+```
+
+**Acceptance Criteria:**
+
+```bash
+# Add acceptance criterion to task
+dw task-manager ac add TM-task-X --description "..."
+
+# List task acceptance criteria
+dw task-manager ac list TM-task-X
+
+# Mark as verified (when done)
+dw task-manager ac verify TM-ac-X
+
+# Mark as failed with feedback
+dw task-manager ac fail TM-ac-X --feedback "..."
 ```
 
 **Creating New Work:**
@@ -81,6 +102,12 @@ dw task-manager iteration start <iter-num>
 ```
 
 **Priority Guidance**: Work on current iteration first → critical/high priority tracks → planned iterations.
+
+**Best Practices**:
+- Update task status as you work (don't batch updates)
+- Verify all acceptance criteria before marking task "done"
+- Use `dw task-manager iteration current` to stay focused
+- Check track dependencies before starting new tracks
 
 ---
 
