@@ -157,6 +157,7 @@ type IterationsLoadedMsg struct {
 type IterationDetailLoadedMsg struct {
 	Iteration *IterationEntity
 	Tasks     []*TaskEntity
+	ACs       []*AcceptanceCriteriaEntity
 	Error     error
 }
 
@@ -425,9 +426,15 @@ func (m *AppModel) loadIterationDetail(iterationNum int) tea.Cmd {
 			return IterationDetailLoadedMsg{Error: err}
 		}
 
+		acs, err := m.repository.ListACByIteration(m.ctx, iterationNum)
+		if err != nil {
+			return IterationDetailLoadedMsg{Error: err}
+		}
+
 		return IterationDetailLoadedMsg{
 			Iteration: iteration,
 			Tasks:     tasks,
+			ACs:       acs,
 		}
 	}
 }
@@ -625,6 +632,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.currentIteration = msg.Iteration
 		m.iterationTasks = msg.Tasks
+		m.acs = msg.ACs // Store ACs for iteration view
 		// Sort tasks by status to match display order (todo, in-progress, done)
 		// This ensures the selection index matches the visual order
 		sort.SliceStable(m.iterationTasks, func(i, j int) bool {
@@ -1730,6 +1738,41 @@ func (m *AppModel) renderIterationDetail() string {
 				doneItems = append(doneItems, fmt.Sprintf("%s %s %s - %s", statusIcon, priorityIcon, task.ID, task.Title))
 			}
 			s += renderSelectableList(m.selectedIterationTaskIdx-taskIdx, doneItems, itemStyle, selectedItemStyle)
+		}
+	}
+
+	// Acceptance Criteria section
+	if len(m.acs) > 0 {
+		s += "\n\n"
+		s += sectionStyle.Render(fmt.Sprintf("Acceptance Criteria (%d)", len(m.acs))) + "\n"
+
+		// Group ACs by task
+		acsByTask := make(map[string][]*AcceptanceCriteriaEntity)
+		taskMap := make(map[string]*TaskEntity)
+		for _, task := range m.iterationTasks {
+			taskMap[task.ID] = task
+		}
+		for _, ac := range m.acs {
+			acsByTask[ac.TaskID] = append(acsByTask[ac.TaskID], ac)
+		}
+
+		// Display ACs grouped by task
+		for _, task := range m.iterationTasks {
+			acs, hasACs := acsByTask[task.ID]
+			if !hasACs || len(acs) == 0 {
+				continue
+			}
+
+			s += "\n" + lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("214")).Render(fmt.Sprintf("%s: %s", task.ID, task.Title)) + "\n"
+			for _, ac := range acs {
+				statusIcon := getACStatusIcon(string(ac.Status))
+				// Truncate description if too long
+				desc := ac.Description
+				if len(desc) > 80 {
+					desc = desc[:77] + "..."
+				}
+				s += fmt.Sprintf("  %s [%s] %s\n", statusIcon, ac.ID, desc)
+			}
 		}
 	}
 
