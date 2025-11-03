@@ -484,7 +484,11 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 				fmt.Fprintf(cmdCtx.GetStdout(), "#%d: %s - %s (%d tasks, %d%% complete)\n",
 					iter.Number, iter.Name, iter.Goal, len(tasks), completePct)
 
-				fmt.Fprintf(cmdCtx.GetStdout(), "\nHint: Use 'dw task-manager iteration start %d' to start this iteration\n", iter.Number)
+				fmt.Fprintf(cmdCtx.GetStdout(), "\nTo review this iteration:\n")
+				fmt.Fprintf(cmdCtx.GetStdout(), "  dw task-manager iteration show %d           # View tasks\n", iter.Number)
+				fmt.Fprintf(cmdCtx.GetStdout(), "  dw task-manager ac list-iteration %d        # View all acceptance criteria\n", iter.Number)
+				fmt.Fprintf(cmdCtx.GetStdout(), "\nTo start working:\n")
+				fmt.Fprintf(cmdCtx.GetStdout(), "  dw task-manager iteration start %d          # Start this iteration\n", iter.Number)
 			} else {
 				fmt.Fprintf(cmdCtx.GetStdout(), "No planned iterations available.\n")
 				fmt.Fprintf(cmdCtx.GetStdout(), "Hint: Use 'dw task-manager iteration create' to create an iteration\n")
