@@ -724,9 +724,9 @@ func (r *SQLiteRoadmapRepository) GetIteration(ctx context.Context, number int) 
 
 	err := r.db.QueryRowContext(
 		ctx,
-		"SELECT number, name, goal, status, deliverable, started_at, completed_at, created_at, updated_at FROM iterations WHERE number = ?",
+		"SELECT number, name, goal, status, rank, deliverable, started_at, completed_at, created_at, updated_at FROM iterations WHERE number = ?",
 		number,
-	).Scan(&iteration.Number, &iteration.Name, &iteration.Goal, &iteration.Status, &iteration.Deliverable, &startedAt, &completedAt, &iteration.CreatedAt, &iteration.UpdatedAt)
+	).Scan(&iteration.Number, &iteration.Name, &iteration.Goal, &iteration.Status, &iteration.Rank, &iteration.Deliverable, &startedAt, &completedAt, &iteration.CreatedAt, &iteration.UpdatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -759,9 +759,9 @@ func (r *SQLiteRoadmapRepository) GetCurrentIteration(ctx context.Context) (*Ite
 
 	err := r.db.QueryRowContext(
 		ctx,
-		"SELECT number, name, goal, status, deliverable, started_at, completed_at, created_at, updated_at FROM iterations WHERE status = ? LIMIT 1",
+		"SELECT number, name, goal, status, rank, deliverable, started_at, completed_at, created_at, updated_at FROM iterations WHERE status = ? LIMIT 1",
 		"current",
-	).Scan(&iteration.Number, &iteration.Name, &iteration.Goal, &iteration.Status, &iteration.Deliverable, &startedAt, &completedAt, &iteration.CreatedAt, &iteration.UpdatedAt)
+	).Scan(&iteration.Number, &iteration.Name, &iteration.Goal, &iteration.Status, &iteration.Rank, &iteration.Deliverable, &startedAt, &completedAt, &iteration.CreatedAt, &iteration.UpdatedAt)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -791,7 +791,7 @@ func (r *SQLiteRoadmapRepository) GetCurrentIteration(ctx context.Context) (*Ite
 func (r *SQLiteRoadmapRepository) ListIterations(ctx context.Context) ([]*IterationEntity, error) {
 	rows, err := r.db.QueryContext(
 		ctx,
-		"SELECT number, name, goal, status, deliverable, started_at, completed_at, created_at, updated_at FROM iterations ORDER BY rank, number",
+		"SELECT number, name, goal, status, rank, deliverable, started_at, completed_at, created_at, updated_at FROM iterations ORDER BY rank, number",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query iterations: %w", err)
@@ -803,7 +803,7 @@ func (r *SQLiteRoadmapRepository) ListIterations(ctx context.Context) ([]*Iterat
 		var iteration IterationEntity
 		var startedAt, completedAt sql.NullTime
 
-		err := rows.Scan(&iteration.Number, &iteration.Name, &iteration.Goal, &iteration.Status, &iteration.Deliverable, &startedAt, &completedAt, &iteration.CreatedAt, &iteration.UpdatedAt)
+		err := rows.Scan(&iteration.Number, &iteration.Name, &iteration.Goal, &iteration.Status, &iteration.Rank, &iteration.Deliverable, &startedAt, &completedAt, &iteration.CreatedAt, &iteration.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan iteration: %w", err)
 		}
@@ -844,8 +844,8 @@ func (r *SQLiteRoadmapRepository) UpdateIteration(ctx context.Context, iteration
 	// Update iteration fields
 	result, err := tx.ExecContext(
 		ctx,
-		"UPDATE iterations SET name = ?, goal = ?, status = ?, deliverable = ?, started_at = ?, completed_at = ?, updated_at = ? WHERE number = ?",
-		iteration.Name, iteration.Goal, iteration.Status, iteration.Deliverable, iteration.StartedAt, iteration.CompletedAt, iteration.UpdatedAt, iteration.Number,
+		"UPDATE iterations SET name = ?, goal = ?, status = ?, rank = ?, deliverable = ?, started_at = ?, completed_at = ?, updated_at = ? WHERE number = ?",
+		iteration.Name, iteration.Goal, iteration.Status, iteration.Rank, iteration.Deliverable, iteration.StartedAt, iteration.CompletedAt, iteration.UpdatedAt, iteration.Number,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update iteration: %w", err)
