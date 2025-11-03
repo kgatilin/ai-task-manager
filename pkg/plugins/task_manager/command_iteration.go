@@ -752,8 +752,13 @@ func (c *IterationUpdateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.C
 		iteration.Status = *c.status
 		// Update timestamps based on status changes
 		now := time.Now().UTC()
-		if *c.status == "current" && iteration.StartedAt == nil {
-			iteration.StartedAt = &now
+		if *c.status == "current" {
+			// Set StartedAt if not already set
+			if iteration.StartedAt == nil {
+				iteration.StartedAt = &now
+			}
+			// Clear CompletedAt since iteration is no longer complete
+			iteration.CompletedAt = nil
 		}
 		if *c.status == "complete" && iteration.CompletedAt == nil {
 			iteration.CompletedAt = &now
