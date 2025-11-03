@@ -94,6 +94,11 @@ type AppModel struct {
 	// Viewport for scrolling
 	roadmapViewport viewport.Model
 
+	// Section line positions (for auto-scrolling on Tab)
+	iterationsSectionLine int
+	tracksSectionLine     int
+	backlogSectionLine    int
+
 	// View mode toggles
 	showFullRoadmap      bool // Toggle between tracks-only and full roadmap view
 	showCompletedTracks  bool // Toggle showing completed tracks
@@ -612,18 +617,26 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case SelectIterations:
 			m.selectedItemType = SelectTracks
 			m.selectedTrackIdx = 0
+			// Scroll to tracks section
+			m.roadmapViewport.SetYOffset(m.tracksSectionLine)
 		case SelectTracks:
 			// Only show backlog option if in full view mode and backlog has items
 			if m.showFullRoadmap && len(m.backlogTasks) > 0 {
 				m.selectedItemType = SelectBacklog
 				m.selectedBacklogIdx = 0
+				// Scroll to backlog section
+				m.roadmapViewport.SetYOffset(m.backlogSectionLine)
 			} else {
 				m.selectedItemType = SelectIterations
 				m.selectedIterationIdx = 0
+				// Scroll to top (iterations)
+				m.roadmapViewport.SetYOffset(m.iterationsSectionLine)
 			}
 		case SelectBacklog:
 			m.selectedItemType = SelectIterations
 			m.selectedIterationIdx = 0
+			// Scroll to top (iterations)
+			m.roadmapViewport.SetYOffset(m.iterationsSectionLine)
 		}
 
 	// Navigation: j/k or arrow keys
@@ -900,6 +913,14 @@ func (m *AppModel) renderError() string {
 	return errorStyle.Render(fmt.Sprintf("Error: %v", m.error)) + "\n\nPress esc to go back"
 }
 
+// countLines counts the number of lines in a string (number of newlines + 1)
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
+}
+
 // renderRoadmapList renders the roadmap overview screen
 func (m *AppModel) renderRoadmapList() string {
 	titleStyle := lipgloss.NewStyle().
@@ -964,6 +985,8 @@ func (m *AppModel) renderRoadmapList() string {
 	}
 
 	if len(nonCompletedIterations) > 0 {
+		// Track iterations section position
+		m.iterationsSectionLine = countLines(s)
 		s += sectionHeaderStyle.Render("Active Iterations:") + "\n"
 		for idx, iter := range nonCompletedIterations {
 			statusIcon := m.formatIterationStatus(iter.Status)
@@ -1014,6 +1037,8 @@ func (m *AppModel) renderRoadmapList() string {
 	}
 
 	// Active tracks
+	// Track tracks section position
+	m.tracksSectionLine = countLines(s)
 	if len(activeTracks) > 0 {
 		s += sectionHeaderStyle.Render("Active Tracks:") + "\n"
 		for i, track := range activeTracks {
@@ -1056,6 +1081,8 @@ func (m *AppModel) renderRoadmapList() string {
 
 	// Backlog (only in full view)
 	if m.showFullRoadmap && len(m.backlogTasks) > 0 {
+		// Track backlog section position
+		m.backlogSectionLine = countLines(s)
 		s += "\n" + sectionHeaderStyle.Render("Backlog:") + "\n"
 		for idx, task := range m.backlogTasks {
 			var taskLine string
