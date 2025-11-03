@@ -1192,12 +1192,17 @@ func (m *AppModel) renderTrackDetail() string {
 	return s
 }
 
-// loadTaskDetail loads task details (stub for future implementation)
+// loadTaskDetail loads task details
 func (m *AppModel) loadTaskDetail(taskID string) tea.Cmd {
 	return func() tea.Msg {
-		// For now, just return to track detail view
-		// This can be implemented later to show full task details
-		return BackMsg{}
+		task, err := m.repository.GetTask(m.ctx, taskID)
+		if err != nil {
+			return TaskDetailLoadedMsg{Error: err}
+		}
+
+		return TaskDetailLoadedMsg{
+			Task: task,
+		}
 	}
 }
 
