@@ -100,6 +100,9 @@ type AppModel struct {
 	tracksSectionLine     int
 	backlogSectionLine    int
 
+	// Track which iteration is being reordered (to maintain selection after reload)
+	reorderingIterationNumber int
+
 	// View mode toggles
 	showFullRoadmap      bool // Toggle between tracks-only and full roadmap view
 	showCompletedTracks  bool // Toggle showing completed tracks
@@ -532,6 +535,28 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedTrackIdx = 0
 		m.lastUpdate = time.Now()
 
+		// If we just reordered an iteration, find it and update selection
+		if m.reorderingIterationNumber != 0 {
+			// Filter to active iterations only (same as in reordering logic)
+			activeIterations := []*IterationEntity{}
+			for _, iter := range m.iterations {
+				if iter.Status != "complete" {
+					activeIterations = append(activeIterations, iter)
+				}
+			}
+
+			// Find the reordered iteration in the new list
+			for idx, iter := range activeIterations {
+				if iter.Number == m.reorderingIterationNumber {
+					m.selectedIterationIdx = idx
+					break
+				}
+			}
+
+			// Reset the flag
+			m.reorderingIterationNumber = 0
+		}
+
 	case TrackDetailLoadedMsg:
 		if msg.Error != nil {
 			m.currentView = ViewError
@@ -792,6 +817,9 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				currentIter := activeIterations[m.selectedIterationIdx]
 				nextIter := activeIterations[m.selectedIterationIdx+1]
 
+				// Remember which iteration we're moving so we can find it after reload
+				m.reorderingIterationNumber = currentIter.Number
+
 				// Swap ranks - if equal, make them different first
 				if currentIter.Rank == nextIter.Rank {
 					// Current moves down, so increase its rank
@@ -806,9 +834,8 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// Update both iterations in repository
 				if err := m.repository.UpdateIteration(m.ctx, currentIter); err == nil {
 					if err := m.repository.UpdateIteration(m.ctx, nextIter); err == nil {
-						// Move selection down
-						m.selectedIterationIdx++
 						// Reload roadmap to reflect changes
+						// Selection will be updated when RoadmapLoadedMsg is received
 						return m, func() tea.Msg {
 							return m.loadRoadmap()
 						}
@@ -832,6 +859,9 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				currentIter := activeIterations[m.selectedIterationIdx]
 				prevIter := activeIterations[m.selectedIterationIdx-1]
 
+				// Remember which iteration we're moving so we can find it after reload
+				m.reorderingIterationNumber = currentIter.Number
+
 				// Swap ranks - if equal, make them different first
 				if currentIter.Rank == prevIter.Rank {
 					// Current moves up, so decrease its rank
@@ -846,9 +876,8 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				// Update both iterations in repository
 				if err := m.repository.UpdateIteration(m.ctx, currentIter); err == nil {
 					if err := m.repository.UpdateIteration(m.ctx, prevIter); err == nil {
-						// Move selection up
-						m.selectedIterationIdx--
 						// Reload roadmap to reflect changes
+						// Selection will be updated when RoadmapLoadedMsg is received
 						return m, func() tea.Msg {
 							return m.loadRoadmap()
 						}
