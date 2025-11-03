@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -436,7 +437,7 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 	iteration, err := repo.GetCurrentIteration(ctx)
 	if err != nil {
 		if errors.Is(err, pluginsdk.ErrNotFound) {
-			// No current iteration - show next 3 planned iterations
+			// No current iteration - show next planned iteration (ordered by rank)
 			iterations, err := repo.ListIterations(ctx)
 			if err != nil {
 				return fmt.Errorf("failed to list iterations: %w", err)
@@ -450,40 +451,40 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 				}
 			}
 
+			// Sort by rank (lowest rank = highest priority)
+			sort.Slice(plannedIterations, func(i, j int) bool {
+				return plannedIterations[i].Rank < plannedIterations[j].Rank
+			})
+
 			fmt.Fprintf(cmdCtx.GetStdout(), "No current iteration.\n\n")
 
 			if len(plannedIterations) > 0 {
-				fmt.Fprintf(cmdCtx.GetStdout(), "Next planned iterations:\n")
-				limit := 3
-				if len(plannedIterations) < limit {
-					limit = len(plannedIterations)
+				// Show only the next iteration (highest priority)
+				iter := plannedIterations[0]
+
+				// Get tasks for progress calculation
+				tasks, err := repo.GetIterationTasks(ctx, iter.Number)
+				if err != nil {
+					return fmt.Errorf("failed to get iteration tasks: %w", err)
 				}
 
-				for i := 0; i < limit; i++ {
-					iter := plannedIterations[i]
-					// Get tasks for progress calculation
-					tasks, err := repo.GetIterationTasks(ctx, iter.Number)
-					if err != nil {
-						return fmt.Errorf("failed to get iteration tasks: %w", err)
+				completedCount := 0
+				for _, task := range tasks {
+					if task.Status == "done" {
+						completedCount++
 					}
-
-					completedCount := 0
-					for _, task := range tasks {
-						if task.Status == "done" {
-							completedCount++
-						}
-					}
-
-					completePct := 0
-					if len(tasks) > 0 {
-						completePct = (completedCount * 100) / len(tasks)
-					}
-
-					fmt.Fprintf(cmdCtx.GetStdout(), "%d. %s - %s (%d tasks, %d%% complete)\n",
-						i+1, iter.Name, iter.Goal, len(tasks), completePct)
 				}
 
-				fmt.Fprintf(cmdCtx.GetStdout(), "\nHint: Use 'dw task-manager iteration start <number>' to start an iteration\n")
+				completePct := 0
+				if len(tasks) > 0 {
+					completePct = (completedCount * 100) / len(tasks)
+				}
+
+				fmt.Fprintf(cmdCtx.GetStdout(), "Next planned iteration:\n")
+				fmt.Fprintf(cmdCtx.GetStdout(), "#%d: %s - %s (%d tasks, %d%% complete)\n",
+					iter.Number, iter.Name, iter.Goal, len(tasks), completePct)
+
+				fmt.Fprintf(cmdCtx.GetStdout(), "\nHint: Use 'dw task-manager iteration start %d' to start this iteration\n", iter.Number)
 			} else {
 				fmt.Fprintf(cmdCtx.GetStdout(), "No planned iterations available.\n")
 				fmt.Fprintf(cmdCtx.GetStdout(), "Hint: Use 'dw task-manager iteration create' to create an iteration\n")
