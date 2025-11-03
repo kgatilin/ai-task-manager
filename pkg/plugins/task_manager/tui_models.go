@@ -2291,15 +2291,10 @@ func (m *AppModel) handleACFailInputKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
-	case tea.KeyCtrlC, tea.KeyEsc:
-		// Cancel and return to previous view
-		m.feedbackInput.SetValue("")
-		m.feedbackInput.Blur()
-		m.currentView = m.previousViewMode
-		return m, nil
 	}
 
 	// Update text input with key press
+	// Note: ESC and Ctrl+C are handled by the main Update() function
 	m.feedbackInput, cmd = m.feedbackInput.Update(msg)
 	return m, cmd
 }
