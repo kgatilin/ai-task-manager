@@ -86,7 +86,8 @@ type AppModel struct {
 	selectedTrackIdx     int
 	selectedTaskIdx      int
 	selectedIterationIdx int
-	selectedBacklogIdx   int
+	selectedBacklogIdx       int
+	selectedIterationTaskIdx int // For navigating tasks in iteration detail view
 	selectedItemType     ItemSelectionType // Tracks which list is active for selection (tracks vs iterations vs backlog)
 	width                int
 	height               int
@@ -460,7 +461,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			switch m.currentView {
 			case ViewTaskDetail:
-				m.currentView = ViewTrackDetail
+				m.currentView = m.previousViewMode
 				return m, nil
 			case ViewTrackDetail:
 				m.currentView = ViewRoadmapList
@@ -563,6 +564,7 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.currentIteration = msg.Iteration
 		m.iterationTasks = msg.Tasks
+		m.selectedIterationTaskIdx = 0 // Reset selection
 		m.currentView = ViewIterationDetail
 		m.lastUpdate = time.Now()
 
@@ -718,6 +720,7 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case SelectBacklog:
 			// View backlog task detail
 			if len(m.backlogTasks) > 0 && m.selectedBacklogIdx < len(m.backlogTasks) {
+				m.previousViewMode = ViewRoadmapList
 				return m, m.loadTaskDetail(m.backlogTasks[m.selectedBacklogIdx].ID)
 			}
 		}
@@ -799,6 +802,7 @@ func (m *AppModel) handleTrackDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		// Navigate into selected task
 		if m.selectedTaskIdx < len(m.tasks) {
+			m.previousViewMode = ViewTrackDetail
 			taskID := m.tasks[m.selectedTaskIdx].ID
 			m.currentView = ViewLoading
 			return m, m.loadTaskDetail(taskID)
@@ -866,7 +870,23 @@ func (m *AppModel) handleIterationListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) 
 
 // handleIterationDetailKeys processes key presses on iteration detail view
 func (m *AppModel) handleIterationDetailKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Iteration detail is read-only, navigation handled by esc in main Update
+	switch msg.String() {
+	case "j", "down":
+		if m.selectedIterationTaskIdx < len(m.iterationTasks)-1 {
+			m.selectedIterationTaskIdx++
+		}
+	case "k", "up":
+		if m.selectedIterationTaskIdx > 0 {
+			m.selectedIterationTaskIdx--
+		}
+	case "enter":
+		if m.selectedIterationTaskIdx < len(m.iterationTasks) {
+			m.previousViewMode = ViewIterationDetail
+			taskID := m.iterationTasks[m.selectedIterationTaskIdx].ID
+			m.currentView = ViewLoading
+			return m, m.loadTaskDetail(taskID)
+		}
+	}
 	return m, nil
 }
 
@@ -1286,7 +1306,17 @@ func (m *AppModel) renderTaskDetail() string {
 
 	// Track
 	s += "\n" + sectionStyle.Render("Track") + "\n"
-	s += contentStyle.Render(m.currentTask.TrackID) + "\n"
+	// Load track to get name
+	if m.currentTask.TrackID != "" {
+		track, err := m.repository.GetTrack(m.ctx, m.currentTask.TrackID)
+		if err == nil && track != nil {
+			s += contentStyle.Render(fmt.Sprintf("%s - %s", track.ID, track.Title)) + "\n"
+		} else {
+			s += contentStyle.Render(m.currentTask.TrackID) + "\n"
+		}
+	} else {
+		s += contentStyle.Render("(no track assigned)") + "\n"
+	}
 
 	// Branch (if set)
 	if m.currentTask.Branch != "" {
@@ -1395,6 +1425,16 @@ func (m *AppModel) renderIterationDetail() string {
 		Italic(true).
 		MarginBottom(1)
 
+	selectedStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("240")).
+		Foreground(lipgloss.Color("229"))
+
+	contentStyle := lipgloss.NewStyle()
+
+	sectionStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("86"))
+
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("244")).
 		Italic(true).
@@ -1458,32 +1498,49 @@ func (m *AppModel) renderIterationDetail() string {
 		s += m.renderProgressBar(progress, 40)
 		s += "\n\n"
 
-		// Task breakdown
+		// Task breakdown with selection tracking
+		taskIdx := 0 // Track cumulative task index across all statuses
+
 		if len(todoTasks) > 0 {
-			s += "Todo:\n"
+			s += "\n" + sectionStyle.Render(fmt.Sprintf("To Do (%d)", len(todoTasks))) + "\n"
 			for _, task := range todoTasks {
-				s += fmt.Sprintf("  ○ %s\n", task.Title)
+				if taskIdx == m.selectedIterationTaskIdx {
+					s += selectedStyle.Render(fmt.Sprintf("  → %s\n", task.Title))
+				} else {
+					s += contentStyle.Render(fmt.Sprintf("  ○ %s\n", task.Title))
+				}
+				taskIdx++
 			}
 		}
 
 		if len(inProgressTasks) > 0 {
-			s += "In Progress:\n"
+			s += "\n" + sectionStyle.Render(fmt.Sprintf("In Progress (%d)", len(inProgressTasks))) + "\n"
 			for _, task := range inProgressTasks {
-				s += fmt.Sprintf("  → %s\n", task.Title)
+				if taskIdx == m.selectedIterationTaskIdx {
+					s += selectedStyle.Render(fmt.Sprintf("  → %s\n", task.Title))
+				} else {
+					s += contentStyle.Render(fmt.Sprintf("  → %s\n", task.Title))
+				}
+				taskIdx++
 			}
 		}
 
 		if len(doneTasks) > 0 {
-			s += "Done:\n"
+			s += "\n" + sectionStyle.Render(fmt.Sprintf("Done (%d)", len(doneTasks))) + "\n"
 			for _, task := range doneTasks {
-				s += fmt.Sprintf("  ✓ %s\n", task.Title)
+				if taskIdx == m.selectedIterationTaskIdx {
+					s += selectedStyle.Render(fmt.Sprintf("  → %s\n", task.Title))
+				} else {
+					s += contentStyle.Render(fmt.Sprintf("  ✓ %s\n", task.Title))
+				}
+				taskIdx++
 			}
 		}
 	}
 
 	// Help
 	s += "\n"
-	s += helpStyle.Render("Navigation: esc: Back to iteration list | q: Quit")
+	s += helpStyle.Render("Navigation: j/k or ↑/↓: Select task | Enter: View task details | esc: Back to iteration list | q: Quit")
 
 	return s
 }

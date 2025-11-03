@@ -616,14 +616,14 @@ func TestIterationDetailView(t *testing.T) {
 	if !contains(view, "Progress:") {
 		t.Fatalf("View should contain 'Progress:', got: %s", view)
 	}
-	if !contains(view, "Todo:") {
-		t.Fatalf("View should contain 'Todo:', got: %s", view)
+	if !contains(view, "To Do") {
+		t.Fatalf("View should contain 'To Do', got: %s", view)
 	}
-	if !contains(view, "In Progress:") {
-		t.Fatalf("View should contain 'In Progress:', got: %s", view)
+	if !contains(view, "In Progress") {
+		t.Fatalf("View should contain 'In Progress', got: %s", view)
 	}
-	if !contains(view, "Done:") {
-		t.Fatalf("View should contain 'Done:', got: %s", view)
+	if !contains(view, "Done") {
+		t.Fatalf("View should contain 'Done', got: %s", view)
 	}
 }
 
