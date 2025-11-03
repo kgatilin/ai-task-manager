@@ -818,3 +818,22 @@ func (e *EventEmittingRepository) DeprecateADR(ctx context.Context, adrID string
 func (e *EventEmittingRepository) GetADRsByTrack(ctx context.Context, trackID string) ([]*ADREntity, error) {
 	return e.repo.GetADRsByTrack(ctx, trackID)
 }
+
+// ============================================================================
+// New Query Methods for LLM Agent Integration
+// ============================================================================
+
+// GetIterationsForTask returns all iterations that contain a specific task (read-only, no event).
+func (e *EventEmittingRepository) GetIterationsForTask(ctx context.Context, taskID string) ([]*IterationEntity, error) {
+	return e.repo.GetIterationsForTask(ctx, taskID)
+}
+
+// GetBacklogTasks returns all tasks that are not in any iteration and not done (read-only, no event).
+func (e *EventEmittingRepository) GetBacklogTasks(ctx context.Context) ([]*TaskEntity, error) {
+	return e.repo.GetBacklogTasks(ctx)
+}
+
+// ListFailedAC returns all acceptance criteria with status "failed" (read-only, no event).
+func (e *EventEmittingRepository) ListFailedAC(ctx context.Context, filters ACFilters) ([]*AcceptanceCriteriaEntity, error) {
+	return e.repo.ListFailedAC(ctx, filters)
+}

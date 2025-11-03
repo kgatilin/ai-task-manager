@@ -6,8 +6,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 	tm "github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager"
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
 // MockRepository is a mock implementation of RoadmapRepository for testing
@@ -297,6 +297,60 @@ func (m *MockRepository) GetADRsByTrack(ctx context.Context, trackID string) ([]
 	return []*tm.ADREntity{}, nil
 }
 
+func (m *MockRepository) GetIterationsForTask(ctx context.Context, taskID string) ([]*tm.IterationEntity, error) {
+	if m.shouldError {
+		return nil, pluginsdk.ErrInternal
+	}
+	// Return iterations that contain this task
+	var result []*tm.IterationEntity
+	for _, iter := range m.iterations {
+		for _, id := range iter.TaskIDs {
+			if id == taskID {
+				result = append(result, iter)
+				break
+			}
+		}
+	}
+	return result, nil
+}
+
+func (m *MockRepository) GetBacklogTasks(ctx context.Context) ([]*tm.TaskEntity, error) {
+	if m.shouldError {
+		return nil, pluginsdk.ErrInternal
+	}
+	// Return tasks that are not in any iteration and status != done
+	var backlog []*tm.TaskEntity
+	for _, task := range m.tasks {
+		if task.Status == "done" {
+			continue
+		}
+		inIteration := false
+		for _, iter := range m.iterations {
+			for _, taskID := range iter.TaskIDs {
+				if taskID == task.ID {
+					inIteration = true
+					break
+				}
+			}
+			if inIteration {
+				break
+			}
+		}
+		if !inIteration {
+			backlog = append(backlog, task)
+		}
+	}
+	return backlog, nil
+}
+
+func (m *MockRepository) ListFailedAC(ctx context.Context, filters tm.ACFilters) ([]*tm.AcceptanceCriteriaEntity, error) {
+	if m.shouldError {
+		return nil, pluginsdk.ErrInternal
+	}
+	// Return empty slice for mock
+	return []*tm.AcceptanceCriteriaEntity{}, nil
+}
+
 // NewMockLogger creates a new mock logger
 func NewMockLogger() *MockLogger {
 	return &MockLogger{}
@@ -321,11 +375,11 @@ func TestAppModelInit(t *testing.T) {
 	repo := NewMockRepository()
 	logger := NewMockLogger()
 	repo.activeRoadmap = &tm.RoadmapEntity{
-		ID:               "roadmap-1",
-		Vision:           "Test vision",
-		SuccessCriteria:  "Test criteria",
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 
 	model := tm.NewAppModel(ctx, repo, logger)
@@ -343,11 +397,11 @@ func TestAppModelRoadmapListView(t *testing.T) {
 
 	model := tm.NewAppModel(ctx, repo, logger)
 	model.SetRoadmap(&tm.RoadmapEntity{
-		ID:               "roadmap-1",
-		Vision:           "Test vision",
-		SuccessCriteria:  "Test criteria",
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	})
 	model.SetTracks([]*tm.TrackEntity{
 		{
@@ -425,11 +479,11 @@ func TestAppModelKeyNavigation(t *testing.T) {
 
 	model := tm.NewAppModel(ctx, repo, logger)
 	model.SetRoadmap(&tm.RoadmapEntity{
-		ID:               "roadmap-1",
-		Vision:           "Test vision",
-		SuccessCriteria:  "Test criteria",
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	})
 	model.SetTracks([]*tm.TrackEntity{
 		{
@@ -661,11 +715,11 @@ func TestNavigationToIterationList(t *testing.T) {
 
 	model := tm.NewAppModel(ctx, repo, logger)
 	model.SetRoadmap(&tm.RoadmapEntity{
-		ID:               "roadmap-1",
-		Vision:           "Test vision",
-		SuccessCriteria:  "Test criteria",
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	})
 	model.SetTracks([]*tm.TrackEntity{})
 	model.SetCurrentView(tm.ViewRoadmapList)
@@ -715,13 +769,69 @@ func TestNavigationFromIterationDetailBack(t *testing.T) {
 	model := tm.NewAppModel(ctx, repo, logger)
 	model.SetCurrentIteration(iter)
 	model.SetCurrentView(tm.ViewIterationDetail)
+	model.SetSelectedIterationIdx(0) // Set initial selection
 
-	// Press 'esc' to go back to iteration list
+	// Press 'esc' to go back to main view
 	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
-	// Should not return a command (handled in Update)
-	if model.GetCurrentView() != tm.ViewIterationList {
-		t.Fatalf("Expected ViewIterationList after esc, got %v", model.GetCurrentView())
+	// Should return to main view (ViewRoadmapList) instead of ViewIterationList
+	if model.GetCurrentView() != tm.ViewRoadmapList {
+		t.Fatalf("Expected ViewRoadmapList after esc, got %v", model.GetCurrentView())
+	}
+
+	// Should preserve selected iteration index
+	if model.GetSelectedIterationIdx() != 0 {
+		t.Fatalf("Expected selected iteration index to be preserved (0), got %d", model.GetSelectedIterationIdx())
+	}
+}
+
+func TestNavigationFromMainViewIterationSection(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
+
+	now := time.Now()
+	iter1, _ := tm.NewIterationEntity(1, "Sprint 1", "Foundation", "Core features", []string{}, "complete", 500, now, now, now, now)
+	iter2, _ := tm.NewIterationEntity(2, "Sprint 2", "Features", "New features", []string{}, "current", 500, now, time.Time{}, now, now)
+	iter3, _ := tm.NewIterationEntity(3, "Sprint 3", "Polish", "Final touches", []string{}, "planned", 500, time.Time{}, time.Time{}, now, now)
+
+	repo.iterations = []*tm.IterationEntity{iter1, iter2, iter3}
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(&tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	})
+	model.SetIterations(repo.iterations)
+	model.SetCurrentView(tm.ViewRoadmapList)
+	model.SetSelectedIterationIdx(1) // Select second iteration (Sprint 2)
+
+	// Press 'enter' to view selected iteration
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Should return a command (loadIterationDetail)
+	if cmd == nil {
+		t.Fatal("Expected command for loading iteration detail")
+	}
+
+	// Simulate loading iteration detail (would normally happen via message handling)
+	model.SetCurrentIteration(iter2)
+	model.SetCurrentView(tm.ViewIterationDetail)
+
+	// Press 'esc' to go back to main view
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+
+	// Should return to main view
+	if model.GetCurrentView() != tm.ViewRoadmapList {
+		t.Fatalf("Expected ViewRoadmapList after esc, got %v", model.GetCurrentView())
+	}
+
+	// Should preserve selected iteration index (Sprint 2 = index 1)
+	if model.GetSelectedIterationIdx() != 1 {
+		t.Fatalf("Expected selected iteration index to be preserved (1), got %d", model.GetSelectedIterationIdx())
 	}
 }
 
@@ -807,7 +917,7 @@ func TestACListDisplay(t *testing.T) {
 
 	model := tm.NewAppModel(ctx, repo, logger)
 	model.SetCurrentView(tm.ViewACList)
-	
+
 	// Set up test ACs with long descriptions
 	acs := []*tm.AcceptanceCriteriaEntity{
 		{
@@ -829,7 +939,7 @@ func TestACListDisplay(t *testing.T) {
 			UpdatedAt:        time.Now(),
 		},
 	}
-	
+
 	// Set up track
 	track := &tm.TrackEntity{
 		ID:          "TM-track-1",
@@ -840,32 +950,32 @@ func TestACListDisplay(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	
+
 	model.SetCurrentTrack(track)
 	model.SetACs(acs)
-	
+
 	// Render the view
 	view := model.View()
-	
+
 	// Check that full description is displayed (not truncated)
 	if len(view) == 0 {
 		t.Fatal("View should not be empty")
 	}
-	
+
 	// Check that task IDs are displayed
 	if !contains(view, "TM-task-1") {
 		t.Error("View should display task ID TM-task-1")
 	}
-	
+
 	if !contains(view, "TM-task-2") {
 		t.Error("View should display task ID TM-task-2")
 	}
-	
+
 	// Check that full descriptions are present (not truncated)
 	if !contains(view, "This is a very long acceptance criterion description that should be displayed in full without any truncation") {
 		t.Error("View should display full AC description without truncation")
 	}
-	
+
 	// Check that space bar help text is shown
 	if !contains(view, "space: Verify selected AC") {
 		t.Error("View should show space bar help text")
@@ -880,7 +990,7 @@ func TestACSpaceBarVerification(t *testing.T) {
 
 	model := tm.NewAppModel(ctx, repo, logger)
 	model.SetCurrentView(tm.ViewACList)
-	
+
 	// Set up test ACs
 	acs := []*tm.AcceptanceCriteriaEntity{
 		{
@@ -902,7 +1012,7 @@ func TestACSpaceBarVerification(t *testing.T) {
 			UpdatedAt:        time.Now(),
 		},
 	}
-	
+
 	// Set up track
 	track := &tm.TrackEntity{
 		ID:          "TM-track-1",
@@ -913,19 +1023,19 @@ func TestACSpaceBarVerification(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	
+
 	model.SetCurrentTrack(track)
 	model.SetACs(acs)
 	model.SetSelectedACIdx(0)
-	
+
 	// Press space bar to verify
 	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
-	
+
 	// Should return a command to reload ACs
 	if cmd == nil {
 		t.Error("Expected command to reload ACs after verification")
 	}
-	
+
 	// Verify that the AC status was updated
 	if acs[0].Status != tm.ACStatusVerified {
 		t.Errorf("Expected AC status to be Verified, got %s", acs[0].Status)
@@ -940,7 +1050,7 @@ func TestACSpaceBarNoOpOnVerified(t *testing.T) {
 
 	model := tm.NewAppModel(ctx, repo, logger)
 	model.SetCurrentView(tm.ViewACList)
-	
+
 	// Set up test AC that's already verified
 	acs := []*tm.AcceptanceCriteriaEntity{
 		{
@@ -953,36 +1063,450 @@ func TestACSpaceBarNoOpOnVerified(t *testing.T) {
 			UpdatedAt:        time.Now(),
 		},
 	}
-	
+
 	// Set up track
 	track := &tm.TrackEntity{
 		ID:          "TM-track-1",
 		RoadmapID:   "roadmap-1",
 		Title:       "Test Track",
-		Description:      "Test Description",
+		Description: "Test Description",
 		Status:      "in-progress",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	
+
 	model.SetCurrentTrack(track)
 	model.SetACs(acs)
 	model.SetSelectedACIdx(0)
-	
+
 	originalStatus := acs[0].Status
-	
+
 	// Press space bar
 	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{' '}})
-	
+
 	// Should not return a command since AC is already verified
 	if cmd != nil {
 		t.Error("Expected no command when AC is already verified")
 	}
-	
+
 	// Verify that the status didn't change
 	if acs[0].Status != originalStatus {
 		t.Error("AC status should not change when already verified")
 	}
 }
 
+// TestBacklogDisplayInMainView tests that backlog tasks are displayed in main view
+func TestBacklogDisplayInMainView(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
 
+	now := time.Now()
+
+	// Create roadmap
+	roadmap := &tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	// Create track
+	track1 := &tm.TrackEntity{
+		ID:          "TM-track-1",
+		RoadmapID:   "roadmap-1",
+		Title:       "Core Framework",
+		Description: "Core features",
+		Status:      "in-progress",
+		Rank:        100,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	// Create backlog tasks (not in any iteration, status != done)
+	task1 := tm.NewTaskEntity("TM-task-1", "TM-track-1", "Backlog Task 1", "Description 1", "todo", 200, "", now, now)
+	task2 := tm.NewTaskEntity("TM-task-2", "TM-track-1", "Backlog Task 2", "Description 2", "todo", 300, "", now, now)
+	task3 := tm.NewTaskEntity("TM-task-3", "TM-track-1", "Done Task", "Should not appear", "done", 400, "", now, now)
+
+	repo.activeRoadmap = roadmap
+	repo.tracks = []*tm.TrackEntity{track1}
+	repo.tasks = []*tm.TaskEntity{task1, task2, task3}
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(roadmap)
+	model.SetTracks(repo.tracks)
+	model.SetCurrentView(tm.ViewRoadmapList)
+	model.SetDimensions(120, 40)
+
+	// Simulate loading backlog data
+	backlogTasks := []*tm.TaskEntity{task1, task2} // Exclude done task
+	msg := tm.FullRoadmapDataLoadedMsg{
+		IterationTasks: make(map[int][]*tm.TaskEntity),
+		TrackTasks:     make(map[string][]*tm.TaskEntity),
+		BacklogTasks:   backlogTasks,
+	}
+	_, _ = model.Update(msg)
+
+	view := model.View()
+
+	// Check that backlog section exists
+	if !contains(view, "Backlog") {
+		t.Fatal("View should contain 'Backlog' section")
+	}
+
+	// Check that backlog count is shown
+	if !contains(view, "Backlog (2)") {
+		t.Fatal("View should show backlog count (2)")
+	}
+
+	// Check that todo tasks are displayed
+	if !contains(view, "TM-task-1") {
+		t.Fatal("View should contain task TM-task-1")
+	}
+	if !contains(view, "Backlog Task 1") {
+		t.Fatal("View should contain 'Backlog Task 1'")
+	}
+
+	if !contains(view, "TM-task-2") {
+		t.Fatal("View should contain task TM-task-2")
+	}
+	if !contains(view, "Backlog Task 2") {
+		t.Fatal("View should contain 'Backlog Task 2'")
+	}
+
+	// Check that done task is NOT displayed
+	if contains(view, "TM-task-3") {
+		t.Fatal("View should NOT contain done task TM-task-3")
+	}
+	if contains(view, "Done Task") {
+		t.Fatal("View should NOT contain 'Done Task'")
+	}
+}
+
+// TestBacklogDisplayWithTrackInfo tests that backlog tasks show track information
+func TestBacklogDisplayWithTrackInfo(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
+
+	now := time.Now()
+
+	// Create roadmap
+	roadmap := &tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	// Create track
+	track1 := &tm.TrackEntity{
+		ID:          "TM-track-1",
+		RoadmapID:   "roadmap-1",
+		Title:       "Core Framework",
+		Description: "Core features",
+		Status:      "in-progress",
+		Rank:        100,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	// Create backlog task with track
+	task1 := tm.NewTaskEntity("TM-task-1", "TM-track-1", "Backlog Task 1", "Description 1", "todo", 200, "", now, now)
+
+	repo.activeRoadmap = roadmap
+	repo.tracks = []*tm.TrackEntity{track1}
+	repo.tasks = []*tm.TaskEntity{task1}
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(roadmap)
+	model.SetTracks(repo.tracks)
+	model.SetCurrentView(tm.ViewRoadmapList)
+	model.SetDimensions(120, 40)
+
+	// Simulate loading backlog data
+	backlogTasks := []*tm.TaskEntity{task1}
+	msg := tm.FullRoadmapDataLoadedMsg{
+		IterationTasks: make(map[int][]*tm.TaskEntity),
+		TrackTasks:     make(map[string][]*tm.TaskEntity),
+		BacklogTasks:   backlogTasks,
+	}
+	_, _ = model.Update(msg)
+
+	view := model.View()
+
+	// Check that track ID is displayed with task
+	if !contains(view, "[TM-track-1]") {
+		t.Fatal("View should contain track ID [TM-track-1]")
+	}
+}
+
+// TestBacklogTabNavigation tests that Tab key navigates to backlog section
+func TestBacklogTabNavigation(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
+
+	now := time.Now()
+
+	// Create roadmap
+	roadmap := &tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	// Create iteration
+	iter1, _ := tm.NewIterationEntity(1, "Sprint 1", "Foundation", "Core features", []string{}, "current", 500, now, time.Time{}, now, now)
+
+	// Create track
+	track1 := &tm.TrackEntity{
+		ID:          "TM-track-1",
+		RoadmapID:   "roadmap-1",
+		Title:       "Core Framework",
+		Description: "Core features",
+		Status:      "in-progress",
+		Rank:        100,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+
+	// Create backlog task
+	task1 := tm.NewTaskEntity("TM-task-1", "TM-track-1", "Backlog Task 1", "Description 1", "todo", 200, "", now, now)
+
+	repo.activeRoadmap = roadmap
+	repo.iterations = []*tm.IterationEntity{iter1}
+	repo.tracks = []*tm.TrackEntity{track1}
+	repo.tasks = []*tm.TaskEntity{task1}
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(roadmap)
+	model.SetIterations(repo.iterations)
+	model.SetTracks(repo.tracks)
+	model.SetCurrentView(tm.ViewRoadmapList)
+
+	// Simulate loading backlog data
+	backlogTasks := []*tm.TaskEntity{task1}
+	msg := tm.FullRoadmapDataLoadedMsg{
+		IterationTasks: make(map[int][]*tm.TaskEntity),
+		TrackTasks:     make(map[string][]*tm.TaskEntity),
+		BacklogTasks:   backlogTasks,
+	}
+	_, _ = model.Update(msg)
+
+	// Start in Iterations section (default)
+	// Press Tab to move to Tracks
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+
+	// Press Tab again to move to Backlog
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+
+	// Now we should be in backlog section
+	// Try navigating with j/k
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+
+	// Navigation should work (no panic/error)
+	// This tests that backlog section is accessible via Tab
+}
+
+// TestBacklogNavigationUpDown tests j/k navigation in backlog
+func TestBacklogNavigationUpDown(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
+
+	now := time.Now()
+
+	// Create roadmap
+	roadmap := &tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	// Create backlog tasks
+	task1 := tm.NewTaskEntity("TM-task-1", "TM-track-1", "Backlog Task 1", "Description 1", "todo", 200, "", now, now)
+	task2 := tm.NewTaskEntity("TM-task-2", "TM-track-1", "Backlog Task 2", "Description 2", "todo", 300, "", now, now)
+	task3 := tm.NewTaskEntity("TM-task-3", "TM-track-1", "Backlog Task 3", "Description 3", "todo", 400, "", now, now)
+
+	repo.activeRoadmap = roadmap
+	repo.tasks = []*tm.TaskEntity{task1, task2, task3}
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(roadmap)
+	model.SetCurrentView(tm.ViewRoadmapList)
+
+	// Simulate loading backlog data
+	backlogTasks := []*tm.TaskEntity{task1, task2, task3}
+	msg := tm.FullRoadmapDataLoadedMsg{
+		IterationTasks: make(map[int][]*tm.TaskEntity),
+		TrackTasks:     make(map[string][]*tm.TaskEntity),
+		BacklogTasks:   backlogTasks,
+	}
+	_, _ = model.Update(msg)
+
+	// Navigate to backlog section (Tab twice from iterations)
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab}) // To tracks
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab}) // To backlog
+
+	// Now test navigation
+	// Press 'j' to move down
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	// Should now be at index 1 (second task)
+
+	// Press 'j' again
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	// Should now be at index 2 (third task)
+
+	// Press 'k' to move up
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}})
+	// Should now be at index 1 (second task)
+
+	// Navigation completed without errors
+}
+
+// TestBacklogEnterViewsTaskDetail tests that Enter key opens backlog task detail
+func TestBacklogEnterViewsTaskDetail(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
+
+	now := time.Now()
+
+	// Create roadmap
+	roadmap := &tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	// Create backlog task
+	task1 := tm.NewTaskEntity("TM-task-1", "TM-track-1", "Backlog Task 1", "Description 1", "todo", 200, "", now, now)
+
+	repo.activeRoadmap = roadmap
+	repo.tasks = []*tm.TaskEntity{task1}
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(roadmap)
+	model.SetCurrentView(tm.ViewRoadmapList)
+
+	// Simulate loading backlog data
+	backlogTasks := []*tm.TaskEntity{task1}
+	msg := tm.FullRoadmapDataLoadedMsg{
+		IterationTasks: make(map[int][]*tm.TaskEntity),
+		TrackTasks:     make(map[string][]*tm.TaskEntity),
+		BacklogTasks:   backlogTasks,
+	}
+	_, _ = model.Update(msg)
+
+	// Navigate to backlog section
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab}) // To tracks
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab}) // To backlog
+
+	// Press Enter to view task detail
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Should return a command (loadTaskDetail)
+	if cmd == nil {
+		t.Fatal("Expected command for loading task detail")
+	}
+}
+
+// TestBacklogEmptyState tests that empty backlog doesn't show section
+func TestBacklogEmptyState(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
+
+	now := time.Now()
+
+	// Create roadmap
+	roadmap := &tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	repo.activeRoadmap = roadmap
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(roadmap)
+	model.SetCurrentView(tm.ViewRoadmapList)
+	model.SetDimensions(120, 40)
+
+	// Simulate loading empty backlog
+	msg := tm.FullRoadmapDataLoadedMsg{
+		IterationTasks: make(map[int][]*tm.TaskEntity),
+		TrackTasks:     make(map[string][]*tm.TaskEntity),
+		BacklogTasks:   []*tm.TaskEntity{}, // Empty backlog
+	}
+	_, _ = model.Update(msg)
+
+	view := model.View()
+
+	// Backlog section should not be displayed when empty
+	if contains(view, "Backlog (0)") {
+		t.Fatal("View should NOT show empty backlog section")
+	}
+}
+
+// TestBacklogSelectionHighlight tests that selected backlog task is highlighted
+func TestBacklogSelectionHighlight(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMockRepository()
+	logger := NewMockLogger()
+
+	now := time.Now()
+
+	// Create roadmap
+	roadmap := &tm.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	// Create backlog tasks
+	task1 := tm.NewTaskEntity("TM-task-1", "TM-track-1", "Backlog Task 1", "Description 1", "todo", 200, "", now, now)
+	task2 := tm.NewTaskEntity("TM-task-2", "TM-track-1", "Backlog Task 2", "Description 2", "todo", 300, "", now, now)
+
+	repo.activeRoadmap = roadmap
+	repo.tasks = []*tm.TaskEntity{task1, task2}
+
+	model := tm.NewAppModel(ctx, repo, logger)
+	model.SetRoadmap(roadmap)
+	model.SetCurrentView(tm.ViewRoadmapList)
+	model.SetDimensions(120, 40)
+
+	// Simulate loading backlog data
+	backlogTasks := []*tm.TaskEntity{task1, task2}
+	msg := tm.FullRoadmapDataLoadedMsg{
+		IterationTasks: make(map[int][]*tm.TaskEntity),
+		TrackTasks:     make(map[string][]*tm.TaskEntity),
+		BacklogTasks:   backlogTasks,
+	}
+	_, _ = model.Update(msg)
+
+	// Navigate to backlog section
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab}) // To tracks
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab}) // To backlog
+
+	view := model.View()
+
+	// First task should be selected (arrow indicator)
+	// Check for selection indicator
+	if !contains(view, "→") {
+		t.Fatal("View should contain selection indicator (→)")
+	}
+}

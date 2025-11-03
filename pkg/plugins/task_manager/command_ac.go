@@ -151,9 +151,9 @@ func (c *ACAddCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandCont
 // ============================================================================
 
 type ACListCommand struct {
-	Plugin *TaskManagerPlugin
+	Plugin  *TaskManagerPlugin
 	project string
-	taskID string
+	taskID  string
 }
 
 func (c *ACListCommand) GetName() string {
@@ -259,10 +259,10 @@ func (c *ACListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandCon
 // ============================================================================
 
 type ACVerifyCommand struct {
-	Plugin *TaskManagerPlugin
+	Plugin  *TaskManagerPlugin
 	project string
-	acID   string
-	notes  string
+	acID    string
+	notes   string
 }
 
 func (c *ACVerifyCommand) GetName() string {
@@ -357,10 +357,10 @@ func (c *ACVerifyCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 // ============================================================================
 
 type ACFailCommand struct {
-	Plugin *TaskManagerPlugin
+	Plugin  *TaskManagerPlugin
 	project string
-	acID   string
-	reason string
+	acID    string
+	reason  string
 }
 
 func (c *ACFailCommand) GetName() string {
@@ -638,9 +638,9 @@ func (c *ACDeleteCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 // ============================================================================
 
 type ACVerifyAutoCommand struct {
-	Plugin *TaskManagerPlugin
+	Plugin  *TaskManagerPlugin
 	project string
-	acID   string
+	acID    string
 }
 
 func (c *ACVerifyAutoCommand) GetName() string {
@@ -720,13 +720,158 @@ func (c *ACVerifyAutoCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comm
 }
 
 // ============================================================================
+// ACFailedCommand lists failed acceptance criteria with filtering
+// ============================================================================
+
+type ACFailedCommand struct {
+	Plugin       *TaskManagerPlugin
+	project      string
+	iterationNum *int
+	trackID      string
+	taskID       string
+}
+
+func (c *ACFailedCommand) GetName() string {
+	return "ac failed"
+}
+
+func (c *ACFailedCommand) GetDescription() string {
+	return "List failed acceptance criteria with optional filtering"
+}
+
+func (c *ACFailedCommand) GetUsage() string {
+	return "dw task-manager ac failed [--iteration <num>] [--track <id>] [--task <id>]"
+}
+
+func (c *ACFailedCommand) GetHelp() string {
+	return `Lists all acceptance criteria with status "failed".
+
+Supports optional filtering by iteration, track, or task to narrow results.
+
+Flags:
+  --iteration <num>  Filter by iteration number (optional)
+  --track <id>       Filter by track ID (optional)
+  --task <id>        Filter by task ID (optional)
+  --project <name>   Use specific project (optional)
+
+Examples:
+  # List all failed ACs
+  dw task-manager ac failed
+
+  # List failed ACs in iteration 3
+  dw task-manager ac failed --iteration 3
+
+  # List failed ACs for a specific track
+  dw task-manager ac failed --track TM-track-core
+
+  # List failed ACs for a specific task
+  dw task-manager ac failed --task TM-task-58
+
+Output:
+  Shows AC ID, task ID, description, and feedback (Notes field) for each failed AC.`
+}
+
+func (c *ACFailedCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
+	// Parse arguments
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--project":
+			if i+1 < len(args) {
+				c.project = args[i+1]
+				i++
+			}
+		case "--iteration":
+			if i+1 < len(args) {
+				var iterNum int
+				_, err := fmt.Sscanf(args[i+1], "%d", &iterNum)
+				if err != nil {
+					return fmt.Errorf("invalid iteration number: %s", args[i+1])
+				}
+				c.iterationNum = &iterNum
+				i++
+			}
+		case "--track":
+			if i+1 < len(args) {
+				c.trackID = args[i+1]
+				i++
+			}
+		case "--task":
+			if i+1 < len(args) {
+				c.taskID = args[i+1]
+				i++
+			}
+		}
+	}
+
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Build filters
+	filters := ACFilters{
+		IterationNum: c.iterationNum,
+		TrackID:      c.trackID,
+		TaskID:       c.taskID,
+	}
+
+	// Get failed ACs
+	failedACs, err := repo.ListFailedAC(ctx, filters)
+	if err != nil {
+		return fmt.Errorf("failed to list failed ACs: %w", err)
+	}
+
+	if len(failedACs) == 0 {
+		fmt.Fprintf(cmdCtx.GetStdout(), "No failed acceptance criteria found")
+		if c.iterationNum != nil {
+			fmt.Fprintf(cmdCtx.GetStdout(), " for iteration %d", *c.iterationNum)
+		}
+		if c.trackID != "" {
+			fmt.Fprintf(cmdCtx.GetStdout(), " for track %s", c.trackID)
+		}
+		if c.taskID != "" {
+			fmt.Fprintf(cmdCtx.GetStdout(), " for task %s", c.taskID)
+		}
+		fmt.Fprintf(cmdCtx.GetStdout(), "\n")
+		return nil
+	}
+
+	// Display header
+	fmt.Fprintf(cmdCtx.GetStdout(), "Failed Acceptance Criteria")
+	if c.iterationNum != nil {
+		fmt.Fprintf(cmdCtx.GetStdout(), " (Iteration %d)", *c.iterationNum)
+	}
+	if c.trackID != "" {
+		fmt.Fprintf(cmdCtx.GetStdout(), " (Track: %s)", c.trackID)
+	}
+	if c.taskID != "" {
+		fmt.Fprintf(cmdCtx.GetStdout(), " (Task: %s)", c.taskID)
+	}
+	fmt.Fprintf(cmdCtx.GetStdout(), "\n")
+	fmt.Fprintf(cmdCtx.GetStdout(), "Total: %d\n\n", len(failedACs))
+
+	// Display each failed AC
+	for _, ac := range failedACs {
+		fmt.Fprintf(cmdCtx.GetStdout(), "✗ [%s] Task: %s\n", ac.ID, ac.TaskID)
+		fmt.Fprintf(cmdCtx.GetStdout(), "  Description: %s\n", ac.Description)
+		if ac.Notes != "" {
+			fmt.Fprintf(cmdCtx.GetStdout(), "  Feedback: %s\n", ac.Notes)
+		}
+		fmt.Fprintf(cmdCtx.GetStdout(), "\n")
+	}
+
+	return nil
+}
+
+// ============================================================================
 // ACRequestReviewCommand requests human review for an AC
 // ============================================================================
 
 type ACRequestReviewCommand struct {
-	Plugin *TaskManagerPlugin
+	Plugin  *TaskManagerPlugin
 	project string
-	acID   string
+	acID    string
 }
 
 func (c *ACRequestReviewCommand) GetName() string {

@@ -334,6 +334,7 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&TaskMoveCommand{Plugin: p},
 		&TaskMigrateCommand{Plugin: p},
 		&TaskCheckReadyCommand{Plugin: p},
+		&TaskBacklogCommand{Plugin: p},
 		// Acceptance Criteria commands
 		&ACAddCommand{Plugin: p},
 		&ACListCommand{Plugin: p},
@@ -345,10 +346,12 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&ACRequestReviewCommand{Plugin: p},
 		&ACListIterationCommand{Plugin: p},
 		&ACListTrackCommand{Plugin: p},
+		&ACFailedCommand{Plugin: p},
 		// Iteration commands
 		&IterationCreateCommand{Plugin: p},
 		&IterationListCommand{Plugin: p},
 		&IterationShowCommand{Plugin: p},
+		&IterationViewCommand{Plugin: p},
 		&IterationCurrentCommand{Plugin: p},
 		&IterationUpdateCommand{Plugin: p},
 		&IterationDeleteCommand{Plugin: p},

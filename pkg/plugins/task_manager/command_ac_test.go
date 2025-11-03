@@ -1164,3 +1164,417 @@ func TestACRequestReviewCommand_Success(t *testing.T) {
 		t.Errorf("expected status 'pending_human_review', got '%s'", updated.Status)
 	}
 }
+
+// ============================================================================
+// ACFailedCommand Tests
+// ============================================================================
+
+func TestACFailedCommand_NoFilters(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-test", "Test vision", "Test criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("DW-track-1", "roadmap-test", "Test Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task1 := task_manager.NewTaskEntity("DW-task-1", "DW-track-1", "Test Task 1", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+
+	task2 := task_manager.NewTaskEntity("DW-task-2", "DW-track-1", "Test Task 2", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task2)
+
+	// Create failed ACs
+	ac1 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-1",
+		"DW-task-1",
+		"AC1 description",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac1.Status = task_manager.ACStatusFailed
+	ac1.Notes = "Test failure reason 1"
+	repo.SaveAC(ctx, ac1)
+
+	ac2 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-2",
+		"DW-task-2",
+		"AC2 description",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac2.Status = task_manager.ACStatusFailed
+	ac2.Notes = "Test failure reason 2"
+	repo.SaveAC(ctx, ac2)
+
+	// Create a verified AC (should not appear)
+	ac3 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-3",
+		"DW-task-1",
+		"AC3 description",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac3.Status = task_manager.ACStatusVerified
+	repo.SaveAC(ctx, ac3)
+
+	// Execute command with no filters
+	cmd := &task_manager.ACFailedCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Total: 2") {
+		t.Errorf("expected 2 failed ACs, got output: %s", output)
+	}
+	if !strings.Contains(output, "DW-ac-1") || !strings.Contains(output, "DW-ac-2") {
+		t.Errorf("expected both failed ACs in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Test failure reason 1") || !strings.Contains(output, "Test failure reason 2") {
+		t.Errorf("expected failure reasons in output, got: %s", output)
+	}
+	if strings.Contains(output, "DW-ac-3") {
+		t.Errorf("verified AC should not appear in output, got: %s", output)
+	}
+}
+
+func TestACFailedCommand_FilterByIteration(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-test", "Test vision", "Test criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("DW-track-1", "roadmap-test", "Test Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task1 := task_manager.NewTaskEntity("DW-task-1", "DW-track-1", "Test Task 1", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+
+	task2 := task_manager.NewTaskEntity("DW-task-2", "DW-track-1", "Test Task 2", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task2)
+
+	// Create iteration
+	iter, err := task_manager.NewIterationEntity(1, "Iteration 1", "Test goal", "Test deliverable", []string{}, "planned", 100, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("failed to create iteration: %v", err)
+	}
+	repo.SaveIteration(ctx, iter)
+	repo.AddTaskToIteration(ctx, 1, "DW-task-1")
+
+	// Create failed ACs
+	ac1 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-1",
+		"DW-task-1",
+		"AC1 in iteration",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac1.Status = task_manager.ACStatusFailed
+	ac1.Notes = "Iteration failure"
+	repo.SaveAC(ctx, ac1)
+
+	ac2 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-2",
+		"DW-task-2",
+		"AC2 not in iteration",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac2.Status = task_manager.ACStatusFailed
+	ac2.Notes = "Not in iteration"
+	repo.SaveAC(ctx, ac2)
+
+	// Execute command with iteration filter
+	cmd := &task_manager.ACFailedCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{"--iteration", "1"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Iteration 1") {
+		t.Errorf("expected iteration filter in header, got: %s", output)
+	}
+	if !strings.Contains(output, "Total: 1") {
+		t.Errorf("expected 1 failed AC in iteration, got: %s", output)
+	}
+	if !strings.Contains(output, "DW-ac-1") {
+		t.Errorf("expected AC1 in output, got: %s", output)
+	}
+	if strings.Contains(output, "DW-ac-2") {
+		t.Errorf("AC2 should not appear (not in iteration), got: %s", output)
+	}
+}
+
+func TestACFailedCommand_FilterByTrack(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-test", "Test vision", "Test criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track1, _ := task_manager.NewTrackEntity("DW-track-1", "roadmap-test", "Test Track 1", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track1)
+
+	track2, _ := task_manager.NewTrackEntity("DW-track-2", "roadmap-test", "Test Track 2", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track2)
+
+	task1 := task_manager.NewTaskEntity("DW-task-1", "DW-track-1", "Test Task 1", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+
+	task2 := task_manager.NewTaskEntity("DW-task-2", "DW-track-2", "Test Task 2", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task2)
+
+	// Create failed ACs
+	ac1 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-1",
+		"DW-task-1",
+		"AC1 in track 1",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac1.Status = task_manager.ACStatusFailed
+	repo.SaveAC(ctx, ac1)
+
+	ac2 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-2",
+		"DW-task-2",
+		"AC2 in track 2",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac2.Status = task_manager.ACStatusFailed
+	repo.SaveAC(ctx, ac2)
+
+	// Execute command with track filter
+	cmd := &task_manager.ACFailedCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{"--track", "DW-track-1"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Track: DW-track-1") {
+		t.Errorf("expected track filter in header, got: %s", output)
+	}
+	if !strings.Contains(output, "Total: 1") {
+		t.Errorf("expected 1 failed AC in track, got: %s", output)
+	}
+	if !strings.Contains(output, "DW-ac-1") {
+		t.Errorf("expected AC1 in output, got: %s", output)
+	}
+	if strings.Contains(output, "DW-ac-2") {
+		t.Errorf("AC2 should not appear (different track), got: %s", output)
+	}
+}
+
+func TestACFailedCommand_FilterByTask(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-test", "Test vision", "Test criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("DW-track-1", "roadmap-test", "Test Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task := task_manager.NewTaskEntity("DW-task-1", "DW-track-1", "Test Task", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task)
+
+	// Create multiple failed ACs for same task
+	ac1 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-1",
+		"DW-task-1",
+		"AC1 for task",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac1.Status = task_manager.ACStatusFailed
+	repo.SaveAC(ctx, ac1)
+
+	ac2 := task_manager.NewAcceptanceCriteriaEntity(
+		"DW-ac-2",
+		"DW-task-1",
+		"AC2 for task",
+		task_manager.VerificationTypeManual,
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	ac2.Status = task_manager.ACStatusFailed
+	repo.SaveAC(ctx, ac2)
+
+	// Execute command with task filter
+	cmd := &task_manager.ACFailedCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{"--task", "DW-task-1"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Task: DW-task-1") {
+		t.Errorf("expected task filter in header, got: %s", output)
+	}
+	if !strings.Contains(output, "Total: 2") {
+		t.Errorf("expected 2 failed ACs for task, got: %s", output)
+	}
+	if !strings.Contains(output, "DW-ac-1") || !strings.Contains(output, "DW-ac-2") {
+		t.Errorf("expected both ACs in output, got: %s", output)
+	}
+}
+
+func TestACFailedCommand_NoResults(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup with no failed ACs
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-test", "Test vision", "Test criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	// Execute command
+	cmd := &task_manager.ACFailedCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "No failed acceptance criteria found") {
+		t.Errorf("expected 'no failed ACs' message, got: %s", output)
+	}
+}

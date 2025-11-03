@@ -163,8 +163,10 @@ func (c *IterationCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.C
 // ============================================================================
 
 type IterationListCommand struct {
-	Plugin  *TaskManagerPlugin
-	project string
+	Plugin    *TaskManagerPlugin
+	project   string
+	format    string
+	helpHints bool
 }
 
 func (c *IterationListCommand) GetName() string {
@@ -176,7 +178,7 @@ func (c *IterationListCommand) GetDescription() string {
 }
 
 func (c *IterationListCommand) GetUsage() string {
-	return "dw task-manager iteration list"
+	return "dw task-manager iteration list [--format <format>] [--help-hints]"
 }
 
 func (c *IterationListCommand) GetHelp() string {
@@ -184,16 +186,57 @@ func (c *IterationListCommand) GetHelp() string {
 
 Each iteration shows its number, name, goal, status, task count, and timestamps.
 
+Flags:
+  --format <format>    Output format (default: table)
+                       Values: table, llm, json
+  --help-hints         Show contextual next-step suggestions
+
 Examples:
+  # Table format (default)
   dw task-manager iteration list
 
+  # LLM-friendly format
+  dw task-manager iteration list --format llm
+
+  # JSON format
+  dw task-manager iteration list --format json
+
+  # With contextual hints
+  dw task-manager iteration list --help-hints
+
 Notes:
-  - Iterations are displayed in order by number
-  - Current iteration is highlighted
-  - Status values: planned, current, complete`
+  - Iterations are displayed in order by rank (lower = higher priority)
+  - Current iteration is highlighted in table format
+  - Status values: planned, current, complete
+  - JSON format includes all metadata
+  - LLM format is optimized for AI agent consumption`
 }
 
 func (c *IterationListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
+	// Parse flags
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--project":
+			if i+1 < len(args) {
+				c.project = args[i+1]
+				i++
+			}
+		case "--format":
+			if i+1 < len(args) {
+				c.format = args[i+1]
+				i++
+			}
+		case "--help-hints":
+			c.helpHints = true
+		}
+	}
+
+	// Parse and validate format
+	outputFormat, err := ParseOutputFormat(c.format)
+	if err != nil {
+		return err
+	}
+
 	// Get repository for project
 	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
 	if err != nil {
@@ -209,10 +252,29 @@ func (c *IterationListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 
 	if len(iterations) == 0 {
 		fmt.Fprintf(cmdCtx.GetStdout(), "No iterations found.\n")
-		fmt.Fprintf(cmdCtx.GetStdout(), "Create one with 'dw task-manager iteration create --name <name> --goal <goal>'\n")
+		if c.helpHints {
+			hints := NewContextualHints()
+			hints.Add("dw task-manager iteration create --name <name> --goal <goal> # Create your first iteration")
+			hints.Output(cmdCtx.GetStdout())
+		}
 		return nil
 	}
 
+	// Output based on format
+	switch outputFormat {
+	case FormatJSON:
+		formatter := NewOutputFormatter(cmdCtx.GetStdout(), FormatJSON)
+		return formatter.OutputJSON(iterations)
+
+	case FormatLLM:
+		return c.outputLLMFormat(cmdCtx, iterations)
+
+	default: // FormatTable
+		return c.outputTableFormat(cmdCtx, iterations)
+	}
+}
+
+func (c *IterationListCommand) outputTableFormat(cmdCtx pluginsdk.CommandContext, iterations []*IterationEntity) error {
 	// Display header
 	fmt.Fprintf(cmdCtx.GetStdout(), "%-3s %-30s %-20s %-10s %-5s %-19s %-19s\n",
 		"#", "Name", "Goal", "Status", "Tasks", "Started", "Completed")
@@ -259,6 +321,53 @@ func (c *IterationListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 		)
 	}
 
+	// Output hints if requested
+	if c.helpHints {
+		hints := NewContextualHints()
+		hints.Add("dw task-manager iteration show <number>  # View iteration details")
+		hints.Add("dw task-manager iteration start <number> # Start an iteration")
+		hints.Add("dw task-manager iteration current        # View current iteration")
+		hints.Output(cmdCtx.GetStdout())
+	}
+
+	return nil
+}
+
+func (c *IterationListCommand) outputLLMFormat(cmdCtx pluginsdk.CommandContext, iterations []*IterationEntity) error {
+	out := cmdCtx.GetStdout()
+	fmt.Fprintf(out, "# Iterations\n\n")
+	fmt.Fprintf(out, "Total: %d iteration(s)\n\n", len(iterations))
+
+	for _, iter := range iterations {
+		statusIcon := getStatusIcon(iter.Status)
+		fmt.Fprintf(out, "## %s Iteration %d: %s\n\n", statusIcon, iter.Number, iter.Name)
+		fmt.Fprintf(out, "- **Status**: %s\n", iter.Status)
+		fmt.Fprintf(out, "- **Goal**: %s\n", iter.Goal)
+		if iter.Deliverable != "" {
+			fmt.Fprintf(out, "- **Deliverable**: %s\n", iter.Deliverable)
+		}
+		fmt.Fprintf(out, "- **Tasks**: %d\n", len(iter.TaskIDs))
+		fmt.Fprintf(out, "- **Rank**: %d\n", iter.Rank)
+
+		if iter.StartedAt != nil {
+			fmt.Fprintf(out, "- **Started**: %s\n", iter.StartedAt.Format(time.RFC3339))
+		}
+		if iter.CompletedAt != nil {
+			fmt.Fprintf(out, "- **Completed**: %s\n", iter.CompletedAt.Format(time.RFC3339))
+		}
+
+		fmt.Fprintf(out, "\n")
+	}
+
+	// Output hints if requested
+	if c.helpHints {
+		hints := NewContextualHints()
+		hints.Add("dw task-manager iteration show <number>  # View iteration details")
+		hints.Add("dw task-manager iteration start <number> # Start an iteration")
+		hints.Add("dw task-manager iteration current        # View current iteration")
+		hints.Output(cmdCtx.GetStdout())
+	}
+
 	return nil
 }
 
@@ -267,9 +376,11 @@ func (c *IterationListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 // ============================================================================
 
 type IterationShowCommand struct {
-	Plugin  *TaskManagerPlugin
-	project string
-	full    bool
+	Plugin    *TaskManagerPlugin
+	project   string
+	full      bool
+	format    string
+	helpHints bool
 }
 
 func (c *IterationShowCommand) GetName() string {
@@ -281,7 +392,7 @@ func (c *IterationShowCommand) GetDescription() string {
 }
 
 func (c *IterationShowCommand) GetUsage() string {
-	return "dw task-manager iteration show <number> [--full]"
+	return "dw task-manager iteration show <number> [--full] [--format <format>] [--help-hints]"
 }
 
 func (c *IterationShowCommand) GetHelp() string {
@@ -294,16 +405,33 @@ Arguments:
   <number>  Iteration number (required)
 
 Flags:
-  --full    Show full task titles and descriptions (default: truncated)
+  --full               Show full task titles and descriptions (default: truncated)
+  --format <format>    Output format (default: table)
+                       Values: table, llm, json
+  --help-hints         Show contextual next-step suggestions
 
 Examples:
+  # Table format (default)
   dw task-manager iteration show 1
+
+  # Table format with full details
   dw task-manager iteration show 2 --full
+
+  # LLM-friendly format
+  dw task-manager iteration show 1 --format llm
+
+  # JSON format
+  dw task-manager iteration show 1 --format json
+
+  # With contextual hints
+  dw task-manager iteration show 1 --help-hints
 
 Notes:
   - Run 'dw task-manager iteration list' to see all iteration numbers
   - Task counts show completed/total breakdown
-  - Use --full to see complete task titles and descriptions`
+  - Use --full to see complete task titles and descriptions
+  - JSON format includes all metadata
+  - LLM format is optimized for AI agent consumption`
 }
 
 func (c *IterationShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
@@ -320,11 +448,24 @@ func (c *IterationShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 				c.project = args[i+1]
 				i++
 			}
+		case "--format":
+			if i+1 < len(args) {
+				c.format = args[i+1]
+				i++
+			}
+		case "--help-hints":
+			c.helpHints = true
 		default:
 			if !strings.HasPrefix(args[i], "--") && iterationNum == "" {
 				iterationNum = args[i]
 			}
 		}
+	}
+
+	// Parse and validate format
+	outputFormat, err := ParseOutputFormat(c.format)
+	if err != nil {
+		return err
 	}
 
 	// Get repository for project
@@ -360,6 +501,18 @@ func (c *IterationShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 		return fmt.Errorf("failed to get iteration tasks: %w", err)
 	}
 
+	// Output based on format
+	switch outputFormat {
+	case FormatJSON:
+		return c.outputJSONFormat(cmdCtx, iteration, tasks)
+	case FormatLLM:
+		return c.outputLLMFormatShow(cmdCtx, iteration, tasks)
+	default: // FormatTable
+		return c.outputTableFormatShow(cmdCtx, iteration, tasks)
+	}
+}
+
+func (c *IterationShowCommand) outputTableFormatShow(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity) error {
 	// Display iteration details
 	fmt.Fprintf(cmdCtx.GetStdout(), "Iteration #%d: %s\n", iteration.Number, iteration.Name)
 	fmt.Fprintf(cmdCtx.GetStdout(), "===============================\n")
@@ -406,7 +559,98 @@ func (c *IterationShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 		fmt.Fprintf(cmdCtx.GetStdout(), "No tasks in this iteration.\n")
 	}
 
+	// Output hints if requested
+	if c.helpHints {
+		hints := NewContextualHints()
+		hints.Add("dw task-manager iteration start " + strconv.Itoa(iteration.Number) + " # Start this iteration")
+		hints.Add("dw task-manager task show <task-id>      # View task details")
+		hints.Add("dw task-manager iteration list           # View all iterations")
+		hints.Output(cmdCtx.GetStdout())
+	}
+
 	return nil
+}
+
+func (c *IterationShowCommand) outputLLMFormatShow(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity) error {
+	out := cmdCtx.GetStdout()
+	statusIcon := getStatusIcon(iteration.Status)
+
+	fmt.Fprintf(out, "# %s Iteration %d: %s\n\n", statusIcon, iteration.Number, iteration.Name)
+	fmt.Fprintf(out, "## Overview\n\n")
+	fmt.Fprintf(out, "- **Status**: %s\n", iteration.Status)
+	fmt.Fprintf(out, "- **Goal**: %s\n", iteration.Goal)
+	if iteration.Deliverable != "" {
+		fmt.Fprintf(out, "- **Deliverable**: %s\n", iteration.Deliverable)
+	}
+	fmt.Fprintf(out, "- **Rank**: %d\n", iteration.Rank)
+	fmt.Fprintf(out, "- **Created**: %s\n", iteration.CreatedAt.Format(time.RFC3339))
+	fmt.Fprintf(out, "- **Updated**: %s\n", iteration.UpdatedAt.Format(time.RFC3339))
+
+	if iteration.StartedAt != nil {
+		fmt.Fprintf(out, "- **Started**: %s\n", iteration.StartedAt.Format(time.RFC3339))
+	}
+	if iteration.CompletedAt != nil {
+		fmt.Fprintf(out, "- **Completed**: %s\n", iteration.CompletedAt.Format(time.RFC3339))
+	}
+
+	// Task details
+	fmt.Fprintf(out, "\n## Tasks (%d total)\n\n", len(tasks))
+
+	if len(tasks) > 0 {
+		completedCount := 0
+		for _, task := range tasks {
+			if task.Status == "done" {
+				completedCount++
+			}
+
+			taskIcon := getStatusIcon(task.Status)
+			fmt.Fprintf(out, "### %s %s\n\n", taskIcon, task.Title)
+			fmt.Fprintf(out, "- **ID**: %s\n", task.ID)
+			fmt.Fprintf(out, "- **Status**: %s\n", task.Status)
+			fmt.Fprintf(out, "- **Track ID**: %s\n", task.TrackID)
+
+			if c.full && task.Description != "" {
+				fmt.Fprintf(out, "- **Description**: %s\n", task.Description)
+			}
+
+			fmt.Fprintf(out, "\n")
+		}
+
+		fmt.Fprintf(out, "## Progress\n\n")
+		fmt.Fprintf(out, "- **Completed**: %d/%d tasks (%.0f%%)\n",
+			completedCount,
+			len(tasks),
+			float64(completedCount)/float64(len(tasks))*100,
+		)
+	} else {
+		fmt.Fprintf(out, "*No tasks in this iteration*\n")
+	}
+
+	// Output hints if requested
+	if c.helpHints {
+		hints := NewContextualHints()
+		hints.Add("dw task-manager iteration start " + strconv.Itoa(iteration.Number) + " # Start this iteration")
+		hints.Add("dw task-manager task show <task-id>      # View task details")
+		hints.Add("dw task-manager iteration list           # View all iterations")
+		hints.Output(cmdCtx.GetStdout())
+	}
+
+	return nil
+}
+
+func (c *IterationShowCommand) outputJSONFormat(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity) error {
+	type IterationShowOutput struct {
+		Iteration *IterationEntity `json:"iteration"`
+		Tasks     []*TaskEntity     `json:"tasks"`
+	}
+
+	output := IterationShowOutput{
+		Iteration: iteration,
+		Tasks:     tasks,
+	}
+
+	formatter := NewOutputFormatter(cmdCtx.GetStdout(), FormatJSON)
+	return formatter.OutputJSON(output)
 }
 
 // ============================================================================
@@ -1259,6 +1503,220 @@ func (c *IterationCompleteCommand) Execute(ctx context.Context, cmdCtx pluginsdk
 	}
 	if iteration.StartedAt != nil {
 		fmt.Fprintf(cmdCtx.GetStdout(), "Duration:   %s\n", durationStr)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// IterationViewCommand displays iteration as markdown for LLM agents
+// ============================================================================
+
+type IterationViewCommand struct {
+	Plugin  *TaskManagerPlugin
+	project string
+	full    bool
+}
+
+func (c *IterationViewCommand) GetName() string {
+	return "iteration view"
+}
+
+func (c *IterationViewCommand) GetDescription() string {
+	return "Display iteration details as markdown (LLM-friendly)"
+}
+
+func (c *IterationViewCommand) GetUsage() string {
+	return "dw task-manager iteration view <number> [--full]"
+}
+
+func (c *IterationViewCommand) GetHelp() string {
+	return `Displays complete iteration details formatted as markdown for LLM agents.
+
+Outputs all iteration metadata, tasks with full descriptions, and acceptance
+criteria with their verification status in a structured markdown format.
+
+Arguments:
+  <number>  Iteration number (required)
+
+Flags:
+  --full    Include extended details (full task descriptions, AC notes)
+
+Examples:
+  dw task-manager iteration view 1
+  dw task-manager iteration view 1 --full
+
+Output Format:
+  - Markdown headers and lists
+  - Checkbox-style status indicators for ACs
+  - Complete task and AC information
+  - Suitable for LLM agent consumption
+
+Notes:
+  - Designed for LLM agents to understand iteration state
+  - All tasks in iteration are included
+  - All acceptance criteria are listed with verification status
+  - Use --full for complete details including notes and descriptions`
+}
+
+func (c *IterationViewCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
+	// Parse flags
+	c.full = false
+	iterationNum := ""
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--full":
+			c.full = true
+		case "--project":
+			if i+1 < len(args) {
+				c.project = args[i+1]
+				i++
+			}
+		default:
+			if !strings.HasPrefix(args[i], "--") && iterationNum == "" {
+				iterationNum = args[i]
+			}
+		}
+	}
+
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Parse iteration number
+	if iterationNum == "" {
+		return fmt.Errorf("iteration number is required")
+	}
+
+	number, err := strconv.Atoi(iterationNum)
+	if err != nil {
+		return fmt.Errorf("invalid iteration number: %v", err)
+	}
+
+	// Get iteration
+	iteration, err := repo.GetIteration(ctx, number)
+	if err != nil {
+		if errors.Is(err, pluginsdk.ErrNotFound) {
+			return fmt.Errorf("iteration %d not found", number)
+		}
+		return fmt.Errorf("failed to get iteration: %w", err)
+	}
+
+	// Get iteration tasks
+	tasks, err := repo.GetIterationTasks(ctx, number)
+	if err != nil {
+		return fmt.Errorf("failed to get iteration tasks: %w", err)
+	}
+
+	// Calculate task stats
+	taskStats := make(map[string]int)
+	taskStats["total"] = len(tasks)
+	taskStats["todo"] = 0
+	taskStats["in-progress"] = 0
+	taskStats["done"] = 0
+	for _, task := range tasks {
+		taskStats[task.Status]++
+	}
+
+	// Output markdown header
+	out := cmdCtx.GetStdout()
+	fmt.Fprintf(out, "# Iteration #%d: %s\n\n", iteration.Number, iteration.Name)
+
+	// Output metadata
+	fmt.Fprintf(out, "**Goal**: %s\n\n", iteration.Goal)
+	if iteration.Deliverable != "" {
+		fmt.Fprintf(out, "**Deliverable**: %s\n\n", iteration.Deliverable)
+	}
+	fmt.Fprintf(out, "**Status**: %s\n\n", iteration.Status)
+
+	// Output timestamps
+	fmt.Fprintf(out, "**Created**: %s\n\n", iteration.CreatedAt.Format(time.RFC3339))
+	if iteration.StartedAt != nil {
+		fmt.Fprintf(out, "**Started**: %s\n\n", iteration.StartedAt.Format(time.RFC3339))
+	}
+	if iteration.CompletedAt != nil {
+		fmt.Fprintf(out, "**Completed**: %s\n\n", iteration.CompletedAt.Format(time.RFC3339))
+	}
+
+	// Output task summary
+	fmt.Fprintf(out, "## Tasks (%d total, %d completed)\n\n",
+		taskStats["total"], taskStats["done"])
+
+	// Output each task
+	for _, task := range tasks {
+		// Task header
+		fmt.Fprintf(out, "### %s: %s\n\n", task.ID, task.Title)
+
+		// Task metadata
+		fmt.Fprintf(out, "**Status**: %s\n\n", task.Status)
+
+		// Get track info for context
+		track, err := repo.GetTrack(ctx, task.TrackID)
+		if err == nil {
+			fmt.Fprintf(out, "**Track**: %s - %s\n\n", track.ID, track.Title)
+		}
+
+		// Task description (always show in view command, only truncate without --full)
+		if task.Description != "" {
+			if c.full {
+				fmt.Fprintf(out, "**Description**:\n%s\n\n", task.Description)
+			} else {
+				// Show first 200 chars if description is long
+				desc := task.Description
+				if len(desc) > 200 {
+					desc = desc[:200] + "..."
+				}
+				fmt.Fprintf(out, "**Description**: %s\n\n", desc)
+			}
+		}
+
+		// Get and display acceptance criteria for this task
+		acs, err := repo.ListAC(ctx, task.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get acceptance criteria for task %s: %w", task.ID, err)
+		}
+
+		if len(acs) > 0 {
+			fmt.Fprintf(out, "**Acceptance Criteria**:\n\n")
+			for _, ac := range acs {
+				// Use checkbox-style indicators
+				checkbox := "[ ]"
+				if ac.IsVerified() {
+					checkbox = "[x]"
+				} else if ac.IsFailed() {
+					checkbox = "[✗]"
+				}
+
+				fmt.Fprintf(out, "- %s **%s**: %s\n", checkbox, ac.ID, ac.Description)
+
+				// Show notes if --full and notes exist
+				if c.full && ac.Notes != "" {
+					fmt.Fprintf(out, "  - *Notes*: %s\n", ac.Notes)
+				}
+			}
+			fmt.Fprintf(out, "\n")
+		}
+
+		fmt.Fprintf(out, "---\n\n")
+	}
+
+	// Output summary footer
+	if len(tasks) == 0 {
+		fmt.Fprintf(out, "*No tasks in this iteration*\n\n")
+	} else {
+		completionPct := 0
+		if taskStats["total"] > 0 {
+			completionPct = (taskStats["done"] * 100) / taskStats["total"]
+		}
+		fmt.Fprintf(out, "## Summary\n\n")
+		fmt.Fprintf(out, "- Total Tasks: %d\n", taskStats["total"])
+		fmt.Fprintf(out, "- Completed: %d (%d%%)\n", taskStats["done"], completionPct)
+		fmt.Fprintf(out, "- In Progress: %d\n", taskStats["in-progress"])
+		fmt.Fprintf(out, "- To Do: %d\n", taskStats["todo"])
 	}
 
 	return nil

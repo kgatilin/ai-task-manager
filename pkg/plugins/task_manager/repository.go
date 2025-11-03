@@ -15,6 +15,13 @@ type TaskFilters struct {
 	Priority []string // Filter by priority (critical, high, medium, low)
 }
 
+// ACFilters provides optional filtering for acceptance criteria queries
+type ACFilters struct {
+	IterationNum *int   // Filter by iteration number
+	TrackID      string // Filter by track ID
+	TaskID       string // Filter by task ID
+}
+
 // RoadmapRepository defines the contract for persistent storage of roadmap entities.
 // It manages roadmaps, tracks, tasks, and iterations in a hierarchical structure.
 type RoadmapRepository interface {
@@ -243,4 +250,19 @@ type RoadmapRepository interface {
 	// ListACByIteration returns all acceptance criteria for all tasks in an iteration.
 	// Returns empty slice if the iteration has no ACs.
 	ListACByIteration(ctx context.Context, iterationNum int) ([]*AcceptanceCriteriaEntity, error)
+
+	// GetIterationsForTask returns all iterations that contain a specific task.
+	// Returns empty slice if the task is not in any iterations.
+	// Ordered by iteration number ascending.
+	GetIterationsForTask(ctx context.Context, taskID string) ([]*IterationEntity, error)
+
+	// GetBacklogTasks returns all tasks that are not in any iteration and not done.
+	// Returns empty slice if there are no backlog tasks.
+	// Ordered by created_at ascending.
+	GetBacklogTasks(ctx context.Context) ([]*TaskEntity, error)
+
+	// ListFailedAC returns all acceptance criteria with status "failed".
+	// Supports optional filtering by iteration, track, or task.
+	// Returns empty slice if no failed ACs match the filters.
+	ListFailedAC(ctx context.Context, filters ACFilters) ([]*AcceptanceCriteriaEntity, error)
 }

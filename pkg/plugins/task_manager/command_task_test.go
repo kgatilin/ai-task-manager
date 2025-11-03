@@ -684,6 +684,250 @@ func TestTaskShowCommand_NotFound(t *testing.T) {
 	}
 }
 
+func TestTaskShowCommand_WithIterations(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	// Create roadmap
+	roadmap, err := task_manager.NewRoadmapEntity(
+		"roadmap-test",
+		"Test vision",
+		"Test criteria",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+	if err := repo.SaveRoadmap(ctx, roadmap); err != nil {
+		t.Fatalf("failed to save roadmap: %v", err)
+	}
+
+	// Create track
+	track, err := task_manager.NewTrackEntity(
+		"track-test",
+		"roadmap-test",
+		"Test Track",
+		"Test description",
+		"not-started",
+		200,
+		[]string{},
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+	if err := repo.SaveTrack(ctx, track); err != nil {
+		t.Fatalf("failed to save track: %v", err)
+	}
+
+	// Create task
+	task := task_manager.NewTaskEntity(
+		"DEF-task-1",
+		"track-test",
+		"Test Task",
+		"Test description",
+		"in-progress",
+		200,
+		"",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err := repo.SaveTask(ctx, task); err != nil {
+		t.Fatalf("failed to save task: %v", err)
+	}
+
+	// Create iterations
+	now := time.Now().UTC()
+	var zeroTime time.Time
+	iter1, err := task_manager.NewIterationEntity(
+		1,
+		"Sprint 1",
+		"First sprint",
+		"Deliverable 1",
+		[]string{"DEF-task-1"},
+		"current",
+		100,
+		now,
+		zeroTime,
+		now,
+		now,
+	)
+	if err != nil {
+		t.Fatalf("failed to create iteration 1: %v", err)
+	}
+	if err := repo.SaveIteration(ctx, iter1); err != nil {
+		t.Fatalf("failed to save iteration 1: %v", err)
+	}
+
+	iter2, err := task_manager.NewIterationEntity(
+		2,
+		"Sprint 2",
+		"Second sprint",
+		"Deliverable 2",
+		[]string{"DEF-task-1"},
+		"planned",
+		200,
+		zeroTime,
+		zeroTime,
+		now,
+		now,
+	)
+	if err != nil {
+		t.Fatalf("failed to create iteration 2: %v", err)
+	}
+	if err := repo.SaveIteration(ctx, iter2); err != nil {
+		t.Fatalf("failed to save iteration 2: %v", err)
+	}
+
+	// Execute command
+	cmd := &task_manager.TaskShowCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{"DEF-task-1"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify output contains iterations section
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Iterations:") {
+		t.Errorf("expected 'Iterations:' section, got: %s", output)
+	}
+	if !strings.Contains(output, "Sprint 1") {
+		t.Errorf("expected 'Sprint 1' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "Sprint 2") {
+		t.Errorf("expected 'Sprint 2' in output, got: %s", output)
+	}
+	if !strings.Contains(output, "current") {
+		t.Errorf("expected 'current' status in output, got: %s", output)
+	}
+	if !strings.Contains(output, "planned") {
+		t.Errorf("expected 'planned' status in output, got: %s", output)
+	}
+}
+
+func TestTaskShowCommand_NoIterations(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	// Create roadmap
+	roadmap, err := task_manager.NewRoadmapEntity(
+		"roadmap-test",
+		"Test vision",
+		"Test criteria",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+	if err := repo.SaveRoadmap(ctx, roadmap); err != nil {
+		t.Fatalf("failed to save roadmap: %v", err)
+	}
+
+	// Create track
+	track, err := task_manager.NewTrackEntity(
+		"track-test",
+		"roadmap-test",
+		"Test Track",
+		"Test description",
+		"not-started",
+		200,
+		[]string{},
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+	if err := repo.SaveTrack(ctx, track); err != nil {
+		t.Fatalf("failed to save track: %v", err)
+	}
+
+	// Create task (not assigned to any iteration)
+	task := task_manager.NewTaskEntity(
+		"DEF-task-1",
+		"track-test",
+		"Test Task",
+		"Test description",
+		"todo",
+		200,
+		"",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err := repo.SaveTask(ctx, task); err != nil {
+		t.Fatalf("failed to save task: %v", err)
+	}
+
+	// Execute command
+	cmd := &task_manager.TaskShowCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{"DEF-task-1"})
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify output contains "not assigned to any iteration" message
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Iterations:") {
+		t.Errorf("expected 'Iterations:' section, got: %s", output)
+	}
+	if !strings.Contains(output, "Not assigned to any iteration") {
+		t.Errorf("expected 'Not assigned to any iteration' message, got: %s", output)
+	}
+}
+
 // ============================================================================
 // TaskUpdateCommand Tests
 // ============================================================================
@@ -1203,5 +1447,227 @@ func TestTaskMoveCommand_TaskNotFound(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "task not found") {
 		t.Errorf("expected 'task not found' error, got: %v", err)
+	}
+}
+
+// ============================================================================
+// TaskBacklogCommand Tests
+// ============================================================================
+
+func TestTaskBacklogCommand_ShowUnassignedTasks(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup: Create roadmap, track, tasks, and iteration
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	roadmap, err := task_manager.NewRoadmapEntity(
+		"roadmap-test",
+		"Test vision",
+		"Test criteria",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+	if err := repo.SaveRoadmap(ctx, roadmap); err != nil {
+		t.Fatalf("failed to save roadmap: %v", err)
+	}
+
+	track, err := task_manager.NewTrackEntity(
+		"DW-track-1",
+		"roadmap-test",
+		"Test Track",
+		"Test description",
+		"not-started",
+		200,
+		[]string{},
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+	if err := repo.SaveTrack(ctx, track); err != nil {
+		t.Fatalf("failed to save track: %v", err)
+	}
+
+	// Create 3 tasks: 1 in iteration, 1 done (not in iteration), 1 backlog
+	task1 := task_manager.NewTaskEntity(
+		"DW-task-1",
+		"DW-track-1",
+		"Task in iteration",
+		"",
+		"in-progress",
+		300,
+		"",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err := repo.SaveTask(ctx, task1); err != nil {
+		t.Fatalf("failed to save task1: %v", err)
+	}
+
+	task2 := task_manager.NewTaskEntity(
+		"DW-task-2",
+		"DW-track-1",
+		"Task done",
+		"",
+		"done",
+		300,
+		"",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err := repo.SaveTask(ctx, task2); err != nil {
+		t.Fatalf("failed to save task2: %v", err)
+	}
+
+	task3 := task_manager.NewTaskEntity(
+		"DW-task-3",
+		"DW-track-1",
+		"Task in backlog",
+		"",
+		"todo",
+		300,
+		"",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err := repo.SaveTask(ctx, task3); err != nil {
+		t.Fatalf("failed to save task3: %v", err)
+	}
+
+	// Create iteration and add task1 to it
+	iteration, err := task_manager.NewIterationEntity(
+		1,
+		"Sprint 1",
+		"Test goal",
+		"Test deliverable",
+		[]string{},
+		"planned",
+		500,
+		time.Time{},
+		time.Time{},
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create iteration: %v", err)
+	}
+	if err := repo.SaveIteration(ctx, iteration); err != nil {
+		t.Fatalf("failed to save iteration: %v", err)
+	}
+	if err := repo.AddTaskToIteration(ctx, 1, "DW-task-1"); err != nil {
+		t.Fatalf("failed to add task to iteration: %v", err)
+	}
+
+	// Execute backlog command
+	cmd := &task_manager.TaskBacklogCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := cmdCtx.stdout.String()
+
+	// Should show only task3 (not in iteration, not done)
+	if !strings.Contains(output, "DW-task-3") {
+		t.Errorf("expected backlog to contain DW-task-3, got: %s", output)
+	}
+	if !strings.Contains(output, "Task in backlog") {
+		t.Errorf("expected backlog to contain 'Task in backlog', got: %s", output)
+	}
+
+	// Should NOT show task1 (in iteration) or task2 (done)
+	if strings.Contains(output, "DW-task-1") {
+		t.Errorf("expected backlog to NOT contain DW-task-1 (in iteration), got: %s", output)
+	}
+	if strings.Contains(output, "DW-task-2") {
+		t.Errorf("expected backlog to NOT contain DW-task-2 (done), got: %s", output)
+	}
+
+	// Should show total count
+	if !strings.Contains(output, "Total: 1 backlog task(s)") {
+		t.Errorf("expected total count of 1, got: %s", output)
+	}
+}
+
+func TestTaskBacklogCommand_EmptyBacklog(t *testing.T) {
+	tmpDir := t.TempDir()
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+
+	plugin, err := task_manager.NewTaskManagerPlugin(
+		&stubLogger{},
+		tmpDir,
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("failed to create plugin: %v", err)
+	}
+
+	// Set active project
+	if err := os.WriteFile(filepath.Join(tmpDir, ".darwinflow", "active-project.txt"), []byte("default"), 0644); err != nil {
+		t.Fatalf("failed to set active project: %v", err)
+	}
+
+	// Setup: Create roadmap only (no tasks)
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+	ctx := context.Background()
+
+	roadmap, err := task_manager.NewRoadmapEntity(
+		"roadmap-test",
+		"Test vision",
+		"Test criteria",
+		time.Now().UTC(),
+		time.Now().UTC(),
+	)
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+	if err := repo.SaveRoadmap(ctx, roadmap); err != nil {
+		t.Fatalf("failed to save roadmap: %v", err)
+	}
+
+	// Execute backlog command
+	cmd := &task_manager.TaskBacklogCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "No backlog tasks found") {
+		t.Errorf("expected 'No backlog tasks found', got: %s", output)
 	}
 }

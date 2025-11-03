@@ -814,3 +814,376 @@ func TestGetTrackWithTasks(t *testing.T) {
 		t.Errorf("expected track-1, got %s", retrieved.ID)
 	}
 }
+
+// ============================================================================
+// New Query Methods Tests
+// ============================================================================
+
+func TestGetIterationsForTask(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup roadmap, track, task
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task := task_manager.NewTaskEntity("task-1", "track-1", "Task", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task)
+
+	// Create two iterations and add task to both
+	iter1, _ := task_manager.NewIterationEntity(1, "Sprint 1", "Goal 1", "", []string{}, "planned", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+	iter2, _ := task_manager.NewIterationEntity(2, "Sprint 2", "Goal 2", "", []string{}, "planned", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+
+	repo.SaveIteration(ctx, iter1)
+	repo.SaveIteration(ctx, iter2)
+
+	repo.AddTaskToIteration(ctx, 1, "task-1")
+	repo.AddTaskToIteration(ctx, 2, "task-1")
+
+	// Get iterations for task
+	iterations, err := repo.GetIterationsForTask(ctx, "task-1")
+	if err != nil {
+		t.Fatalf("failed to get iterations for task: %v", err)
+	}
+
+	// Should return 2 iterations in ascending order
+	if len(iterations) != 2 {
+		t.Errorf("expected 2 iterations, got %d", len(iterations))
+	}
+	if iterations[0].Number != 1 || iterations[1].Number != 2 {
+		t.Errorf("expected iterations in order 1, 2, got %d, %d", iterations[0].Number, iterations[1].Number)
+	}
+}
+
+func TestGetIterationsForTaskNotInAnyIteration(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup roadmap, track, task (but don't add to any iteration)
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task := task_manager.NewTaskEntity("task-1", "track-1", "Task", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task)
+
+	// Get iterations for task
+	iterations, err := repo.GetIterationsForTask(ctx, "task-1")
+	if err != nil {
+		t.Fatalf("failed to get iterations for task: %v", err)
+	}
+
+	// Should return empty slice
+	if len(iterations) != 0 {
+		t.Errorf("expected 0 iterations, got %d", len(iterations))
+	}
+}
+
+func TestGetBacklogTasks(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	// Create tasks:
+	// - task-1: in backlog (todo, not in any iteration)
+	// - task-2: in backlog (in-progress, not in any iteration)
+	// - task-3: NOT in backlog (done, not in any iteration)
+	// - task-4: NOT in backlog (todo, but in an iteration)
+	task1 := task_manager.NewTaskEntity("task-1", "track-1", "Task 1", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	task2 := task_manager.NewTaskEntity("task-2", "track-1", "Task 2", "", "in-progress", 200, "", time.Now().UTC(), time.Now().UTC())
+	task3 := task_manager.NewTaskEntity("task-3", "track-1", "Task 3", "", "done", 200, "", time.Now().UTC(), time.Now().UTC())
+	task4 := task_manager.NewTaskEntity("task-4", "track-1", "Task 4", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+
+	repo.SaveTask(ctx, task1)
+	repo.SaveTask(ctx, task2)
+	repo.SaveTask(ctx, task3)
+	repo.SaveTask(ctx, task4)
+
+	// Add task-4 to an iteration
+	iter1, _ := task_manager.NewIterationEntity(1, "Sprint 1", "Goal", "", []string{}, "planned", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveIteration(ctx, iter1)
+	repo.AddTaskToIteration(ctx, 1, "task-4")
+
+	// Get backlog tasks
+	backlog, err := repo.GetBacklogTasks(ctx)
+	if err != nil {
+		t.Fatalf("failed to get backlog tasks: %v", err)
+	}
+
+	// Should return task-1 and task-2 only
+	if len(backlog) != 2 {
+		t.Errorf("expected 2 backlog tasks, got %d", len(backlog))
+	}
+
+	// Check that we got the right tasks (task-1 and task-2)
+	foundTask1 := false
+	foundTask2 := false
+	for _, task := range backlog {
+		if task.ID == "task-1" {
+			foundTask1 = true
+		}
+		if task.ID == "task-2" {
+			foundTask2 = true
+		}
+	}
+
+	if !foundTask1 || !foundTask2 {
+		t.Errorf("expected task-1 and task-2 in backlog, got %v", backlog)
+	}
+}
+
+func TestGetBacklogTasksEmpty(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	// Create only done tasks
+	task1 := task_manager.NewTaskEntity("task-1", "track-1", "Task 1", "", "done", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+
+	// Get backlog tasks
+	backlog, err := repo.GetBacklogTasks(ctx)
+	if err != nil {
+		t.Fatalf("failed to get backlog tasks: %v", err)
+	}
+
+	// Should return empty slice
+	if len(backlog) != 0 {
+		t.Errorf("expected 0 backlog tasks, got %d", len(backlog))
+	}
+}
+
+func TestListFailedAC(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task := task_manager.NewTaskEntity("task-1", "track-1", "Task", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task)
+
+	// Create ACs with different statuses
+	ac1 := task_manager.NewAcceptanceCriteriaEntity("ac-1", "task-1", "AC 1", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+	ac2 := task_manager.NewAcceptanceCriteriaEntity("ac-2", "task-1", "AC 2", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+	ac3 := task_manager.NewAcceptanceCriteriaEntity("ac-3", "task-1", "AC 3", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+
+	repo.SaveAC(ctx, ac1)
+	repo.SaveAC(ctx, ac2)
+	repo.SaveAC(ctx, ac3)
+
+	// Mark ac-1 and ac-2 as failed, ac-3 as verified
+	ac1.Status = task_manager.ACStatusFailed
+	ac1.Notes = "Failed reason 1"
+	repo.UpdateAC(ctx, ac1)
+
+	ac2.Status = task_manager.ACStatusFailed
+	ac2.Notes = "Failed reason 2"
+	repo.UpdateAC(ctx, ac2)
+
+	ac3.Status = task_manager.ACStatusVerified
+	repo.UpdateAC(ctx, ac3)
+
+	// List failed ACs (no filter)
+	failedACs, err := repo.ListFailedAC(ctx, task_manager.ACFilters{})
+	if err != nil {
+		t.Fatalf("failed to list failed ACs: %v", err)
+	}
+
+	// Should return ac-1 and ac-2 only
+	if len(failedACs) != 2 {
+		t.Errorf("expected 2 failed ACs, got %d", len(failedACs))
+	}
+
+	// Verify statuses
+	for _, ac := range failedACs {
+		if ac.Status != task_manager.ACStatusFailed {
+			t.Errorf("expected failed status, got %s", ac.Status)
+		}
+	}
+}
+
+func TestListFailedACWithTaskFilter(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task1 := task_manager.NewTaskEntity("task-1", "track-1", "Task 1", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	task2 := task_manager.NewTaskEntity("task-2", "track-1", "Task 2", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+	repo.SaveTask(ctx, task2)
+
+	// Create failed ACs for both tasks
+	ac1 := task_manager.NewAcceptanceCriteriaEntity("ac-1", "task-1", "AC 1", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+	ac2 := task_manager.NewAcceptanceCriteriaEntity("ac-2", "task-2", "AC 2", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+
+	repo.SaveAC(ctx, ac1)
+	repo.SaveAC(ctx, ac2)
+
+	ac1.Status = task_manager.ACStatusFailed
+	repo.UpdateAC(ctx, ac1)
+
+	ac2.Status = task_manager.ACStatusFailed
+	repo.UpdateAC(ctx, ac2)
+
+	// Filter by task-1
+	failedACs, err := repo.ListFailedAC(ctx, task_manager.ACFilters{TaskID: "task-1"})
+	if err != nil {
+		t.Fatalf("failed to list failed ACs: %v", err)
+	}
+
+	// Should return only ac-1
+	if len(failedACs) != 1 {
+		t.Errorf("expected 1 failed AC, got %d", len(failedACs))
+	}
+	if failedACs[0].ID != "ac-1" {
+		t.Errorf("expected ac-1, got %s", failedACs[0].ID)
+	}
+}
+
+func TestListFailedACWithIterationFilter(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	task1 := task_manager.NewTaskEntity("task-1", "track-1", "Task 1", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	task2 := task_manager.NewTaskEntity("task-2", "track-1", "Task 2", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+	repo.SaveTask(ctx, task2)
+
+	// Create iteration and add only task-1
+	iter1, _ := task_manager.NewIterationEntity(1, "Sprint 1", "Goal", "", []string{}, "planned", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveIteration(ctx, iter1)
+	repo.AddTaskToIteration(ctx, 1, "task-1")
+
+	// Create failed ACs for both tasks
+	ac1 := task_manager.NewAcceptanceCriteriaEntity("ac-1", "task-1", "AC 1", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+	ac2 := task_manager.NewAcceptanceCriteriaEntity("ac-2", "task-2", "AC 2", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+
+	repo.SaveAC(ctx, ac1)
+	repo.SaveAC(ctx, ac2)
+
+	ac1.Status = task_manager.ACStatusFailed
+	repo.UpdateAC(ctx, ac1)
+
+	ac2.Status = task_manager.ACStatusFailed
+	repo.UpdateAC(ctx, ac2)
+
+	// Filter by iteration 1
+	iterNum := 1
+	failedACs, err := repo.ListFailedAC(ctx, task_manager.ACFilters{IterationNum: &iterNum})
+	if err != nil {
+		t.Fatalf("failed to list failed ACs: %v", err)
+	}
+
+	// Should return only ac-1 (task-1 is in iteration 1)
+	if len(failedACs) != 1 {
+		t.Errorf("expected 1 failed AC, got %d", len(failedACs))
+	}
+	if failedACs[0].ID != "ac-1" {
+		t.Errorf("expected ac-1, got %s", failedACs[0].ID)
+	}
+}
+
+func TestListFailedACWithTrackFilter(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Setup
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "vision", "criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track1, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track 1", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	track2, _ := task_manager.NewTrackEntity("track-2", "roadmap-1", "Track 2", "", "not-started", 200, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track1)
+	repo.SaveTrack(ctx, track2)
+
+	task1 := task_manager.NewTaskEntity("task-1", "track-1", "Task 1", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	task2 := task_manager.NewTaskEntity("task-2", "track-2", "Task 2", "", "todo", 200, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+	repo.SaveTask(ctx, task2)
+
+	// Create failed ACs for both tasks
+	ac1 := task_manager.NewAcceptanceCriteriaEntity("ac-1", "task-1", "AC 1", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+	ac2 := task_manager.NewAcceptanceCriteriaEntity("ac-2", "task-2", "AC 2", task_manager.VerificationTypeManual, time.Now().UTC(), time.Now().UTC())
+
+	repo.SaveAC(ctx, ac1)
+	repo.SaveAC(ctx, ac2)
+
+	ac1.Status = task_manager.ACStatusFailed
+	repo.UpdateAC(ctx, ac1)
+
+	ac2.Status = task_manager.ACStatusFailed
+	repo.UpdateAC(ctx, ac2)
+
+	// Filter by track-1
+	failedACs, err := repo.ListFailedAC(ctx, task_manager.ACFilters{TrackID: "track-1"})
+	if err != nil {
+		t.Fatalf("failed to list failed ACs: %v", err)
+	}
+
+	// Should return only ac-1 (task-1 is in track-1)
+	if len(failedACs) != 1 {
+		t.Errorf("expected 1 failed AC, got %d", len(failedACs))
+	}
+	if failedACs[0].ID != "ac-1" {
+		t.Errorf("expected ac-1, got %s", failedACs[0].ID)
+	}
+}

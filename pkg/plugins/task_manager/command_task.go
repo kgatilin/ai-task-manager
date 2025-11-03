@@ -373,6 +373,12 @@ func (c *TaskShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 		return fmt.Errorf("failed to retrieve track: %w", err)
 	}
 
+	// Get iterations that contain this task
+	iterations, err := repo.GetIterationsForTask(ctx, task.ID)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve iterations: %w", err)
+	}
+
 	// Display task details
 	stdout := cmdCtx.GetStdout()
 	fmt.Fprintf(stdout, "Task Details\n")
@@ -391,6 +397,17 @@ func (c *TaskShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 
 	if task.Branch != "" {
 		fmt.Fprintf(stdout, "Branch:      %s\n", task.Branch)
+	}
+
+	// Display iterations
+	fmt.Fprintf(stdout, "\nIterations:\n")
+	if len(iterations) == 0 {
+		fmt.Fprintf(stdout, "  Not assigned to any iteration\n")
+	} else {
+		for _, iter := range iterations {
+			fmt.Fprintf(stdout, "  - Iteration %d: %s (status: %s)\n",
+				iter.Number, iter.Name, iter.Status)
+		}
 	}
 
 	fmt.Fprintf(stdout, "\nCreated:     %s\n", task.CreatedAt.Format(time.RFC3339))
@@ -904,6 +921,121 @@ func (c *TaskMigrateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comma
 	fmt.Fprintf(stdout, "Task migration is not yet implemented\n")
 	fmt.Fprintf(stdout, "Task migration will be implemented in a future phase\n")
 
+	return nil
+}
+
+// ============================================================================
+// TaskBacklogCommand shows all unassigned tasks (backlog)
+// ============================================================================
+
+type TaskBacklogCommand struct {
+	Plugin  *TaskManagerPlugin
+	project string
+}
+
+func (c *TaskBacklogCommand) GetName() string {
+	return "task backlog"
+}
+
+func (c *TaskBacklogCommand) GetDescription() string {
+	return "Show all unassigned tasks (backlog)"
+}
+
+func (c *TaskBacklogCommand) GetUsage() string {
+	return "dw task-manager task backlog"
+}
+
+func (c *TaskBacklogCommand) GetHelp() string {
+	return `Shows all tasks that are not assigned to any iteration and not done.
+
+The backlog represents work that has been planned but not yet scheduled
+into an iteration. Tasks are displayed ordered by creation date (oldest first).
+
+Examples:
+  # Show backlog tasks
+  dw task-manager task backlog
+
+  # Show backlog for a specific project
+  dw task-manager task backlog --project production
+
+Notes:
+  - Only shows tasks with status 'todo' or 'in-progress'
+  - Excludes tasks that are in any iteration
+  - Excludes tasks with status 'done'
+  - Tasks are ordered by creation date (oldest first)`
+}
+
+func (c *TaskBacklogCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
+	// Parse flags
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--project":
+			if i+1 < len(args) {
+				c.project = args[i+1]
+				i++
+			}
+		}
+	}
+
+	// Get repository for project
+	repo, cleanup, err := c.Plugin.getRepositoryForProject(c.project)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	// Get backlog tasks
+	tasks, err := repo.GetBacklogTasks(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get backlog tasks: %w", err)
+	}
+
+	// Display results
+	stdout := cmdCtx.GetStdout()
+
+	if len(tasks) == 0 {
+		fmt.Fprintf(stdout, "No backlog tasks found\n")
+		return nil
+	}
+
+	// Print header
+	fmt.Fprintf(stdout, "%-20s %-40s %-20s %-12s\n",
+		"ID", "Title", "Track", "Status")
+	fmt.Fprintf(stdout, "%s %s %s %s\n",
+		strings.Repeat("-", 20), strings.Repeat("-", 40),
+		strings.Repeat("-", 20), strings.Repeat("-", 12))
+
+	// Print tasks
+	for _, task := range tasks {
+		// Get track info for display
+		track, err := repo.GetTrack(ctx, task.TrackID)
+		trackName := task.TrackID
+		if err == nil {
+			trackName = track.Title
+		}
+
+		// Abbreviate ID for display
+		abbrevID := task.ID
+		if len(abbrevID) > 20 {
+			abbrevID = abbrevID[:17] + "..."
+		}
+
+		// Truncate title if too long
+		title := task.Title
+		if len(title) > 40 {
+			title = title[:37] + "..."
+		}
+
+		// Truncate track name if too long
+		if len(trackName) > 20 {
+			trackName = trackName[:17] + "..."
+		}
+
+		fmt.Fprintf(stdout, "%-20s %-40s %-20s %-12s\n",
+			abbrevID, title, trackName, task.Status)
+	}
+
+	fmt.Fprintf(stdout, "\nTotal: %d backlog task(s)\n", len(tasks))
 	return nil
 }
 

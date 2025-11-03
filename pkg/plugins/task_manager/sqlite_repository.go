@@ -1618,3 +1618,161 @@ func (r *SQLiteRoadmapRepository) ListACByIteration(ctx context.Context, iterati
 
 	return acs, nil
 }
+
+// ============================================================================
+// New Query Methods for LLM Agent Integration
+// ============================================================================
+
+// GetIterationsForTask returns all iterations that contain a specific task.
+func (r *SQLiteRoadmapRepository) GetIterationsForTask(ctx context.Context, taskID string) ([]*IterationEntity, error) {
+	rows, err := r.db.QueryContext(
+		ctx,
+		`SELECT i.number, i.name, i.goal, i.status, i.rank, i.deliverable, i.started_at, i.completed_at, i.created_at, i.updated_at
+		 FROM iterations i
+		 JOIN iteration_tasks it ON i.number = it.iteration_number
+		 WHERE it.task_id = ?
+		 ORDER BY i.number ASC`,
+		taskID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query iterations for task: %w", err)
+	}
+	defer rows.Close()
+
+	var iterations []*IterationEntity
+	for rows.Next() {
+		var iteration IterationEntity
+		var startedAt, completedAt sql.NullTime
+
+		err := rows.Scan(&iteration.Number, &iteration.Name, &iteration.Goal, &iteration.Status, &iteration.Rank, &iteration.Deliverable, &startedAt, &completedAt, &iteration.CreatedAt, &iteration.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan iteration: %w", err)
+		}
+
+		if startedAt.Valid {
+			iteration.StartedAt = &startedAt.Time
+		}
+		if completedAt.Valid {
+			iteration.CompletedAt = &completedAt.Time
+		}
+
+		// Load task IDs for each iteration
+		taskIDs, err := r.getIterationTaskIDs(ctx, iteration.Number)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load iteration tasks: %w", err)
+		}
+		iteration.TaskIDs = taskIDs
+
+		iterations = append(iterations, &iteration)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating iterations: %w", err)
+	}
+
+	return iterations, nil
+}
+
+// GetBacklogTasks returns all tasks that are not in any iteration and not done.
+func (r *SQLiteRoadmapRepository) GetBacklogTasks(ctx context.Context) ([]*TaskEntity, error) {
+	rows, err := r.db.QueryContext(
+		ctx,
+		`SELECT t.id, t.track_id, t.title, t.description, t.status, t.rank, t.branch, t.created_at, t.updated_at
+		 FROM tasks t
+		 LEFT JOIN iteration_tasks it ON t.id = it.task_id
+		 WHERE it.task_id IS NULL AND t.status != 'done'
+		 ORDER BY t.created_at ASC`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query backlog tasks: %w", err)
+	}
+	defer rows.Close()
+
+	var tasks []*TaskEntity
+	for rows.Next() {
+		var task TaskEntity
+		var branch sql.NullString
+
+		err := rows.Scan(&task.ID, &task.TrackID, &task.Title, &task.Description, &task.Status, &task.Rank, &branch, &task.CreatedAt, &task.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task: %w", err)
+		}
+
+		if branch.Valid {
+			task.Branch = branch.String
+		}
+
+		tasks = append(tasks, &task)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating tasks: %w", err)
+	}
+
+	return tasks, nil
+}
+
+// ListFailedAC returns all acceptance criteria with status "failed".
+func (r *SQLiteRoadmapRepository) ListFailedAC(ctx context.Context, filters ACFilters) ([]*AcceptanceCriteriaEntity, error) {
+	query := `SELECT ac.id, ac.task_id, ac.description, ac.verification_type, ac.status, ac.notes, ac.created_at, ac.updated_at
+		      FROM acceptance_criteria ac`
+
+	var joins []string
+	var conditions []string
+	var args []interface{}
+
+	// Base condition: status = failed
+	conditions = append(conditions, "ac.status = ?")
+	args = append(args, string(ACStatusFailed))
+
+	// Add iteration filter
+	if filters.IterationNum != nil {
+		joins = append(joins, "JOIN iteration_tasks it ON ac.task_id = it.task_id")
+		conditions = append(conditions, "it.iteration_number = ?")
+		args = append(args, *filters.IterationNum)
+	}
+
+	// Add track filter
+	if filters.TrackID != "" {
+		joins = append(joins, "JOIN tasks t ON ac.task_id = t.id")
+		conditions = append(conditions, "t.track_id = ?")
+		args = append(args, filters.TrackID)
+	}
+
+	// Add task filter
+	if filters.TaskID != "" {
+		conditions = append(conditions, "ac.task_id = ?")
+		args = append(args, filters.TaskID)
+	}
+
+	// Build final query
+	for _, join := range joins {
+		query += " " + join
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + strings.Join(conditions, " AND ")
+	}
+	query += " ORDER BY ac.created_at ASC"
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query failed ACs: %w", err)
+	}
+	defer rows.Close()
+
+	var acs []*AcceptanceCriteriaEntity
+	for rows.Next() {
+		var ac AcceptanceCriteriaEntity
+		err := rows.Scan(&ac.ID, &ac.TaskID, &ac.Description, (*string)(&ac.VerificationType), (*string)(&ac.Status), &ac.Notes, &ac.CreatedAt, &ac.UpdatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan AC: %w", err)
+		}
+		acs = append(acs, &ac)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating ACs: %w", err)
+	}
+
+	return acs, nil
+}

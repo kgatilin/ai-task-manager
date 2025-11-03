@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
@@ -24,6 +25,7 @@ const (
 	ViewIterationDetail
 	ViewADRList
 	ViewACList
+	ViewACFailInput // New view for capturing failure feedback
 	ViewError
 	ViewLoading
 )
@@ -79,6 +81,9 @@ type AppModel struct {
 	// Data - AC views
 	acs              []*AcceptanceCriteriaEntity
 	selectedACIdx    int
+
+	// Input - for capturing AC failure feedback
+	feedbackInput    textinput.Model
 
 	previousViewMode ViewMode // To return to previous view after ADR/AC list
 
@@ -177,6 +182,12 @@ func NewAppModel(
 	repository RoadmapRepository,
 	logger pluginsdk.Logger,
 ) *AppModel {
+	// Initialize text input for AC failure feedback
+	ti := textinput.New()
+	ti.Placeholder = "Enter failure feedback..."
+	ti.CharLimit = 500
+	ti.Width = 80
+
 	m := &AppModel{
 		ctx:             ctx,
 		repository:      repository,
@@ -190,6 +201,7 @@ func NewAppModel(
 		iterationTasksByNumber:  make(map[int][]*TaskEntity),
 		trackTasksByID:          make(map[string][]*TaskEntity),
 		backlogTasks:            make([]*TaskEntity, 0),
+		feedbackInput:           ti,
 	}
 	m.roadmapViewport = viewport.New(80, 24) // Default size, will be updated on window resize
 	return m
@@ -202,6 +214,12 @@ func NewAppModelWithProject(
 	logger pluginsdk.Logger,
 	projectName string,
 ) *AppModel {
+	// Initialize text input for AC failure feedback
+	ti := textinput.New()
+	ti.Placeholder = "Enter failure feedback..."
+	ti.CharLimit = 500
+	ti.Width = 80
+
 	m := &AppModel{
 		ctx:             ctx,
 		repository:      repository,
@@ -215,6 +233,7 @@ func NewAppModelWithProject(
 		iterationTasksByNumber:  make(map[int][]*TaskEntity),
 		trackTasksByID:          make(map[string][]*TaskEntity),
 		backlogTasks:            make([]*TaskEntity, 0),
+		feedbackInput:           ti,
 	}
 	m.roadmapViewport = viewport.New(80, 24) // Default size, will be updated on window resize
 	return m
@@ -480,8 +499,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedTaskIdx = 0
 				return m, nil
 			case ViewIterationDetail:
-				m.currentView = ViewIterationList
-				m.selectedIterationIdx = 0
+				m.currentView = ViewRoadmapList
+				// Keep selectedIterationIdx to preserve selection
 				return m, nil
 			case ViewIterationList:
 				m.currentView = ViewRoadmapList
@@ -494,6 +513,11 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case ViewACList:
 				m.currentView = m.previousViewMode
 				m.selectedACIdx = 0
+				return m, nil
+			case ViewACFailInput:
+				// Cancel input, return to AC list
+				m.feedbackInput.SetValue("")
+				m.currentView = ViewACList
 				return m, nil
 			}
 		}
@@ -512,6 +536,8 @@ func (m *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handleADRListKeys(msg)
 		case ViewACList:
 			return m.handleACListKeys(msg)
+		case ViewACFailInput:
+			return m.handleACFailInputKeys(msg)
 		}
 
 	case tea.WindowSizeMsg:
@@ -656,8 +682,8 @@ func (m *AppModel) handleRoadmapListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// Scroll to tracks section
 			m.roadmapViewport.SetYOffset(m.tracksSectionLine)
 		case SelectTracks:
-			// Only show backlog option if in full view mode and backlog has items
-			if m.showFullRoadmap && len(m.backlogTasks) > 0 {
+			// Only show backlog option if backlog has items
+			if len(m.backlogTasks) > 0 {
 				m.selectedItemType = SelectBacklog
 				m.selectedBacklogIdx = 0
 				// Scroll to backlog section
@@ -1030,6 +1056,8 @@ func (m *AppModel) View() string {
 		return m.renderADRList()
 	case ViewACList:
 		return m.renderACList()
+	case ViewACFailInput:
+		return m.renderACFailInput()
 	default:
 		return "Unknown view"
 	}
@@ -1235,18 +1263,27 @@ func (m *AppModel) renderRoadmapList() string {
 		}
 	}
 
-	// Backlog (only in full view)
-	if m.showFullRoadmap && len(m.backlogTasks) > 0 {
+	// Backlog (always visible when tasks exist)
+	if len(m.backlogTasks) > 0 {
 		// Track backlog section position
 		m.backlogSectionLine = countLines(s)
 		s += "\n" + sectionHeaderStyle.Render(fmt.Sprintf("Backlog (%d):", len(m.backlogTasks))) + "\n"
 		for idx, task := range m.backlogTasks {
+			// Get track information for display
+			trackInfo := ""
+			if task.TrackID != "" {
+				track, err := m.repository.GetTrack(m.ctx, task.TrackID)
+				if err == nil && track != nil {
+					trackInfo = fmt.Sprintf(" [%s]", track.ID)
+				}
+			}
+
 			var taskLine string
 			if m.selectedItemType == SelectBacklog && idx == m.selectedBacklogIdx {
-				taskLine = fmt.Sprintf("→ %s %s", task.ID, task.Title)
+				taskLine = fmt.Sprintf("→ %s %s%s", task.ID, task.Title, trackInfo)
 				s += selectedTrackStyle.Render(taskLine) + "\n"
 			} else {
-				taskLine = fmt.Sprintf("  %s %s", task.ID, task.Title)
+				taskLine = fmt.Sprintf("  %s %s%s", task.ID, task.Title, trackInfo)
 				s += trackItemStyle.Render(taskLine) + "\n"
 			}
 		}
@@ -1460,9 +1497,22 @@ func (m *AppModel) renderTaskDetail() string {
 		s += contentStyle.Render(m.currentTask.Branch) + "\n"
 	}
 
+	// Iterations
+	iterations, err := m.repository.GetIterationsForTask(m.ctx, m.currentTask.ID)
+	if err == nil {
+		s += "\n" + sectionStyle.Render("Iterations") + "\n"
+		if len(iterations) == 0 {
+			s += contentStyle.Render("Not assigned to any iteration") + "\n"
+		} else {
+			for _, iter := range iterations {
+				s += contentStyle.Render(fmt.Sprintf("Iteration %d: %s (status: %s)", iter.Number, iter.Name, iter.Status)) + "\n"
+			}
+		}
+	}
+
 	// Acceptance Criteria
-	acs, err := m.repository.ListAC(m.ctx, m.currentTask.ID)
-	if err == nil && len(acs) > 0 {
+	acs, acErr := m.repository.ListAC(m.ctx, m.currentTask.ID)
+	if acErr == nil && len(acs) > 0 {
 		s += "\n" + sectionStyle.Render(fmt.Sprintf("Acceptance Criteria (%d)", len(acs))) + "\n"
 		for _, ac := range acs {
 			acIcon := getACStatusIcon(string(ac.Status))
@@ -1971,6 +2021,11 @@ func (m *AppModel) renderACList() string {
 			}
 			line := fmt.Sprintf("%s [%s] Task: %s (%s)\n  %s", statusIcon, ac.ID, ac.TaskID, typeStr, ac.Description)
 
+			// Show feedback indicator for failed ACs
+			if ac.Status == ACStatusFailed && ac.Notes != "" {
+				line += fmt.Sprintf("\n  Feedback: %s", ac.Notes)
+			}
+
 			if i == m.selectedACIdx {
 				s += selectedACStyle.Render(line) + "\n"
 			} else {
@@ -1981,7 +2036,42 @@ func (m *AppModel) renderACList() string {
 
 	// Help
 	s += "\n"
-	s += helpStyle.Render("Navigation: j/k or ↑/↓ | space: Verify selected AC | esc: Back | q: Quit")
+	s += helpStyle.Render("Navigation: j/k or ↑/↓ | space: Verify selected AC | f: Mark as Failed | esc: Back | q: Quit")
+
+	return s
+}
+
+// renderACFailInput renders the AC failure feedback input view
+func (m *AppModel) renderACFailInput() string {
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("205")).
+		MarginBottom(1)
+
+	helpStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("244")).
+		Italic(true).
+		MarginTop(1)
+
+	var s string
+
+	// Get selected AC
+	if m.selectedACIdx < len(m.acs) {
+		ac := m.acs[m.selectedACIdx]
+
+		// Header
+		s += titleStyle.Render(fmt.Sprintf("Mark AC as Failed: %s", ac.ID)) + "\n\n"
+		s += fmt.Sprintf("Description: %s\n\n", ac.Description)
+
+		// Input prompt
+		s += "Enter failure feedback (reason why AC failed):\n\n"
+		s += m.feedbackInput.View() + "\n\n"
+
+		// Help
+		s += helpStyle.Render("Enter: Submit | esc: Cancel")
+	} else {
+		s = "Error: No AC selected"
+	}
 
 	return s
 }
@@ -2004,7 +2094,7 @@ func (m *AppModel) handleACListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if ac.Status != ACStatusVerified && ac.Status != ACStatusAutomaticallyVerified {
 				ac.Status = ACStatusVerified
 				ac.UpdatedAt = time.Now()
-				
+
 				// Update in repository
 				if err := m.repository.UpdateAC(m.ctx, ac); err != nil {
 					m.logger.Error("Failed to verify AC", "error", err)
@@ -2014,8 +2104,57 @@ func (m *AppModel) handleACListKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+	case "f": // 'f' key - mark selected AC as failed with feedback
+		if m.selectedACIdx < len(m.acs) {
+			// Enter feedback input mode
+			m.feedbackInput.SetValue("")
+			m.feedbackInput.Focus()
+			m.currentView = ViewACFailInput
+		}
 	}
 	return m, nil
+}
+
+// handleACFailInputKeys processes key presses in AC failure input mode
+func (m *AppModel) handleACFailInputKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg.Type {
+	case tea.KeyEnter:
+		// Submit the feedback and mark AC as failed
+		if m.selectedACIdx < len(m.acs) {
+			ac := m.acs[m.selectedACIdx]
+			feedback := m.feedbackInput.Value()
+
+			// Update AC status to failed with feedback
+			ac.Status = ACStatusFailed
+			ac.Notes = feedback
+			ac.UpdatedAt = time.Now()
+
+			// Update in repository
+			if err := m.repository.UpdateAC(m.ctx, ac); err != nil {
+				m.logger.Error("Failed to mark AC as failed", "error", err)
+			} else {
+				// Clear input and return to AC list
+				m.feedbackInput.SetValue("")
+				m.feedbackInput.Blur()
+				m.currentView = ViewACList
+				// Reload ACs to reflect the change
+				return m, m.loadACs(m.currentTrack.ID)
+			}
+		}
+		return m, nil
+	case tea.KeyCtrlC, tea.KeyEsc:
+		// Cancel and return to AC list
+		m.feedbackInput.SetValue("")
+		m.feedbackInput.Blur()
+		m.currentView = ViewACList
+		return m, nil
+	}
+
+	// Update text input with key press
+	m.feedbackInput, cmd = m.feedbackInput.Update(msg)
+	return m, cmd
 }
 
 // loadACs loads ACs for a track (all tasks in track)
