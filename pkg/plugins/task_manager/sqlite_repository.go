@@ -3,6 +3,7 @@ package task_manager
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -1003,6 +1004,47 @@ func (r *SQLiteRoadmapRepository) GetIterationTasks(ctx context.Context, iterati
 	}
 
 	return tasks, nil
+}
+
+// GetIterationTasksWithWarnings retrieves all tasks for an iteration,
+// gracefully handling missing tasks by returning them separately.
+// Returns: found tasks, missing task IDs, error
+func (r *SQLiteRoadmapRepository) GetIterationTasksWithWarnings(ctx context.Context, iterationNum int) ([]*TaskEntity, []string, error) {
+	// Check if iteration exists
+	var exists int
+	err := r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM iterations WHERE number = ?", iterationNum).Scan(&exists)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to check iteration existence: %w", err)
+	}
+	if exists == 0 {
+		return nil, nil, fmt.Errorf("%w: iteration %d not found", pluginsdk.ErrNotFound, iterationNum)
+	}
+
+	// Get all task IDs from iteration_tasks table
+	taskIDs, err := r.getIterationTaskIDs(ctx, iterationNum)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var foundTasks []*TaskEntity
+	var missingTaskIDs []string
+
+	// Try to fetch each task, collecting missing ones separately
+	for _, taskID := range taskIDs {
+		task, err := r.GetTask(ctx, taskID)
+		if err != nil {
+			if errors.Is(err, pluginsdk.ErrNotFound) {
+				// Task was deleted or missing - add to missing list
+				missingTaskIDs = append(missingTaskIDs, taskID)
+				continue
+			}
+			// Other errors should still fail the operation
+			return nil, nil, fmt.Errorf("failed to get task %s: %w", taskID, err)
+		}
+		foundTasks = append(foundTasks, task)
+	}
+
+	return foundTasks, missingTaskIDs, nil
 }
 
 // StartIteration marks an iteration as current and sets started_at timestamp.

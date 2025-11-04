@@ -652,6 +652,75 @@ func TestGetCurrentIteration(t *testing.T) {
 	}
 }
 
+func TestGetIterationTasksWithWarnings_MissingTask(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	repo := task_manager.NewSQLiteRoadmapRepository(db, createTestLogger())
+	ctx := context.Background()
+
+	// Create roadmap and track
+	roadmap, _ := task_manager.NewRoadmapEntity("roadmap-1", "Vision", "Success criteria", time.Now().UTC(), time.Now().UTC())
+	repo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := task_manager.NewTrackEntity("track-1", "roadmap-1", "Track 1", "Description", "not-started", 500, []string{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveTrack(ctx, track)
+
+	// Create three tasks
+	task1 := task_manager.NewTaskEntity("task-1", "track-1", "Task 1", "Description", "todo", 500, "", time.Now().UTC(), time.Now().UTC())
+	task2 := task_manager.NewTaskEntity("task-2", "track-1", "Task 2", "Description", "todo", 500, "", time.Now().UTC(), time.Now().UTC())
+	task3 := task_manager.NewTaskEntity("task-3", "track-1", "Task 3", "Description", "todo", 500, "", time.Now().UTC(), time.Now().UTC())
+	repo.SaveTask(ctx, task1)
+	repo.SaveTask(ctx, task2)
+	repo.SaveTask(ctx, task3)
+
+	// Create iteration and add all three tasks
+	iteration, _ := task_manager.NewIterationEntity(1, "Sprint 1", "Goal", "", []string{}, "planned", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+	repo.SaveIteration(ctx, iteration)
+	repo.AddTaskToIteration(ctx, 1, "task-1")
+	repo.AddTaskToIteration(ctx, 1, "task-2")
+	repo.AddTaskToIteration(ctx, 1, "task-3")
+
+	// Delete task-2 directly from database to simulate a missing task
+	_, err := db.ExecContext(ctx, "DELETE FROM tasks WHERE id = ?", "task-2")
+	if err != nil {
+		t.Fatalf("failed to delete task: %v", err)
+	}
+
+	// Call GetIterationTasksWithWarnings
+	tasks, missingTaskIDs, err := repo.GetIterationTasksWithWarnings(ctx, 1)
+	if err != nil {
+		t.Fatalf("GetIterationTasksWithWarnings failed: %v", err)
+	}
+
+	// Verify results
+	if len(tasks) != 2 {
+		t.Errorf("expected 2 found tasks, got %d", len(tasks))
+	}
+
+	if len(missingTaskIDs) != 1 {
+		t.Errorf("expected 1 missing task ID, got %d", len(missingTaskIDs))
+	}
+
+	if len(missingTaskIDs) > 0 && missingTaskIDs[0] != "task-2" {
+		t.Errorf("expected missing task 'task-2', got '%s'", missingTaskIDs[0])
+	}
+
+	// Verify the found tasks are correct
+	foundIDs := make(map[string]bool)
+	for _, task := range tasks {
+		foundIDs[task.ID] = true
+	}
+
+	if !foundIDs["task-1"] || !foundIDs["task-3"] {
+		t.Errorf("expected to find task-1 and task-3, got: %v", foundIDs)
+	}
+
+	if foundIDs["task-2"] {
+		t.Error("task-2 should not be in found tasks")
+	}
+}
+
 func TestListIterations(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()

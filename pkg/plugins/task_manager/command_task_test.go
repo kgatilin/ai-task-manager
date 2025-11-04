@@ -1671,3 +1671,497 @@ func TestTaskBacklogCommand_EmptyBacklog(t *testing.T) {
 		t.Errorf("expected 'No backlog tasks found', got: %s", output)
 	}
 }
+
+// ============================================================================
+// TaskCreateCommand - Track Status Validation Tests
+// ============================================================================
+
+func TestTaskCreateCommand_TrackCompleted(t *testing.T) {
+	plugin, tmpDir := setupTestPlugin(t)
+	ctx := context.Background()
+
+	// Setup: Create roadmap and completed track
+	roadmapCmd := &task_manager.RoadmapInitCommand{Plugin: plugin}
+	roadmapCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := roadmapCmd.Execute(ctx, roadmapCtx, []string{
+		"--vision", "Test vision",
+		"--success-criteria", "Test criteria",
+	})
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+
+	trackCmd := &task_manager.TrackCreateCommand{Plugin: plugin}
+	trackCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = trackCmd.Execute(ctx, trackCtx, []string{
+		"--title", "Completed Track",
+		"--description", "A track that is complete",
+		"--rank", "200",
+	})
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+
+	// Extract track ID
+	trackOutput := trackCtx.stdout.String()
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(trackOutput, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", trackOutput)
+	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(trackOutput[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(trackOutput)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(trackOutput[trackIDStart:trackIDEnd])
+
+	// Update track to completed status
+	updateCmd := &task_manager.TrackUpdateCommand{Plugin: plugin}
+	updateCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = updateCmd.Execute(ctx, updateCtx, []string{
+		trackID,
+		"--status", "complete",
+	})
+	if err != nil {
+		t.Fatalf("failed to update track status: %v", err)
+	}
+
+	// Now try to create a task in the completed track - should fail
+	cmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{
+		"--track", trackID,
+		"--title", "This should fail",
+	})
+
+	// Verify the error occurred (nil because error was printed to stdout to avoid help text)
+	if err != nil {
+		t.Errorf("expected nil error (validation error printed to stdout), got: %v", err)
+	}
+
+	// Verify error message is helpful
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Cannot create task in completed track") {
+		t.Errorf("expected error message about completed track, got: %s", output)
+	}
+	if !strings.Contains(output, "Reopen the track") {
+		t.Errorf("expected suggestion to reopen track, got: %s", output)
+	}
+	if !strings.Contains(output, "different track") {
+		t.Errorf("expected suggestion for different track, got: %s", output)
+	}
+
+	// Verify task was not created
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+
+	tasks, err := repo.ListTasks(ctx, task_manager.TaskFilters{TrackID: trackID})
+	if err != nil {
+		t.Fatalf("failed to list tasks: %v", err)
+	}
+	if len(tasks) != 0 {
+		t.Errorf("expected 0 tasks, got %d", len(tasks))
+	}
+}
+
+func TestTaskCreateCommand_TrackInProgress(t *testing.T) {
+	plugin, tmpDir := setupTestPlugin(t)
+	ctx := context.Background()
+
+	// Setup: Create roadmap and in-progress track
+	roadmapCmd := &task_manager.RoadmapInitCommand{Plugin: plugin}
+	roadmapCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := roadmapCmd.Execute(ctx, roadmapCtx, []string{
+		"--vision", "Test vision",
+		"--success-criteria", "Test criteria",
+	})
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+
+	trackCmd := &task_manager.TrackCreateCommand{Plugin: plugin}
+	trackCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = trackCmd.Execute(ctx, trackCtx, []string{
+		"--title", "In Progress Track",
+		"--description", "A track in progress",
+		"--rank", "200",
+	})
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+
+	// Extract track ID
+	trackOutput := trackCtx.stdout.String()
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(trackOutput, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", trackOutput)
+	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(trackOutput[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(trackOutput)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(trackOutput[trackIDStart:trackIDEnd])
+
+	// Update track to in-progress status
+	updateCmd := &task_manager.TrackUpdateCommand{Plugin: plugin}
+	updateCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = updateCmd.Execute(ctx, updateCtx, []string{
+		trackID,
+		"--status", "in-progress",
+	})
+	if err != nil {
+		t.Fatalf("failed to update track status: %v", err)
+	}
+
+	// Create task in in-progress track - should succeed
+	cmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{
+		"--track", trackID,
+		"--title", "This should succeed",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify success message
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Task created successfully") {
+		t.Errorf("expected success message, got: %s", output)
+	}
+
+	// Verify task was created
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+
+	tasks, err := repo.ListTasks(ctx, task_manager.TaskFilters{TrackID: trackID})
+	if err != nil {
+		t.Fatalf("failed to list tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Errorf("expected 1 task, got %d", len(tasks))
+	}
+}
+
+func TestTaskCreateCommand_TrackNotStarted(t *testing.T) {
+	plugin, tmpDir := setupTestPlugin(t)
+	ctx := context.Background()
+
+	// Setup: Create roadmap and not-started track (default status)
+	roadmapCmd := &task_manager.RoadmapInitCommand{Plugin: plugin}
+	roadmapCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := roadmapCmd.Execute(ctx, roadmapCtx, []string{
+		"--vision", "Test vision",
+		"--success-criteria", "Test criteria",
+	})
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+
+	trackCmd := &task_manager.TrackCreateCommand{Plugin: plugin}
+	trackCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = trackCmd.Execute(ctx, trackCtx, []string{
+		"--title", "Not Started Track",
+		"--description", "A new track",
+		"--rank", "200",
+	})
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+
+	// Extract track ID
+	trackOutput := trackCtx.stdout.String()
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(trackOutput, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", trackOutput)
+	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(trackOutput[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(trackOutput)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(trackOutput[trackIDStart:trackIDEnd])
+
+	// Create task in not-started track - should succeed
+	cmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{
+		"--track", trackID,
+		"--title", "This should succeed",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify success message
+	output := cmdCtx.stdout.String()
+	if !strings.Contains(output, "Task created successfully") {
+		t.Errorf("expected success message, got: %s", output)
+	}
+
+	// Verify task was created
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+
+	tasks, err := repo.ListTasks(ctx, task_manager.TaskFilters{TrackID: trackID})
+	if err != nil {
+		t.Fatalf("failed to list tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Errorf("expected 1 task, got %d", len(tasks))
+	}
+}
+
+func TestTaskCreateCommand_TrackBlocked(t *testing.T) {
+	plugin, tmpDir := setupTestPlugin(t)
+	ctx := context.Background()
+
+	// Setup: Create roadmap and blocked track
+	roadmapCmd := &task_manager.RoadmapInitCommand{Plugin: plugin}
+	roadmapCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := roadmapCmd.Execute(ctx, roadmapCtx, []string{
+		"--vision", "Test vision",
+		"--success-criteria", "Test criteria",
+	})
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+
+	trackCmd := &task_manager.TrackCreateCommand{Plugin: plugin}
+	trackCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = trackCmd.Execute(ctx, trackCtx, []string{
+		"--title", "Blocked Track",
+		"--description", "A blocked track",
+		"--rank", "200",
+	})
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+
+	// Extract track ID
+	trackOutput := trackCtx.stdout.String()
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(trackOutput, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", trackOutput)
+	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(trackOutput[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(trackOutput)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(trackOutput[trackIDStart:trackIDEnd])
+
+	// Update track to blocked status
+	updateCmd := &task_manager.TrackUpdateCommand{Plugin: plugin}
+	updateCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = updateCmd.Execute(ctx, updateCtx, []string{
+		trackID,
+		"--status", "blocked",
+	})
+	if err != nil {
+		t.Fatalf("failed to update track status: %v", err)
+	}
+
+	// Create task in blocked track - should succeed
+	cmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{
+		"--track", trackID,
+		"--title", "This should succeed",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify task was created
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+
+	tasks, err := repo.ListTasks(ctx, task_manager.TaskFilters{TrackID: trackID})
+	if err != nil {
+		t.Fatalf("failed to list tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Errorf("expected 1 task, got %d", len(tasks))
+	}
+}
+
+func TestTaskCreateCommand_TrackWaiting(t *testing.T) {
+	plugin, tmpDir := setupTestPlugin(t)
+	ctx := context.Background()
+
+	// Setup: Create roadmap and waiting track
+	roadmapCmd := &task_manager.RoadmapInitCommand{Plugin: plugin}
+	roadmapCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err := roadmapCmd.Execute(ctx, roadmapCtx, []string{
+		"--vision", "Test vision",
+		"--success-criteria", "Test criteria",
+	})
+	if err != nil {
+		t.Fatalf("failed to create roadmap: %v", err)
+	}
+
+	trackCmd := &task_manager.TrackCreateCommand{Plugin: plugin}
+	trackCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = trackCmd.Execute(ctx, trackCtx, []string{
+		"--title", "Waiting Track",
+		"--description", "A waiting track",
+		"--rank", "200",
+	})
+	if err != nil {
+		t.Fatalf("failed to create track: %v", err)
+	}
+
+	// Extract track ID
+	trackOutput := trackCtx.stdout.String()
+	trackIDPrefix := "ID:"
+	trackIDStart := strings.Index(trackOutput, trackIDPrefix)
+	if trackIDStart == -1 {
+		t.Fatalf("failed to find track ID in output: %s", trackOutput)
+	}
+	trackIDStart += len(trackIDPrefix)
+	trackIDEnd := strings.Index(trackOutput[trackIDStart:], "\n")
+	if trackIDEnd == -1 {
+		trackIDEnd = len(trackOutput)
+	} else {
+		trackIDEnd += trackIDStart
+	}
+	trackID := strings.TrimSpace(trackOutput[trackIDStart:trackIDEnd])
+
+	// Update track to waiting status
+	updateCmd := &task_manager.TrackUpdateCommand{Plugin: plugin}
+	updateCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+	err = updateCmd.Execute(ctx, updateCtx, []string{
+		trackID,
+		"--status", "waiting",
+	})
+	if err != nil {
+		t.Fatalf("failed to update track status: %v", err)
+	}
+
+	// Create task in waiting track - should succeed
+	cmd := &task_manager.TaskCreateCommand{Plugin: plugin}
+	cmdCtx := &mockCommandContext{
+		workingDir: tmpDir,
+		stdout:     &bytes.Buffer{},
+		logger:     &stubLogger{},
+	}
+
+	err = cmd.Execute(ctx, cmdCtx, []string{
+		"--track", trackID,
+		"--title", "This should succeed",
+	})
+
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// Verify task was created
+	db := getProjectDB(t, tmpDir, "default")
+	defer db.Close()
+	repo := task_manager.NewSQLiteRoadmapRepository(db, &stubLogger{})
+
+	tasks, err := repo.ListTasks(ctx, task_manager.TaskFilters{TrackID: trackID})
+	if err != nil {
+		t.Fatalf("failed to list tasks: %v", err)
+	}
+	if len(tasks) != 1 {
+		t.Errorf("expected 1 task, got %d", len(tasks))
+	}
+}

@@ -18,7 +18,7 @@ import (
 
 type TaskCreateCommand struct {
 	Plugin      *TaskManagerPlugin
-	project string
+	project     string
 	trackID     string
 	title       string
 	description string
@@ -129,6 +129,17 @@ func (c *TaskCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 		return fmt.Errorf("failed to verify track: %w", err)
 	}
 
+	// Verify track is not completed
+	if track.Status == "complete" {
+		fmt.Fprintf(cmdCtx.GetStdout(), "Error: Cannot create task in completed track '%s' (status: complete)\n\n", track.Title)
+		fmt.Fprintf(cmdCtx.GetStdout(), "Suggestions:\n")
+		fmt.Fprintf(cmdCtx.GetStdout(), "  - Reopen the track: dw task-manager track update %s --status in-progress\n", track.ID)
+		fmt.Fprintf(cmdCtx.GetStdout(), "  - Create task in a different track: dw task-manager task create --track <other-track-id> ...\n")
+		fmt.Fprintf(cmdCtx.GetStdout(), "  - If track should remain complete, consider creating a new track for new work\n")
+		// Return nil to avoid showing help text (error already printed to stdout)
+		return nil
+	}
+
 	// Generate task ID using project code and sequence number
 	projectCode := repo.GetProjectCode(ctx)
 	nextNum, err := repo.GetNextSequenceNumber(ctx, "task")
@@ -143,9 +154,9 @@ func (c *TaskCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 		c.trackID,
 		c.title,
 		c.description,
-		"todo",         // initial status
+		"todo", // initial status
 		c.rank,
-		"",             // no branch initially
+		"", // no branch initially
 		time.Now().UTC(),
 		time.Now().UTC(),
 	)
@@ -172,10 +183,10 @@ func (c *TaskCreateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 // ============================================================================
 
 type TaskListCommand struct {
-	Plugin   *TaskManagerPlugin
+	Plugin  *TaskManagerPlugin
 	project string
-	track    string
-	status   string
+	track   string
+	status  string
 }
 
 func (c *TaskListCommand) GetName() string {
@@ -308,7 +319,7 @@ func (c *TaskListCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 type TaskShowCommand struct {
 	Plugin  *TaskManagerPlugin
 	project string
-	taskID string
+	taskID  string
 }
 
 func (c *TaskShowCommand) GetName() string {
@@ -422,7 +433,7 @@ func (c *TaskShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.CommandC
 
 type TaskUpdateCommand struct {
 	Plugin      *TaskManagerPlugin
-	project string
+	project     string
 	taskID      string
 	title       string
 	description string
@@ -662,8 +673,8 @@ func (c *TaskUpdateCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 type TaskDeleteCommand struct {
 	Plugin  *TaskManagerPlugin
 	project string
-	taskID string
-	force  bool
+	taskID  string
+	force   bool
 }
 
 func (c *TaskDeleteCommand) GetName() string {
@@ -765,10 +776,10 @@ func (c *TaskDeleteCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Comman
 // ============================================================================
 
 type TaskMoveCommand struct {
-	Plugin       *TaskManagerPlugin
-	project string
-	taskID        string
-	newTrackID    string
+	Plugin     *TaskManagerPlugin
+	project    string
+	taskID     string
+	newTrackID string
 }
 
 func (c *TaskMoveCommand) GetName() string {

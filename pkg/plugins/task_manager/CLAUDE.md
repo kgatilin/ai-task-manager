@@ -444,6 +444,145 @@ go test ./pkg/plugins/task_manager -run TestTUI
 
 ---
 
+## ⚠️ CRITICAL TESTING RULES ⚠️
+
+### 🚫 NEVER USE REAL DIRECTORIES IN TESTS 🚫
+
+**ABSOLUTE RULE: ALL tests MUST use `t.TempDir()` for file operations.**
+
+**❌ NEVER DO THIS:**
+```go
+func TestBadExample(t *testing.T) {
+    homeDir, _ := os.UserHomeDir()
+    testDir := filepath.Join(homeDir, ".darwinflow")  // ❌ BAD!
+    // Writing to real user directories in tests
+}
+```
+
+**✅ ALWAYS DO THIS:**
+```go
+func TestGoodExample(t *testing.T) {
+    tmpDir := t.TempDir()  // ✅ GOOD! Auto-cleanup after test
+    testDir := filepath.Join(tmpDir, ".darwinflow")
+    // All file operations in isolated temp directory
+}
+```
+
+### Why This Matters
+
+1. **Test Isolation**: Tests must not interfere with each other or real data
+2. **CI/CD**: Tests run in clean environments without side effects
+3. **Reproducibility**: Tests must produce identical results on every run
+4. **Safety**: Never risk corrupting real user data during testing
+5. **Cleanup**: `t.TempDir()` automatically removes test files after completion
+
+### Testing Commands That Use Home Directory
+
+For commands that use `~/.darwinflow` or `os.UserHomeDir()`:
+
+**Option 1: Environment Variable Override**
+```go
+func TestWithTempHome(t *testing.T) {
+    tmpHome := t.TempDir()
+    t.Setenv("HOME", tmpHome)  // Override HOME for this test
+
+    // Now code using os.UserHomeDir() will use tmpHome
+}
+```
+
+**Option 2: Pass Directory as Parameter**
+```go
+// Command accepts optional directory override for testing
+type BackupCommand struct {
+    testBackupDir string  // Only set in tests
+}
+
+func (c *BackupCommand) getBackupDir() string {
+    if c.testBackupDir != "" {
+        return c.testBackupDir  // Use test directory
+    }
+    return filepath.Join(os.UserHomeDir(), ".darwinflow")  // Production
+}
+```
+
+**Option 3: Dependency Injection**
+```go
+// Inject filesystem abstraction
+type FileSystem interface {
+    HomeDir() string
+}
+
+type Command struct {
+    fs FileSystem
+}
+```
+
+### Test Setup Template
+
+**Every test file should follow this pattern:**
+
+```go
+package task_manager_test
+
+import (
+    "testing"
+    "path/filepath"
+)
+
+func setupTestEnvironment(t *testing.T) string {
+    tmpDir := t.TempDir()  // ✅ ALWAYS start with this
+
+    // Set environment variables to use temp directory
+    t.Setenv("HOME", tmpDir)
+
+    // Create any needed subdirectories
+    testDataDir := filepath.Join(tmpDir, ".darwinflow")
+    os.MkdirAll(testDataDir, 0755)
+
+    return tmpDir
+}
+
+func TestExample(t *testing.T) {
+    tmpDir := setupTestEnvironment(t)
+
+    // All file operations now happen in tmpDir
+    // Automatic cleanup when test finishes
+}
+```
+
+### Common Pitfalls
+
+❌ **Using real ~/.darwinflow**
+❌ **Writing to /tmp without cleanup**
+❌ **Creating files in project directory**
+❌ **Hardcoding absolute paths**
+❌ **Assuming specific directory structure exists**
+
+✅ **Always use t.TempDir()**
+✅ **Override HOME environment variable in tests**
+✅ **Clean up manually created resources with t.Cleanup()**
+✅ **Use relative paths within test directory**
+✅ **Create all needed directories explicitly in tests**
+
+### Enforcement
+
+**Before committing:**
+1. Search test files for `os.UserHomeDir()` → Must use `t.Setenv("HOME", tmpDir)`
+2. Search test files for `~/.darwinflow` → Must be in `t.TempDir()`
+3. Run tests multiple times → Must pass every time
+4. Check for leftover files in `~/.darwinflow` after tests
+
+**If you find real directory usage in tests:**
+```bash
+# Find violations
+grep -r "UserHomeDir" pkg/plugins/task_manager/*_test.go
+grep -r ".darwinflow" pkg/plugins/task_manager/*_test.go
+
+# Every match must be preceded by t.TempDir() or t.Setenv("HOME")
+```
+
+---
+
 ## Plugin Architecture
 
 ### Plugin Interface Implementation

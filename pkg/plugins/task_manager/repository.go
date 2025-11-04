@@ -149,6 +149,11 @@ type RoadmapRepository interface {
 	// Returns empty slice if the iteration has no tasks.
 	GetIterationTasks(ctx context.Context, iterationNum int) ([]*TaskEntity, error)
 
+	// GetIterationTasksWithWarnings retrieves all tasks for an iteration,
+	// gracefully handling missing tasks by returning them separately.
+	// Returns: found tasks, missing task IDs, error
+	GetIterationTasksWithWarnings(ctx context.Context, iterationNum int) ([]*TaskEntity, []string, error)
+
 	// StartIteration marks an iteration as current and sets started_at timestamp.
 	// Returns ErrNotFound if the iteration doesn't exist.
 	// Returns ErrInvalidArgument if the iteration status is not "planned".

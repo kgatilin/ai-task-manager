@@ -495,8 +495,8 @@ func (c *IterationShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 		return fmt.Errorf("failed to get iteration: %w", err)
 	}
 
-	// Get iteration tasks
-	tasks, err := repo.GetIterationTasks(ctx, number)
+	// Get iteration tasks with warnings
+	tasks, missingTaskIDs, err := repo.GetIterationTasksWithWarnings(ctx, number)
 	if err != nil {
 		return fmt.Errorf("failed to get iteration tasks: %w", err)
 	}
@@ -504,15 +504,15 @@ func (c *IterationShowCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Com
 	// Output based on format
 	switch outputFormat {
 	case FormatJSON:
-		return c.outputJSONFormat(cmdCtx, iteration, tasks)
+		return c.outputJSONFormat(cmdCtx, iteration, tasks, missingTaskIDs)
 	case FormatLLM:
-		return c.outputLLMFormatShow(cmdCtx, iteration, tasks)
+		return c.outputLLMFormatShow(cmdCtx, iteration, tasks, missingTaskIDs)
 	default: // FormatTable
-		return c.outputTableFormatShow(cmdCtx, iteration, tasks)
+		return c.outputTableFormatShow(cmdCtx, iteration, tasks, missingTaskIDs)
 	}
 }
 
-func (c *IterationShowCommand) outputTableFormatShow(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity) error {
+func (c *IterationShowCommand) outputTableFormatShow(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity, missingTaskIDs []string) error {
 	// Display iteration details
 	fmt.Fprintf(cmdCtx.GetStdout(), "Iteration #%d: %s\n", iteration.Number, iteration.Name)
 	fmt.Fprintf(cmdCtx.GetStdout(), "===============================\n")
@@ -559,6 +559,14 @@ func (c *IterationShowCommand) outputTableFormatShow(cmdCtx pluginsdk.CommandCon
 		fmt.Fprintf(cmdCtx.GetStdout(), "No tasks in this iteration.\n")
 	}
 
+	// Display warnings for missing tasks
+	if len(missingTaskIDs) > 0 {
+		fmt.Fprintf(cmdCtx.GetStdout(), "\n⚠️  Warning: %d task(s) not found (may have been deleted):\n", len(missingTaskIDs))
+		for _, id := range missingTaskIDs {
+			fmt.Fprintf(cmdCtx.GetStdout(), "  - %s\n", id)
+		}
+	}
+
 	// Output hints if requested
 	if c.helpHints {
 		hints := NewContextualHints()
@@ -571,7 +579,7 @@ func (c *IterationShowCommand) outputTableFormatShow(cmdCtx pluginsdk.CommandCon
 	return nil
 }
 
-func (c *IterationShowCommand) outputLLMFormatShow(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity) error {
+func (c *IterationShowCommand) outputLLMFormatShow(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity, missingTaskIDs []string) error {
 	out := cmdCtx.GetStdout()
 	statusIcon := getStatusIcon(iteration.Status)
 
@@ -626,6 +634,15 @@ func (c *IterationShowCommand) outputLLMFormatShow(cmdCtx pluginsdk.CommandConte
 		fmt.Fprintf(out, "*No tasks in this iteration*\n")
 	}
 
+	// Display warnings for missing tasks
+	if len(missingTaskIDs) > 0 {
+		fmt.Fprintf(out, "\n## ⚠️  Data Integrity Warning\n\n")
+		fmt.Fprintf(out, "The following %d task(s) are referenced in this iteration but were not found (may have been deleted):\n\n", len(missingTaskIDs))
+		for _, id := range missingTaskIDs {
+			fmt.Fprintf(out, "- `%s`\n", id)
+		}
+	}
+
 	// Output hints if requested
 	if c.helpHints {
 		hints := NewContextualHints()
@@ -638,15 +655,22 @@ func (c *IterationShowCommand) outputLLMFormatShow(cmdCtx pluginsdk.CommandConte
 	return nil
 }
 
-func (c *IterationShowCommand) outputJSONFormat(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity) error {
+func (c *IterationShowCommand) outputJSONFormat(cmdCtx pluginsdk.CommandContext, iteration *IterationEntity, tasks []*TaskEntity, missingTaskIDs []string) error {
 	type IterationShowOutput struct {
-		Iteration *IterationEntity `json:"iteration"`
-		Tasks     []*TaskEntity     `json:"tasks"`
+		Iteration      *IterationEntity `json:"iteration"`
+		Tasks          []*TaskEntity    `json:"tasks"`
+		MissingTaskIDs []string         `json:"missing_task_ids,omitempty"`
+		Warning        string           `json:"warning,omitempty"`
 	}
 
 	output := IterationShowOutput{
-		Iteration: iteration,
-		Tasks:     tasks,
+		Iteration:      iteration,
+		Tasks:          tasks,
+		MissingTaskIDs: missingTaskIDs,
+	}
+
+	if len(missingTaskIDs) > 0 {
+		output.Warning = fmt.Sprintf("%d task(s) not found (may have been deleted)", len(missingTaskIDs))
 	}
 
 	formatter := NewOutputFormatter(cmdCtx.GetStdout(), FormatJSON)
@@ -747,7 +771,7 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 				iter := plannedIterations[0]
 
 				// Get tasks for progress calculation
-				tasks, err := repo.GetIterationTasks(ctx, iter.Number)
+				tasks, missingTaskIDs, err := repo.GetIterationTasksWithWarnings(ctx, iter.Number)
 				if err != nil {
 					return fmt.Errorf("failed to get iteration tasks: %w", err)
 				}
@@ -768,6 +792,14 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 				fmt.Fprintf(cmdCtx.GetStdout(), "#%d: %s - %s (%d tasks, %d%% complete)\n",
 					iter.Number, iter.Name, iter.Goal, len(tasks), completePct)
 
+				// Display warnings for missing tasks
+				if len(missingTaskIDs) > 0 {
+					fmt.Fprintf(cmdCtx.GetStdout(), "\n⚠️  Warning: %d task(s) not found (may have been deleted):\n", len(missingTaskIDs))
+					for _, id := range missingTaskIDs {
+						fmt.Fprintf(cmdCtx.GetStdout(), "  - %s\n", id)
+					}
+				}
+
 				fmt.Fprintf(cmdCtx.GetStdout(), "\nTo review this iteration:\n")
 				fmt.Fprintf(cmdCtx.GetStdout(), "  dw task-manager iteration show %d           # View tasks\n", iter.Number)
 				fmt.Fprintf(cmdCtx.GetStdout(), "  dw task-manager ac list-iteration %d        # View all acceptance criteria\n", iter.Number)
@@ -783,8 +815,8 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 		return fmt.Errorf("failed to get current iteration: %w", err)
 	}
 
-	// Get iteration tasks
-	tasks, err := repo.GetIterationTasks(ctx, iteration.Number)
+	// Get iteration tasks with warnings
+	tasks, missingTaskIDs, err := repo.GetIterationTasksWithWarnings(ctx, iteration.Number)
 	if err != nil {
 		return fmt.Errorf("failed to get iteration tasks: %w", err)
 	}
@@ -838,6 +870,14 @@ func (c *IterationCurrentCommand) Execute(ctx context.Context, cmdCtx pluginsdk.
 		fmt.Fprintf(cmdCtx.GetStdout(), "All tasks completed! Use 'dw task-manager iteration complete %d' to finish this iteration.\n", iteration.Number)
 	} else {
 		fmt.Fprintf(cmdCtx.GetStdout(), "No tasks in current iteration.\n")
+	}
+
+	// Display warnings for missing tasks
+	if len(missingTaskIDs) > 0 {
+		fmt.Fprintf(cmdCtx.GetStdout(), "\n⚠️  Warning: %d task(s) not found (may have been deleted):\n", len(missingTaskIDs))
+		for _, id := range missingTaskIDs {
+			fmt.Fprintf(cmdCtx.GetStdout(), "  - %s\n", id)
+		}
 	}
 
 	return nil
@@ -1370,12 +1410,46 @@ func (c *IterationStartCommand) Execute(ctx context.Context, cmdCtx pluginsdk.Co
 		return fmt.Errorf("invalid iteration number: %v", err)
 	}
 
-	// Start iteration
-	if err := repo.StartIteration(ctx, number); err != nil {
+	// Get iteration first to validate it exists before checking ACs
+	_, err = repo.GetIteration(ctx, number)
+	if err != nil {
 		if errors.Is(err, pluginsdk.ErrNotFound) {
 			fmt.Fprintf(cmdCtx.GetStdout(), "Iteration %d not found.\n", number)
 			return nil
 		}
+		return fmt.Errorf("failed to get iteration: %w", err)
+	}
+
+	// Get all tasks in iteration
+	tasks, err := repo.GetIterationTasks(ctx, number)
+	if err != nil {
+		return fmt.Errorf("failed to get iteration tasks: %w", err)
+	}
+
+	// Check each task has at least one AC
+	var tasksWithoutACs []string
+	for _, task := range tasks {
+		acs, err := repo.ListAC(ctx, task.ID)
+		if err != nil {
+			return fmt.Errorf("failed to list ACs for task %s: %w", task.ID, err)
+		}
+		if len(acs) == 0 {
+			tasksWithoutACs = append(tasksWithoutACs, fmt.Sprintf("  - %s: %s", task.ID, task.Title))
+		}
+	}
+
+	// If any tasks lack ACs, return error with helpful message
+	if len(tasksWithoutACs) > 0 {
+		fmt.Fprintf(cmdCtx.GetStdout(), "Error: Cannot start iteration: %d task(s) missing acceptance criteria\n\n", len(tasksWithoutACs))
+		fmt.Fprintf(cmdCtx.GetStdout(), "Tasks without acceptance criteria:\n%s\n\n", strings.Join(tasksWithoutACs, "\n"))
+		fmt.Fprintf(cmdCtx.GetStdout(), "Add acceptance criteria before starting:\n")
+		fmt.Fprintf(cmdCtx.GetStdout(), "  dw task-manager ac add <task-id> --description \"...\"\n\n")
+		fmt.Fprintf(cmdCtx.GetStdout(), "See CLAUDE.md for guidance on writing good acceptance criteria.\n")
+		return nil
+	}
+
+	// Start iteration
+	if err := repo.StartIteration(ctx, number); err != nil {
 		if errors.Is(err, pluginsdk.ErrInvalidArgument) {
 			fmt.Fprintf(cmdCtx.GetStdout(), "Cannot start iteration: %v\n", err)
 			return nil

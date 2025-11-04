@@ -366,6 +366,10 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&PromptCommand{Plugin: p},
 		// Migration commands
 		&MigrateIDsCommand{Plugin: p},
+		// Backup commands
+		&BackupCommand{Plugin: p},
+		&RestoreCommand{Plugin: p},
+		&BackupListCommand{Plugin: p},
 	}
 }
 

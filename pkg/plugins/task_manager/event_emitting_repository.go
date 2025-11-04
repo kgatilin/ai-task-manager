@@ -272,6 +272,12 @@ func (e *EventEmittingRepository) GetIterationTasks(ctx context.Context, iterati
 	return e.repo.GetIterationTasks(ctx, iterationNum)
 }
 
+// GetIterationTasksWithWarnings retrieves all tasks for an iteration,
+// gracefully handling missing tasks by returning them separately (read-only, no event).
+func (e *EventEmittingRepository) GetIterationTasksWithWarnings(ctx context.Context, iterationNum int) ([]*TaskEntity, []string, error) {
+	return e.repo.GetIterationTasksWithWarnings(ctx, iterationNum)
+}
+
 // StartIteration marks an iteration as current and emits EventIterationStarted.
 func (e *EventEmittingRepository) StartIteration(ctx context.Context, iterationNum int) error {
 	if err := e.repo.StartIteration(ctx, iterationNum); err != nil {
