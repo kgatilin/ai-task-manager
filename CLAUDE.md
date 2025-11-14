@@ -34,6 +34,10 @@ DarwinFlow uses a plugin-based architecture:
 - `pkg/plugins/claude_code/` - Reference implementation
 - `README.md` (main) - Framework capabilities overview
 
+**Supported Plugins**:
+- `claude_code` - Event capture, session analysis, TUI
+- `task_manager` - Roadmap/task tracking (workflow below, architecture in `pkg/plugins/task_manager/CLAUDE.md`)
+
 ---
 
 ## Task Manager - Core Workflow

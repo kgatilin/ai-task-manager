@@ -2,535 +2,476 @@
 
 **Path**: `pkg/plugins/task_manager`
 
-**Role**: Hierarchical roadmap management plugin (Roadmap → Track → Task → Iteration → ADR → AcceptanceCriteria)
+**Role**: Hierarchical roadmap management (Roadmap → Track → Task → Iteration → ADR → AcceptanceCriteria)
+
+**Architecture**: Clean architecture with DDD (Domain → Application → Infrastructure → Presentation)
+
+**Database**: SQLite per-project (`.darwinflow/projects/<name>/roadmap.db`)
 
 ---
 
-## ⚠️ REFACTORING IN PROGRESS ⚠️
-
-**Status**: Undergoing clean architecture refactoring (Iteration #27)
-
-**Active Iteration**: #27 - TM Refactoring: Foundation Layers (Domain/Application/Infrastructure)
-
-**Related Tasks**:
-- TM-task-126: Phase 1 - Domain Layer Extraction (in-progress)
-- TM-task-127: Phase 2 - Infrastructure Layer (in-progress)
-- TM-task-128: Phase 3 - Application Layer with Unified Services (COMPLETE ✅)
-- TM-task-136: Repository Interface Segregation (in-progress)
-- TM-task-137: Update CLI Adapters to Use Unified Services (todo - BLOCKING)
-
-**Current State**: Application layer complete with unified services. CLI adapters need update to use new services.
-
-**Target Architecture**: Clean architecture with DDD principles (Domain → Application → Infrastructure → Presentation)
-
-**Documentation References**:
-- **Main Architecture**: `/workspace/CLAUDE.md` - DarwinFlow architecture guide
-- **Domain Layer**: `domain/CLAUDE.md` - Domain entities, services, events, repository interfaces
-- **Application Layer**: `application/CLAUDE.md` - Unified application services (TM-task-128 ✅)
-- **Infrastructure Layer**: `infrastructure/CLAUDE.md` - Repository implementations, migrations
-- **Presentation Layer**: `presentation/CLAUDE.md` - CLI adapters (work in progress)
-- **Plugin SDK**: `pkg/pluginsdk/CLAUDE.md` - SDK documentation
-
----
-
-## Overview
-
-The task-manager plugin provides comprehensive project/product roadmap management with:
-- **Multi-project support** - Separate isolated roadmaps (e.g., "production" vs "test")
-- **Hierarchical structure** - Roadmap → Track → Task → Iteration → ADR → AcceptanceCriteria
-- **SQLite database storage** - Per-project databases with full schema management
-- **Full CLI commands** - Comprehensive commands across all entities
-- **Event bus integration** - Cross-plugin communication with event types
-- **Interactive TUI** - Visualization and management with project context
-- **Event sourcing** - Complete audit trail for all changes
-- **Clean Architecture** - DDD with separated layers (Domain, Application, Infrastructure, Presentation)
-
----
-
-## Target Architecture (Clean Architecture + DDD)
-
-### Layer Structure
+## Package Structure
 
 ```
 pkg/plugins/task_manager/
-├── domain/                          # Pure business logic (zero external dependencies)
-│   ├── entities/                    # Domain entities (7 aggregates)
-│   │   ├── roadmap_entity.go
-│   │   ├── track_entity.go
-│   │   ├── task_entity.go
-│   │   ├── iteration_entity.go
-│   │   ├── adr_entity.go
-│   │   ├── acceptance_criteria_entity.go
+├── domain/                          # Business logic (zero external dependencies)
+│   ├── entities/                    # 7 aggregates
+│   │   ├── roadmap_entity.go        # Root aggregate (vision, success criteria)
+│   │   ├── track_entity.go          # Work streams (status, priority, dependencies)
+│   │   ├── task_entity.go           # Atomic work units (todo/in-progress/done)
+│   │   ├── iteration_entity.go      # Time-boxed groupings (planned/current/complete)
+│   │   ├── adr_entity.go            # Architecture decisions (proposed/accepted/rejected)
+│   │   ├── acceptance_criteria_entity.go  # Task verification (not-started/verified/failed)
+│   │   ├── value_objects.go         # Status/Priority enums, ID types
 │   │   └── *_entity_test.go
-│   ├── services/                    # Domain services (business rules)
-│   │   ├── validation_service.go    # ID validation, format validation
-│   │   ├── dependency_service.go    # Circular dependency detection (DFS)
+│   ├── services/                    # Domain services (stateless business logic)
+│   │   ├── validation_service.go    # ID validation, format checks
+│   │   ├── dependency_service.go    # Circular dependency detection (DFS algorithm)
 │   │   ├── iteration_service.go     # Iteration lifecycle validation
 │   │   └── *_service_test.go
 │   ├── events/                      # Domain events
-│   │   └── events.go
+│   │   └── events.go                # 20+ event types (created/updated/status_changed)
 │   ├── repositories/                # Repository interfaces (6 focused interfaces)
 │   │   ├── roadmap_repository.go    # Roadmap CRUD
-│   │   ├── track_repository.go      # Track CRUD + dependencies
-│   │   ├── task_repository.go       # Task CRUD + iteration management
-│   │   ├── iteration_repository.go  # Iteration CRUD + lifecycle
-│   │   ├── adr_repository.go        # ADR CRUD + track relationship
-│   │   └── acceptance_criteria_repository.go  # AC CRUD + verification
-│   └── CLAUDE.md                    # Domain layer architectural guidance
+│   │   ├── track_repository.go      # Track CRUD + dependency management
+│   │   ├── task_repository.go       # Task CRUD + iteration membership
+│   │   ├── iteration_repository.go  # Iteration CRUD + task relationships
+│   │   ├── adr_repository.go        # ADR CRUD + track association
+│   │   └── acceptance_criteria_repository.go  # AC CRUD + verification status
+│   └── CLAUDE.md                    # Domain layer guidance
 │
-├── application/                     # Application services (use cases) ✅ COMPLETE
-│   ├── track_service.go             # All track operations (CRUD + dependencies)
-│   ├── task_service.go              # All task operations (CRUD + move)
-│   ├── iteration_service.go         # All iteration operations (CRUD + lifecycle)
-│   ├── adr_service.go               # All ADR operations (CRUD + status)
-│   ├── ac_service.go                # All AC operations (CRUD + verification)
+├── application/                     # Use cases and orchestration
+│   ├── track_service.go             # Track operations (CRUD + dependencies)
+│   ├── task_service.go              # Task operations (CRUD + move)
+│   ├── iteration_service.go         # Iteration operations (CRUD + lifecycle)
+│   ├── adr_service.go               # ADR operations (CRUD + status transitions)
+│   ├── ac_service.go                # AC operations (CRUD + verification)
 │   ├── dto/                         # Data Transfer Objects
-│   │   ├── track_dto.go
-│   │   ├── task_dto.go
-│   │   ├── iteration_dto.go
-│   │   ├── adr_dto.go
-│   │   ├── ac_dto.go
-│   │   └── helpers.go
+│   │   ├── track_dto.go             # TrackDTO, CreateTrackInput, UpdateTrackInput
+│   │   ├── task_dto.go              # TaskDTO, CreateTaskInput, UpdateTaskInput
+│   │   ├── iteration_dto.go         # IterationDTO, CreateIterationInput, etc.
+│   │   ├── adr_dto.go               # ADRDTO, CreateADRInput, etc.
+│   │   ├── ac_dto.go                # AcceptanceCriteriaDTO, CreateACInput, etc.
+│   │   └── helpers.go               # Entity→DTO, DTO→Entity conversions
+│   ├── mocks/                       # Generated mocks (mockery)
+│   │   ├── mock_track_repository.go
+│   │   ├── mock_task_repository.go
+│   │   └── ... (6 repository mocks)
 │   ├── *_service_test.go            # Service tests (126 tests, 82.1% coverage)
-│   └── CLAUDE.md                    # Application layer architectural guidance
+│   └── CLAUDE.md                    # Application layer guidance
 │
-├── infrastructure/                  # Infrastructure implementations
-│   └── persistence/                 # Repository implementations (6 focused repos)
-│       ├── roadmap_repository.go
-│       ├── track_repository.go
-│       ├── task_repository.go
-│       ├── iteration_repository.go
-│       ├── adr_repository.go
-│       ├── acceptance_criteria_repository.go
-│       ├── migrations.go            # Database migrations
-│       ├── event_emitting_repository.go  # Event emission decorator
+├── infrastructure/                  # Technical implementations
+│   └── persistence/                 # Database persistence
+│       ├── roadmap_repository.go    # SQLite implementation
+│       ├── track_repository.go      # SQLite implementation + dependency queries
+│       ├── task_repository.go       # SQLite implementation + iteration joins
+│       ├── iteration_repository.go  # SQLite implementation + task relationships
+│       ├── adr_repository.go        # SQLite implementation + track foreign key
+│       ├── acceptance_criteria_repository.go  # SQLite + verification status queries
+│       ├── migrations.go            # Schema migrations (8 tables)
+│       ├── event_emitting_repository.go  # Decorator for event emission
+│       ├── repository_composite.go  # Composite pattern (legacy compatibility)
+│       ├── *_repository_test.go     # Integration tests with real SQLite
 │       └── CLAUDE.md                # Infrastructure layer guidance
 │
-├── presentation/                    # Presentation layer (CLI adapters)
-│   └── cli/                         # CLI framework adapters (⚠️ NEEDS UPDATE)
-│       ├── track_adapters.go        # Bridge CLI → application services
-│       ├── task_adapters.go
-│       ├── iteration_adapters.go
-│       ├── adr_adapters.go
-│       ├── ac_adapters.go
+├── presentation/                    # User interface layer
+│   └── cli/                         # CLI command adapters
+│       ├── track_adapters.go        # 7 track commands (create/list/show/update/delete/add-dep/remove-dep)
+│       ├── task_adapters.go         # 7 task commands (create/list/show/update/delete/move/validate)
+│       ├── iteration_adapters.go    # 10 iteration commands (create/list/show/current/update/start/complete/add-task/remove-task/delete)
+│       ├── adr_adapters.go          # 7 ADR commands (create/list/show/update/supersede/deprecate/check)
+│       ├── ac_adapters.go           # 9 AC commands (add/list/list-iteration/show/update/verify/fail/failed/delete)
+│       ├── project_adapters.go      # 5 project commands (create/list/switch/show/delete)
+│       ├── roadmap_adapters.go      # 3 roadmap commands (init/show/update)
 │       └── CLAUDE.md                # Presentation layer guidance
 │
-└── plugin.go                        # Plugin registration and wiring
+├── e2e_test/                        # End-to-end tests
+│   ├── e2e_test.go                  # Base suite (binary build, project setup)
+│   ├── project_test.go              # Project command tests
+│   ├── track_test.go                # Track command tests
+│   ├── task_test.go                 # Task command tests
+│   ├── iteration_test.go            # Iteration command tests
+│   ├── adr_test.go                  # ADR command tests
+│   ├── ac_test.go                   # Acceptance criteria tests
+│   ├── workflow_test.go             # Complete workflow integration tests
+│   └── CLAUDE.md                    # E2E test patterns and best practices
+│
+├── plugin.go                        # Plugin registration + dependency injection
+└── CLAUDE.md                        # This file
 ```
 
-### Dependency Flow (Clean Architecture)
+**Total**: ~48 CLI commands, 7 aggregates, 8 database tables, 126 application tests
+
+---
+
+## Domain Model (Quick Reference)
+
+**Roadmap** (Root Aggregate)
+- Fields: ID, Vision, SuccessCriteria
+- Purpose: Single root for all tracks per project
+- Commands: `roadmap init/show/update`
+
+**Track** (Work Stream)
+- Fields: ID, Title, Description, Status (not-started/in-progress/complete/blocked/waiting), Priority (critical/high/medium/low), Rank
+- Purpose: Major work areas with dependency management
+- Key: Can depend on other tracks (circular dependency prevention via DFS)
+- Commands: `track create/list/show/update/delete/add-dependency/remove-dependency`
+
+**Task** (Atomic Work)
+- Fields: ID, TrackID, Title, Description, Status (todo/in-progress/done), Rank, Branch
+- Purpose: Concrete work items within tracks
+- Key: Can belong to iterations, has acceptance criteria
+- Commands: `task create/list/show/update/delete/move/validate`
+
+**Iteration** (Time-Boxed Grouping)
+- Fields: Number (auto-increment), Name, Goal, Deliverable, Status (planned/current/complete)
+- Purpose: Group tasks from multiple tracks for time-boxed delivery
+- Key: Only one "current" iteration at a time
+- Commands: `iteration create/list/show/current/update/start/complete/add-task/remove-task/delete`
+
+**ADR** (Architecture Decision Record)
+- Fields: ID, TrackID, Title, Context, Decision, Consequences, Alternatives, Status (proposed/accepted/rejected/superseded/deprecated)
+- Purpose: Document architectural decisions at track level
+- Key: Immutable once accepted (create new ADR to change)
+- Commands: `adr create/list/show/update/supersede/deprecate/check`
+
+**AcceptanceCriteria** (Task Verification)
+- Fields: ID, TaskID, Description, TestingInstructions, Status (not-started/pending-review/verified/failed), Feedback
+- Purpose: Define "done" for tasks with verification steps
+- Key: Must verify all ACs before task completion
+- Commands: `ac add/list/list-iteration/show/update/verify/fail/failed/delete`
+
+**Project** (Multi-Project Support)
+- Purpose: Isolated SQLite databases per project (`.darwinflow/projects/<name>/roadmap.db`)
+- Commands: `project create/list/switch/show/delete`
+
+---
+
+## Architecture Decisions (Why This Structure)
+
+### 1. Unified Services (NOT CQRS)
+
+**Pattern**: One service per aggregate (`TrackService`, `TaskService`, etc.) handling all operations.
+
+**Why NOT CQRS**:
+- Operations require orchestration (dependencies, validation, events)
+- Read models would duplicate domain entities
+- Queries need same business rules as commands
+- Added complexity without benefit for this domain
+
+**Key**: Service methods return DTOs, never domain entities (isolation between layers).
+
+### 2. Repository Interface Segregation (6 Interfaces)
+
+**Pattern**: One repository interface per aggregate (ISP compliance).
+
+**Why NOT monolithic**:
+- Consumers depend only on methods they use
+- Clear ownership per aggregate
+- Independent testing (mock only needed repositories)
+- Prevents "god repository" anti-pattern
+
+**Implementation**: 6 files in `infrastructure/persistence/*_repository.go`
+
+### 3. Event Emission via Decorator
+
+**Pattern**: `EventEmittingRepository` wraps base repositories.
+
+```go
+// plugin.go wiring
+baseRepo := persistence.NewTrackRepository(db)
+eventRepo := persistence.NewEventEmittingRepository(baseRepo, eventBus, "track")
+trackService := application.NewTrackService(eventRepo, depService)
+```
+
+**Why decorator**:
+- Base repositories stay pure (no event bus dependency)
+- Event emission happens AFTER successful persistence
+- Single responsibility (persistence vs notification)
+- Application services unaware of event emission
+
+### 4. DTO Conversion at Service Boundary
+
+**Pattern**: Domain entities stay in domain/application. DTOs cross to presentation.
+
+**Why**:
+- Presentation doesn't import domain entities directly
+- Service can change entity structure without breaking CLI
+- DTOs are serialization-safe (no pointers, simplified types)
+
+**Conversion**: `application/dto/helpers.go` contains all Entity↔DTO conversions.
+
+### 5. Domain Service vs Entity Method
+
+**Entity method** (default):
+- Single entity validation/behavior
+- Examples: `Track.Validate()`, `Task.CanComplete()`
+
+**Domain service** (when needed):
+- Multi-entity coordination
+- Complex algorithms (DFS for circular dependencies)
+- Stateless business logic
+- Examples: `DependencyService.CheckCircular()`, `IterationService.CanStart()`
+
+**Rule**: Start with entity method. Extract to domain service if needs multiple aggregates or complex algorithm.
+
+### 6. Mock Placement: `application/mocks/`
+
+**Location**: `application/mocks/`, NOT `domain/repositories/mocks/`
+
+**Why**:
+- Mocks are test infrastructure (not domain)
+- Application tests are primary consumers
+- Keeps domain/ free of test utilities
+- `mockery` generates into application/mocks/ by convention
+
+---
+
+## Dependency Flow (Critical Rules)
 
 ```
-Presentation (CLI adapters)
-    ↓ depends on
+Presentation (CLI)
+    ↓ imports: application services + DTOs, domain types
 Application (Services + DTOs)
-    ↓ depends on
+    ↓ imports: domain interfaces + entities
 Domain (Entities + Interfaces + Services)
     ↑ implemented by
-Infrastructure (Repository implementations)
+Infrastructure (Repositories + Migrations)
 ```
 
-**Key Principle**: Dependencies point inward. Domain layer has zero external dependencies.
+**Layer Rules**:
+1. **Domain**: Imports NOTHING (zero external dependencies)
+2. **Application**: Imports domain ONLY
+3. **Infrastructure**: Implements domain interfaces (dependency inversion)
+4. **Presentation**: Uses application services (thin adapters, no business logic)
 
 ---
 
-## Domain Model
+## Decision Guide: Where Does X Go?
 
-### Aggregates (7 total)
+### Adding Field to Entity
 
-**Roadmap (Root Aggregate)**
-- Single active roadmap per project
-- Contains vision and success criteria
-- Parent to all tracks
+**Example**: Add `ArchivedAt *time.Time` to Track
 
-**Track (Major Work Area)**
-- Represents work streams (e.g., "Framework Core", "Plugin System")
-- Has status (not-started, in-progress, complete, blocked, waiting)
-- Has priority (critical, high, medium, low)
-- Can depend on other tracks (with circular dependency prevention)
-- Contains multiple tasks
-- Associated with ADRs (Architecture Decision Records)
+1. **Domain entity** (`domain/entities/track_entity.go`): Add field + `Archive()` method
+2. **DTO** (`application/dto/track_dto.go`): Add `ArchivedAt *time.Time` to `TrackDTO`
+3. **Conversion** (`application/dto/helpers.go`): Update `ToTrackDTO()` and `FromTrackDTO()`
+4. **Migration** (`infrastructure/persistence/migrations.go`): `ALTER TABLE tracks ADD COLUMN archived_at TIMESTAMP`
+5. **Repository** (`infrastructure/persistence/track_repository.go`): Update `Save()` to persist field
+6. **Service** (`application/track_service.go`): Add `ArchiveTrack(id string) error` method
+7. **CLI** (`presentation/cli/track_adapters.go`): Add `track archive <id>` command
+8. **E2E test** (`e2e_test/track_test.go`): Test archive command
 
-**Task (Concrete Work Item)**
-- Belongs to a track
-- Has status (todo, in-progress, done)
-- Can have git branch association
-- Atomic unit of work
-- Can be grouped into iterations
-- Has acceptance criteria
+### Adding Validation
 
-**Iteration (Time-Boxed Grouping)**
-- Groups tasks from multiple tracks
-- Has status (planned, current, complete)
-- Only one can be "current" at a time
-- Auto-incrementing iteration numbers
-- Deliverable-oriented (goal, deliverable description)
+**Entity-level validation** (`domain/entities/`):
+- Field constraints (required, length, format)
+- Single-entity invariants
+- Example: `Track.Validate()` checks title not empty, max 200 chars
 
-**ADR (Architecture Decision Record)**
-- Documents architectural decisions for tracks
-- Has status (proposed, accepted, rejected, superseded, deprecated)
-- Links to specific track
-- Can supersede other ADRs
-- Immutable once accepted (create new ADR to change)
+**Domain service validation** (`domain/services/`):
+- Cross-entity constraints
+- Complex business rules
+- Example: `DependencyService.CheckCircular()`, `IterationService.CanStart()`
 
-**AcceptanceCriteria (Task Verification)**
-- Defines what "done" means for a task
-- Has description and testing instructions
-- Has status (not-started, pending-review, verified, failed)
-- Can be verified or failed with feedback
-- Links to specific task
+**Application service** (orchestration, NOT validation):
+- Calls domain validation methods
+- Never implements validation logic itself
+- Returns validation errors from domain
+
+### Adding CLI Command
+
+**New command**: `dw task-manager track export <id> --format json`
+
+1. **Application service** (`application/track_service.go`): Add `ExportTrack(id, format string)` if orchestration needed
+2. **CLI adapter** (`presentation/cli/track_adapters.go`): Add command, parse flags, call service, format output
+3. **E2E test** (`e2e_test/track_test.go`): Test command with various flags
+
+**Rule**: CLI adapters are thin. Business logic goes in application/domain.
+
+### Adding Query
+
+**New query**: "Find all tracks blocked by track X"
+
+1. **Repository interface** (`domain/repositories/track_repository.go`): Add `FindBlockedBy(trackID string) ([]*Track, error)`
+2. **Repository implementation** (`infrastructure/persistence/track_repository.go`): Implement with SQL JOIN on `track_dependencies`
+3. **Application service** (`application/track_service.go`): Add method if orchestration needed, or call repo directly
+4. **CLI adapter** (`presentation/cli/track_adapters.go`): Add command or flag to existing command
+5. **Tests**: Infrastructure test for SQL, application test for service orchestration
 
 ---
 
-## Current Implementation Status
+## Testing Strategy
 
-### ✅ Complete (TM-task-128)
-- **Application Layer**: 5 unified services with 82.1% test coverage
-- **DTOs**: Input/output types for all services
-- **Tests**: 126 comprehensive tests (all passing)
+### Domain Layer (`domain/*_test.go`)
+- Pure unit tests (no mocks, no external dependencies)
+- Test entity validation, state transitions, business rules
+- Test domain services (DFS algorithm, lifecycle validation)
+- **Never mock**: Domain has no external dependencies
 
-### 🚧 In Progress
-- **Domain Layer** (TM-task-126): Entities, services, repository interfaces
-- **Infrastructure Layer** (TM-task-127): Repository implementations, migrations
-- **Repository Segregation** (TM-task-136): Split monolithic repository into 6 focused interfaces
+### Application Layer (`application/*_service_test.go`)
+- Mock repository interfaces (use `application/mocks/`)
+- Verify orchestration (call order, multiple repos)
+- Verify DTO conversion
+- **Mock**: Repository interfaces
+- **Don't mock**: Domain services (pure functions, no external dependencies)
+- **Current coverage**: 82.1% (126 tests)
 
-### ⚠️ Blocking (TM-task-137)
-- **CLI Adapters**: Need update to use new application services
-- **Issue**: Adapters still import deleted CQRS packages (application/commands, application/queries)
-- **Impact**: Full build fails, CLI commands won't work until adapters updated
+**Example pattern**:
+```go
+mockRepo := mocks.NewMockTrackRepository(t)
+mockRepo.EXPECT().FindByID("TM-track-1").Return(track, nil)
+mockRepo.EXPECT().Save(mock.Anything).Return(nil)
 
-### Migration Status
+service := application.NewTrackService(mockRepo, depService)
+dto, err := service.UpdateTrack("TM-track-1", updateInput)
+```
 
-**Deleted (TM-task-128)**:
-- Old CQRS pattern (application/commands/, application/queries/)
-- 11 command/query handler files
+### Infrastructure Layer (`infrastructure/persistence/*_test.go`)
+- Real SQLite database in `t.TempDir()`
+- Test migrations, CRUD, queries, constraints, referential integrity
+- **Never mock**: Database (defeats purpose of integration test)
 
-**Created (TM-task-128)**:
-- 5 unified application services (Track, Task, Iteration, ADR, AC)
-- 6 DTO files (one per aggregate + helpers)
-- 10 comprehensive test files
+### Presentation Layer (`presentation/cli/*_test.go`)
+- Mock application services
+- Test flag parsing, error handling, output formatting
+- **Never test**: Business logic (that's in application/domain)
 
-**Next Steps (TM-task-137)**:
-- Update 5 CLI adapter files to use application services
-- Remove imports to deleted packages
-- Full build/test suite will pass after completion
+### E2E Tests (`e2e_test/*_test.go`)
+- Build binary from source: `go build -o /tmp/dw-e2e-test ./cmd/dw`
+- Execute real commands, verify output
+- Test complete workflows (create → update → delete)
+- Test cross-entity operations (track → task → iteration → AC)
+- **See**: `e2e_test/CLAUDE.md` for detailed patterns
+
+---
+
+## Common Anti-Patterns
+
+### ❌ Domain Importing Infrastructure
+```go
+// domain/entities/track_entity.go
+import "pkg/plugins/task_manager/infrastructure/persistence" // WRONG!
+```
+**Fix**: Define interface in `domain/repositories/`, implement in `infrastructure/persistence/`.
+
+### ❌ Business Logic in Presentation
+```go
+// presentation/cli/track_adapters.go
+if track.Status == "complete" && len(dependents) > 0 {
+    return errors.New("cannot complete track with active dependents") // WRONG!
+}
+```
+**Fix**: Move to `domain/services/dependency_service.go` or entity method.
+
+### ❌ Application Service Returning Domain Entity
+```go
+// application/track_service.go
+func (s *TrackService) GetTrack(id string) (*entities.Track, error) // WRONG!
+```
+**Fix**: Return DTO: `func (s *TrackService) GetTrack(id string) (*dto.TrackDTO, error)`
+
+### ❌ CLI Adapter Calling Repository Directly
+```go
+// presentation/cli/track_adapters.go
+track, err := trackRepo.FindByID(id) // WRONG!
+```
+**Fix**: Call application service: `trackDTO, err := trackService.GetTrack(id)`
+
+### ❌ Mocking Domain Services
+```go
+// application/track_service_test.go
+mockDepService := mocks.NewMockDependencyService(t) // WRONG!
+```
+**Fix**: Use real domain service (stateless, no external dependencies).
+
+### ❌ SQL in Application Layer
+```go
+// application/track_service.go
+rows, err := db.Query("SELECT * FROM tracks WHERE status = ?", status) // WRONG!
+```
+**Fix**: Add method to repository interface, implement in infrastructure.
+
+---
+
+## Dependency Injection (Plugin Wiring)
+
+**Pattern** (`plugin.go`):
+1. Create infrastructure (DB connection, repositories)
+2. Wrap repositories with `EventEmittingRepository` (decorator)
+3. Create domain services (stateless, pure functions)
+4. Inject wrapped repositories + domain services into application services
+5. Inject application services into CLI adapters
+6. Register commands with framework
+
+**Key**: Dependencies injected via constructors (NOT global variables or singletons).
+
+**Example**:
+```go
+// Infrastructure
+db := persistence.OpenDB(dbPath)
+baseTrackRepo := persistence.NewTrackRepository(db)
+
+// Decorator
+eventTrackRepo := persistence.NewEventEmittingRepository(baseTrackRepo, eventBus, "track")
+
+// Domain services
+validationService := services.NewValidationService()
+dependencyService := services.NewDependencyService(baseTrackRepo)
+
+// Application services
+trackService := application.NewTrackService(eventTrackRepo, dependencyService)
+
+// Presentation
+trackCommands := cli.NewTrackCommands(trackService)
+```
 
 ---
 
 ## Multi-Project Architecture
 
-**Project Isolation:**
-- Each project has its own SQLite database in `.darwinflow/projects/<project-name>/roadmap.db`
-- Active project tracked in `.darwinflow/active-project.txt`
-- Complete data isolation between projects
-- Auto-migration from legacy single-database structure
+**Isolation**: Each project → own SQLite DB (`.darwinflow/projects/<name>/roadmap.db`)
 
-**Use Cases:**
+**Active project**: Tracked in `.darwinflow/active-project.txt`
+
+**Commands**: All commands support `--project <name>` flag (overrides active project)
+
+**Migration**: Auto-migrates from legacy single-database structure
+
+**Use cases**:
 - Separate "production" and "test" roadmaps
 - Multiple product roadmaps in one workspace
 - Experimentation without affecting real data
-
-**Commands:**
-- All entity commands support `--project <name>` flag to override active project
-- 5 dedicated project management commands (create, list, switch, show, delete)
-
----
-
-## Database Schema
-
-**8 Tables** (post-refactoring):
-- `roadmaps` - Roadmap entities (id, vision, success_criteria)
-- `tracks` - Track entities (id, roadmap_id, title, description, status, priority, rank)
-- `track_dependencies` - Track dependency relationships (track_id, depends_on_id)
-- `tasks` - Task entities (id, track_id, title, description, status, rank, branch)
-- `iterations` - Iteration entities (number, roadmap_id, name, goal, status, deliverable)
-- `iteration_tasks` - Iteration-task relationships (iteration_number, task_id)
-- `adrs` - Architecture Decision Records (id, track_id, title, context, decision, status)
-- `acceptance_criteria` - Acceptance criteria (id, task_id, description, testing_instructions, status)
-
-All tables have:
-- Primary keys and foreign keys
-- Proper indexes on frequently queried columns
-- Created_at and updated_at timestamps
-- Referential integrity constraints
-
----
-
-## Commands Overview
-
-**Note**: Commands currently use old implementation. After TM-task-137 completion, they will use new application services.
-
-### Project Commands (5 commands)
-
-```bash
-dw task-manager project create <name>
-dw task-manager project list
-dw task-manager project switch <name>
-dw task-manager project show
-dw task-manager project delete <name> [--force]
-```
-
-### Roadmap Commands (3 commands)
-
-```bash
-dw task-manager roadmap init --vision "..." --success-criteria "..."
-dw task-manager roadmap show
-dw task-manager roadmap update [--vision "..."] [--success-criteria "..."]
-```
-
-### Track Commands (7 commands)
-
-```bash
-dw task-manager track create --id <id> --title <title> [--description] [--rank]
-dw task-manager track list [--status <status>]
-dw task-manager track show <track-id>
-dw task-manager track update <track-id> [--title] [--description] [--status] [--rank]
-dw task-manager track delete <track-id> [--force]
-dw task-manager track add-dependency <track-id> <depends-on>
-dw task-manager track remove-dependency <track-id> <depends-on>
-```
-
-### Task Commands (7 commands)
-
-```bash
-dw task-manager task create --track <track-id> --title <title> [--description] [--rank]
-dw task-manager task list [--track <track-id>] [--status <status>]
-dw task-manager task show <task-id>
-dw task-manager task update <task-id> [--title] [--description] [--status] [--rank] [--branch]
-dw task-manager task delete <task-id> [--force]
-dw task-manager task move <task-id> --track <new-track-id>
-dw task-manager task validate <task-id>  # Validate acceptance criteria
-```
-
-### Iteration Commands (10 commands)
-
-```bash
-dw task-manager iteration create --name <name> --goal <goal> --deliverable <deliverable>
-dw task-manager iteration list
-dw task-manager iteration show <iteration-number> [--full]
-dw task-manager iteration current
-dw task-manager iteration update <number> [--name] [--goal] [--deliverable]
-dw task-manager iteration start <iteration-number>
-dw task-manager iteration complete <iteration-number>
-dw task-manager iteration add-task <iteration> <task-id> [<task-id>...]
-dw task-manager iteration remove-task <iteration> <task-id> [<task-id>...]
-dw task-manager iteration delete <iteration-number> [--force]
-```
-
-### ADR Commands (7 commands)
-
-```bash
-dw task-manager adr create <track-id> --title <title> --context <context> --decision <decision>
-dw task-manager adr list [--track <track-id>] [--status <status>]
-dw task-manager adr show <adr-id>
-dw task-manager adr update <adr-id> [--title] [--context] [--decision] [--consequences] [--alternatives]
-dw task-manager adr supersede <adr-id> --superseded-by <new-adr-id>
-dw task-manager adr deprecate <adr-id>
-dw task-manager adr check <track-id>  # Check if track has required ADR
-```
-
-### Acceptance Criteria Commands (9 commands)
-
-```bash
-dw task-manager ac add <task-id> --description <desc> --testing-instructions <instructions>
-dw task-manager ac list <task-id>
-dw task-manager ac list-iteration <iteration-number>
-dw task-manager ac show <ac-id>
-dw task-manager ac update <ac-id> [--description] [--testing-instructions]
-dw task-manager ac verify <ac-id>
-dw task-manager ac fail <ac-id> --feedback <feedback>
-dw task-manager ac failed [--task <task-id>] [--iteration <iteration-number>]
-dw task-manager ac delete <ac-id> [--force]
-```
-
-### TUI Command
-
-```bash
-dw task-manager tui
-```
-
-**Total Commands**: ~48 commands across all entities
 
 ---
 
 ## Event Bus Integration
 
-The plugin emits events for all CRUD operations:
+**20+ event types** (`domain/events/events.go`):
+- Roadmap: `created`, `updated`
+- Track: `created`, `updated`, `status_changed`, `completed`, `blocked`
+- Task: `created`, `updated`, `status_changed`, `completed`, `moved`
+- Iteration: `created`, `updated`, `started`, `completed`
+- ADR: `created`, `updated`, `superseded`, `deprecated`
+- AC: `created`, `verified`, `failed`
 
-**Roadmap Events:**
-- `task-manager.roadmap.created`
-- `task-manager.roadmap.updated`
+**Emission**: Via `EventEmittingRepository` decorator (after successful persistence)
 
-**Track Events:**
-- `task-manager.track.created`
-- `task-manager.track.updated`
-- `task-manager.track.status_changed`
-- `task-manager.track.completed`
-- `task-manager.track.blocked`
-
-**Task Events:**
-- `task-manager.task.created`
-- `task-manager.task.updated`
-- `task-manager.task.status_changed`
-- `task-manager.task.completed`
-- `task-manager.task.moved`
-
-**Iteration Events:**
-- `task-manager.iteration.created`
-- `task-manager.iteration.updated`
-- `task-manager.iteration.started`
-- `task-manager.iteration.completed`
-
-**ADR Events:**
-- `task-manager.adr.created`
-- `task-manager.adr.updated`
-- `task-manager.adr.superseded`
-- `task-manager.adr.deprecated`
-
-**Acceptance Criteria Events:**
-- `task-manager.ac.created`
-- `task-manager.ac.verified`
-- `task-manager.ac.failed`
-
-Other plugins can subscribe to these events for notifications, automation, etc.
+**Subscription**: Other plugins can subscribe for notifications, automation, analytics
 
 ---
 
-## Testing
+## Key References
 
-**Application Layer Coverage**: 82.1% (126 tests) ✅
-
-**Test Organization** (post-refactoring):
-- Domain entity tests: Validation, state transitions, business rules
-- Domain service tests: Circular dependencies, lifecycle validation
-- Application service tests: 126 tests (all CRUD + business operations)
-- Infrastructure repository tests: SQLite integration, migrations
-- CLI adapter tests: Command execution, flag parsing
-
-**Running Tests**:
-
-```bash
-# Application layer (new unified services)
-go test ./pkg/plugins/task_manager/application/... -v -coverprofile=coverage.out
-go tool cover -func=coverage.out | grep total
-# Expected: 82.1% coverage
-
-# Domain layer
-go test ./pkg/plugins/task_manager/domain/... -v
-
-# Infrastructure layer
-go test ./pkg/plugins/task_manager/infrastructure/... -v
-
-# All tests (will fail until TM-task-137 complete)
-go test ./pkg/plugins/task_manager/... -v
-```
+- **Workflow**: `/workspace/CLAUDE.md` "Task Manager - Core Workflow" - How to use plugin (commands, best practices)
+- **E2E Tests**: `e2e_test/CLAUDE.md` - E2E test patterns, best practices, examples
+- **Domain Layer**: `domain/CLAUDE.md` - Domain-specific guidance
+- **Application Layer**: `application/CLAUDE.md` - Application service patterns
+- **Infrastructure Layer**: `infrastructure/CLAUDE.md` - Repository implementation guidance
+- **Presentation Layer**: `presentation/CLAUDE.md` - CLI adapter patterns
+- **SDK**: `pkg/pluginsdk/CLAUDE.md` - Plugin SDK documentation
+- **Framework**: `/workspace/CLAUDE.md` - DarwinFlow architecture
 
 ---
 
-## ⚠️ CRITICAL TESTING RULES ⚠️
-
-### 🚫 NEVER USE REAL DIRECTORIES IN TESTS 🚫
-
-**ABSOLUTE RULE: ALL tests MUST use `t.TempDir()` for file operations.**
-
-**❌ NEVER DO THIS:**
-```go
-func TestBadExample(t *testing.T) {
-    homeDir, _ := os.UserHomeDir()
-    testDir := filepath.Join(homeDir, ".darwinflow")  // ❌ BAD!
-    // Writing to real user directories in tests
-}
-```
-
-**✅ ALWAYS DO THIS:**
-```go
-func TestGoodExample(t *testing.T) {
-    tmpDir := t.TempDir()  // ✅ GOOD! Auto-cleanup after test
-    testDir := filepath.Join(tmpDir, ".darwinflow")
-    // All file operations in isolated temp directory
-}
-```
-
-### Why This Matters
-
-1. **Test Isolation**: Tests must not interfere with each other or real data
-2. **CI/CD**: Tests run in clean environments without side effects
-3. **Reproducibility**: Tests must produce identical results on every run
-4. **Safety**: Never risk corrupting real user data during testing
-5. **Cleanup**: `t.TempDir()` automatically removes test files after completion
-
----
-
-## Plugin Architecture
-
-### Plugin Interface Implementation
-
-**TaskManagerPlugin** implements:
-- `pluginsdk.Plugin` - Base plugin interface
-- `pluginsdk.IEntityProvider` - Query roadmaps, tracks, tasks, iterations, ADRs, ACs
-- `pluginsdk.ICommandProvider` - All CLI commands
-
-**Key Methods:**
-- `GetInfo()` - Plugin metadata (name, version, description)
-- `GetCapabilities()` - Lists implemented capabilities
-- `GetEntityTypes()` - Returns entity types (roadmap, track, task, iteration, adr, ac)
-- `Query(ctx, query)` - Query entities with filters and pagination
-- `GetEntity(ctx, id)` - Get entity by ID
-- `UpdateEntity(ctx, id, fields)` - Update entity fields
-- `GetCommands()` - Returns all CLI commands
-
----
-
-## Key Design Decisions
-
-1. **Clean Architecture**: Separated concerns (Domain → Application → Infrastructure → Presentation)
-2. **Unified Services**: One service per aggregate handling all operations (NOT CQRS)
-3. **Repository Segregation**: 6 focused repository interfaces (ISP compliance)
-4. **Event Sourcing**: All changes emit events for audit trail and cross-plugin notifications
-5. **SQLite Persistence**: Reliable local storage without external dependencies
-6. **TUI Integration**: Bubble Tea framework for rich terminal user experience
-7. **Track Dependencies**: Enables workflow management and blocking detection
-8. **Iteration Grouping**: Time-boxed work organizing across tracks
-9. **ADR Pattern**: Documenting architectural decisions at track level
-10. **Acceptance Criteria**: Explicit verification requirements for tasks
-
----
-
-## Refactoring Progress
-
-**Iteration #27**: TM Refactoring: Foundation Layers (Domain/Application/Infrastructure)
-
-**Goal**: Extract and establish the three foundation layers of clean architecture
-
-**Deliverable**: Complete domain/, application/, and infrastructure/ packages with full test coverage
-
-**Status**: Application layer complete (82.1% coverage). CLI adapters need update (TM-task-137).
-
-**Timeline**:
-- Phase 1 (TM-task-126): Domain Layer Extraction - in-progress
-- Phase 2 (TM-task-127): Infrastructure Layer - in-progress
-- Phase 3 (TM-task-128): Application Layer - COMPLETE ✅
-- Phase 4 (TM-task-136): Repository Segregation - in-progress
-- Phase 5 (TM-task-137): CLI Adapter Update - todo (BLOCKING)
-
-**Next Steps**:
-1. Complete TM-task-137 (update CLI adapters to use application services)
-2. Verify full build passes
-3. Complete remaining phases (TM-task-126, TM-task-127, TM-task-136)
-4. Close iteration #27
-
----
-
-## References
-
-- **Main Architecture**: `/workspace/CLAUDE.md` - DarwinFlow architecture guide
-- **Domain Layer**: `domain/CLAUDE.md` - Domain layer architectural guidance
-- **Application Layer**: `application/CLAUDE.md` - Application layer architectural guidance (TM-task-128)
-- **Infrastructure Layer**: `infrastructure/CLAUDE.md` - Infrastructure layer guidance
-- **Presentation Layer**: `presentation/CLAUDE.md` - Presentation layer guidance
-- **Plugin SDK**: `pkg/pluginsdk/CLAUDE.md` - SDK documentation
-- **Iteration #27**: See `dw task-manager iteration show 27 --full` for refactoring details
-
----
-
-*Last Updated: 2025-11-11 (Iteration #27 - Application Layer Complete)*
+**Last Updated**: 2025-11-14 (Clean architecture with DDD)
