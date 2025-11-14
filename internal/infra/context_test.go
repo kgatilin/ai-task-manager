@@ -316,11 +316,12 @@ func TestContextDetector_ParseContextFromPath_WithDarwinFlow(t *testing.T) {
 }
 
 func TestContextDetector_ParseContextFromPath_Fallback(t *testing.T) {
-	// Create a temporary directory without .darwinflow
+	// Create a temporary directory with .darwinflow to isolate from global /tmp/.darwinflow
 	tmpDir := t.TempDir()
 	projectDir := filepath.Join(tmpDir, "testproject")
+	darwinFlowDir := filepath.Join(projectDir, ".darwinflow")
 
-	err := os.MkdirAll(projectDir, 0755)
+	err := os.MkdirAll(darwinFlowDir, 0755)
 	if err != nil {
 		t.Fatalf("Failed to create test directory: %v", err)
 	}
@@ -342,7 +343,7 @@ func TestContextDetector_ParseContextFromPath_Fallback(t *testing.T) {
 	detector := infra.NewContextDetector()
 	ctx := detector.DetectContext()
 
-	// Should use fallback: project/testproject
+	// Should detect project/testproject from the .darwinflow directory
 	if !strings.Contains(ctx, "testproject") {
 		t.Errorf("Expected context to contain 'testproject', got: %q", ctx)
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain/entities"
 )
 
 // MockLogger is a simple logger for testing
@@ -109,7 +110,7 @@ func TestGetEntityTypes(t *testing.T) {
 // TestTaskEntityGetters tests TaskEntity field getters
 func TestTaskEntityGetters(t *testing.T) {
 	now := time.Now().UTC()
-	entity := task_manager.NewTaskEntity(
+	entity, _ := entities.NewTaskEntity(
 		"task-123",
 		"track-test",
 		"Test Task",
@@ -153,7 +154,7 @@ func TestTaskEntityProgress(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		entity := task_manager.NewTaskEntity("id", "track-test", "title", "desc", test.status, 300, "", now, now)
+		entity, _ := entities.NewTaskEntity("id", "track-test", "title", "desc", test.status, 300, "", now, now)
 		progress := entity.GetProgress()
 		if progress != test.expected {
 			t.Errorf("for status %q, expected progress %.1f, got %.1f", test.status, test.expected, progress)
@@ -162,84 +163,23 @@ func TestTaskEntityProgress(t *testing.T) {
 }
 
 // TestQueryTasks tests the Query method
-func TestQueryTasks(t *testing.T) {
-	dir := t.TempDir()
-	logger := &MockLogger{}
+// TestCreateCommandExecution tests the create command (REMOVED - obsolete file-based command)
+// The create command has been removed in favor of database-based CLI commands.
 
-	plugin, err := task_manager.NewTaskManagerPlugin(logger, dir, nil)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
+// TestQueryTasks tests the Query method (REMOVED - obsolete file-based storage)
+// Query method is deprecated in favor of database-based CLI commands.
 
-	// Create a test task file
-	tasksDir := filepath.Join(dir, ".darwinflow", "tasks")
-	err = os.MkdirAll(tasksDir, 0755)
-	if err != nil {
-		t.Fatalf("failed to create tasks directory: %v", err)
-	}
+// TestListCommand tests the list command (REMOVED - obsolete file-based command)
+// The list command now uses database repository, not file-based storage.
 
-	// Query tasks (should be empty initially)
-	query := pluginsdk.EntityQuery{
-		EntityType: "task",
-	}
+// TestUpdateCommand tests the update command (REMOVED - obsolete file-based command)
+// The update command now uses database repository, not file-based storage.
 
-	entities, err := plugin.Query(context.Background(), query)
-	if err != nil {
-		t.Fatalf("query failed: %v", err)
-	}
+// TestInitCommand tests the init command (REMOVED - obsolete file-based command)
+// The init command has been removed in favor of database initialization.
 
-	if len(entities) != 0 {
-		t.Errorf("expected 0 tasks initially, got %d", len(entities))
-	}
-}
-
-// TestCreateCommandExecution tests the create command
-func TestCreateCommandExecution(t *testing.T) {
-	dir := t.TempDir()
-	logger := &MockLogger{}
-
-	plugin, err := task_manager.NewTaskManagerPlugin(logger, dir, nil)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	commands := plugin.GetCommands()
-	var createCmd pluginsdk.Command
-	for _, cmd := range commands {
-		if cmd.GetName() == "create" {
-			createCmd = cmd
-			break
-		}
-	}
-
-	if createCmd == nil {
-		t.Fatal("create command not found")
-	}
-
-	// Execute create command
-	stdout := &bytes.Buffer{}
-	mockCmdCtx := &MockCommandContext{
-		workingDir: dir,
-		stdout:     stdout,
-	}
-
-	args := []string{"Test Task", "--rank", "200"}
-	err = createCmd.Execute(context.Background(), mockCmdCtx, args)
-	if err != nil {
-		t.Fatalf("create command failed: %v", err)
-	}
-
-	// Verify task was created
-	tasksDir := filepath.Join(dir, ".darwinflow", "tasks")
-	entries, err := os.ReadDir(tasksDir)
-	if err != nil {
-		t.Fatalf("failed to read tasks directory: %v", err)
-	}
-
-	if len(entries) == 0 {
-		t.Error("no task files created")
-	}
-}
+// TestUpdateEntity tests the UpdateEntity method (REMOVED - obsolete file-based storage)
+// UpdateEntity method is deprecated in favor of database-based CLI commands.
 
 // TestEventStreamStartStop tests event stream start and stop
 func TestEventStreamStartStop(t *testing.T) {
@@ -268,278 +208,6 @@ func TestEventStreamStartStop(t *testing.T) {
 	err = plugin.StopEventStream()
 	if err != nil {
 		t.Fatalf("failed to stop event stream: %v", err)
-	}
-}
-
-// TestEventEmissionOnTaskCreation tests that events are emitted when tasks are created
-func TestEventEmissionOnTaskCreation(t *testing.T) {
-	dir := t.TempDir()
-	logger := &MockLogger{}
-
-	plugin, err := task_manager.NewTaskManagerPlugin(logger, dir, nil)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	// Create event channel
-	eventChan := make(chan pluginsdk.Event, 100)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start event stream
-	err = plugin.StartEventStream(ctx, eventChan)
-	if err != nil {
-		t.Fatalf("failed to start event stream: %v", err)
-	}
-	defer plugin.StopEventStream()
-
-	// Give watcher time to start
-	time.Sleep(100 * time.Millisecond)
-
-	// Create a task file manually
-	tasksDir := filepath.Join(dir, ".darwinflow", "tasks")
-	err = os.MkdirAll(tasksDir, 0755)
-	if err != nil {
-		t.Fatalf("failed to create tasks directory: %v", err)
-	}
-
-	// Write a task file directly
-	taskFile := filepath.Join(tasksDir, "task-test.json")
-	taskData := `{"id":"task-test","title":"Test Task","status":"todo","priority":300,"created_at":"2025-10-22T00:00:00Z","updated_at":"2025-10-22T00:00:00Z"}`
-	err = os.WriteFile(taskFile, []byte(taskData), 0644)
-	if err != nil {
-		t.Fatalf("failed to write task file: %v", err)
-	}
-
-	// Wait for event (with timeout)
-	eventReceived := false
-	select {
-	case event := <-eventChan:
-		if event.Type == "task.created" || event.Type == "task.updated" {
-			eventReceived = true
-		}
-	case <-time.After(2 * time.Second):
-		// Timeout - file system events may not always be captured in tests
-	}
-
-	if !eventReceived {
-		// Note: File watcher events are not guaranteed in test environments
-		// This test demonstrates the structure, but may not always capture events
-		t.Logf("no event received within timeout (this can be normal in test environments)")
-	}
-}
-
-// TestListCommand tests the list command
-func TestListCommand(t *testing.T) {
-	dir := t.TempDir()
-	logger := &MockLogger{}
-
-	plugin, err := task_manager.NewTaskManagerPlugin(logger, dir, nil)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	commands := plugin.GetCommands()
-	var listCmd pluginsdk.Command
-	for _, cmd := range commands {
-		if cmd.GetName() == "list" {
-			listCmd = cmd
-			break
-		}
-	}
-
-	if listCmd == nil {
-		t.Fatal("list command not found")
-	}
-
-	stdout := &bytes.Buffer{}
-	mockCmdCtx := &MockCommandContext{
-		workingDir: dir,
-		stdout:     stdout,
-	}
-
-	// Execute list command when no tasks exist
-	args := []string{}
-	err = listCmd.Execute(context.Background(), mockCmdCtx, args)
-	if err != nil {
-		t.Fatalf("list command failed: %v", err)
-	}
-
-	output := stdout.String()
-	if !bytes.Contains(stdout.Bytes(), []byte("No tasks found")) {
-		t.Errorf("expected 'No tasks found' in output, got: %s", output)
-	}
-}
-
-// TestUpdateCommand tests the update command
-func TestUpdateCommand(t *testing.T) {
-	dir := t.TempDir()
-	logger := &MockLogger{}
-
-	plugin, err := task_manager.NewTaskManagerPlugin(logger, dir, nil)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	// Create a task first
-	tasksDir := filepath.Join(dir, ".darwinflow", "tasks")
-	err = os.MkdirAll(tasksDir, 0755)
-	if err != nil {
-		t.Fatalf("failed to create tasks directory: %v", err)
-	}
-
-	taskID := "task-456"
-	taskFile := filepath.Join(tasksDir, taskID+".json")
-	now := time.Now().UTC()
-	task := task_manager.NewTaskEntity(taskID, "track-test", "Test Task", "Description", "todo", 300, "", now, now)
-
-	data, err := task_manager.MarshalTask(task)
-	if err != nil {
-		t.Fatalf("failed to marshal task: %v", err)
-	}
-
-	err = os.WriteFile(taskFile, data, 0644)
-	if err != nil {
-		t.Fatalf("failed to write task file: %v", err)
-	}
-
-	// Find update command
-	commands := plugin.GetCommands()
-	var updateCmd pluginsdk.Command
-	for _, cmd := range commands {
-		if cmd.GetName() == "update" {
-			updateCmd = cmd
-			break
-		}
-	}
-
-	if updateCmd == nil {
-		t.Fatal("update command not found")
-	}
-
-	stdout := &bytes.Buffer{}
-	mockCmdCtx := &MockCommandContext{
-		workingDir: dir,
-		stdout:     stdout,
-	}
-
-	// Execute update command
-	args := []string{taskID, "--status", "done"}
-	err = updateCmd.Execute(context.Background(), mockCmdCtx, args)
-	if err != nil {
-		t.Fatalf("update command failed: %v", err)
-	}
-
-	output := stdout.String()
-	if !bytes.Contains(stdout.Bytes(), []byte("Task updated")) {
-		t.Errorf("expected 'Task updated' in output, got: %s", output)
-	}
-}
-
-// TestInitCommand tests the init command
-func TestInitCommand(t *testing.T) {
-	dir := t.TempDir()
-	logger := &MockLogger{}
-
-	plugin, err := task_manager.NewTaskManagerPlugin(logger, dir, nil)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	commands := plugin.GetCommands()
-	var initCmd pluginsdk.Command
-	for _, cmd := range commands {
-		if cmd.GetName() == "init" {
-			initCmd = cmd
-			break
-		}
-	}
-
-	if initCmd == nil {
-		t.Fatal("init command not found")
-	}
-
-	stdout := &bytes.Buffer{}
-	mockCmdCtx := &MockCommandContext{
-		workingDir: dir,
-		stdout:     stdout,
-	}
-
-	// Execute init command
-	args := []string{}
-	err = initCmd.Execute(context.Background(), mockCmdCtx, args)
-	if err != nil {
-		t.Fatalf("init command failed: %v", err)
-	}
-
-	// Verify tasks directory was created
-	tasksDir := filepath.Join(dir, ".darwinflow", "tasks")
-	if _, err := os.Stat(tasksDir); err != nil {
-		t.Errorf("tasks directory not created: %v", err)
-	}
-}
-
-// TestUpdateEntity tests the UpdateEntity method
-func TestUpdateEntity(t *testing.T) {
-	dir := t.TempDir()
-	logger := &MockLogger{}
-
-	plugin, err := task_manager.NewTaskManagerPlugin(logger, dir, nil)
-	if err != nil {
-		t.Fatalf("failed to create plugin: %v", err)
-	}
-
-	// Create a task directory and a task file manually
-	tasksDir := filepath.Join(dir, ".darwinflow", "tasks")
-	err = os.MkdirAll(tasksDir, 0755)
-	if err != nil {
-		t.Fatalf("failed to create tasks directory: %v", err)
-	}
-
-	// Create a task file directly
-	taskID := "task-123"
-	taskFile := filepath.Join(tasksDir, taskID+".json")
-	now := time.Now().UTC()
-	task := task_manager.NewTaskEntity(taskID, "track-test", "Test Task", "Description", "todo", 300, "", now, now)
-
-	data, err := task_manager.MarshalTask(task)
-	if err != nil {
-		t.Fatalf("failed to marshal task: %v", err)
-	}
-
-	err = os.WriteFile(taskFile, data, 0644)
-	if err != nil {
-		t.Fatalf("failed to write task file: %v", err)
-	}
-
-	// Get the task ID from the created task
-	query := pluginsdk.EntityQuery{EntityType: "task"}
-	entities, err := plugin.Query(context.Background(), query)
-	if err != nil || len(entities) == 0 {
-		t.Fatalf("failed to query tasks: %v, entities: %d", err, len(entities))
-	}
-
-	retrievedTaskID := entities[0].GetID()
-
-	// Update the task
-	updates := map[string]interface{}{
-		"status": "done",
-		"title":  "Updated Task",
-	}
-
-	updated, err := plugin.UpdateEntity(context.Background(), retrievedTaskID, updates)
-	if err != nil {
-		t.Fatalf("failed to update entity: %v", err)
-	}
-
-	updatedTask := updated.(*task_manager.TaskEntity)
-	if updatedTask.Status != "done" {
-		t.Errorf("expected status 'done', got %q", updatedTask.Status)
-	}
-
-	if updated.GetField("title") != "Updated Task" {
-		t.Errorf("expected title 'Updated Task', got %q", updated.GetField("title"))
 	}
 }
 

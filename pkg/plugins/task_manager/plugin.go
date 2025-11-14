@@ -3,12 +3,17 @@ package task_manager
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/application"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain/services"
+	infracli "github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/infrastructure/cli"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/infrastructure/persistence"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/cli"
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
@@ -18,19 +23,19 @@ var (
 	_ pluginsdk.IEntityProvider  = (*TaskManagerPlugin)(nil)
 	_ pluginsdk.ICommandProvider = (*TaskManagerPlugin)(nil)
 	_ pluginsdk.IEventEmitter    = (*TaskManagerPlugin)(nil)
+	_ infracli.PluginProvider    = (*TaskManagerPlugin)(nil) // Infrastructure CLI provider
 )
 
-// TaskManagerPlugin provides task management with real-time file watching.
+// TaskManagerPlugin provides task management with SQLite database storage.
 // It implements Plugin, IEntityProvider, ICommandProvider, and IEventEmitter interfaces.
-// It can optionally use a RoadmapRepository for hierarchical roadmap storage.
+// Events are emitted by the EventEmittingRepository decorator (not FileWatcher).
 type TaskManagerPlugin struct {
-	logger      pluginsdk.Logger
-	workingDir  string
-	tasksDir    string
-	fileWatcher *FileWatcher
-	eventBus    pluginsdk.EventBus
+	logger     pluginsdk.Logger
+	workingDir string
+	tasksDir   string
+	eventBus   pluginsdk.EventBus
 	// Optional: Database repository for hierarchical roadmap model
-	repository RoadmapRepository
+	repository domain.RoadmapRepository
 	// Configuration for plugin behavior
 	config *Config
 }
@@ -39,11 +44,6 @@ type TaskManagerPlugin struct {
 // eventBus is passed as interface{} to allow cmd package to avoid importing pluginsdk.
 func NewTaskManagerPlugin(logger pluginsdk.Logger, workingDir string, eventBus interface{}) (*TaskManagerPlugin, error) {
 	tasksDir := filepath.Join(workingDir, ".darwinflow", "tasks")
-
-	fileWatcher, err := NewFileWatcher(logger, tasksDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file watcher: %w", err)
-	}
 
 	// Type assert eventBus to pluginsdk.EventBus
 	var eb pluginsdk.EventBus
@@ -54,11 +54,10 @@ func NewTaskManagerPlugin(logger pluginsdk.Logger, workingDir string, eventBus i
 	}
 
 	return &TaskManagerPlugin{
-		logger:      logger,
-		workingDir:  workingDir,
-		tasksDir:    tasksDir,
-		fileWatcher: fileWatcher,
-		eventBus:    eb,
+		logger:     logger,
+		workingDir: workingDir,
+		tasksDir:   tasksDir,
+		eventBus:   eb,
 	}, nil
 }
 
@@ -74,18 +73,8 @@ func NewTaskManagerPluginWithDatabase(
 	tasksDir := filepath.Join(workingDir, ".darwinflow", "tasks")
 
 	// Initialize database schema
-	if err := InitSchema(db); err != nil {
+	if err := persistence.InitSchema(db); err != nil {
 		return nil, fmt.Errorf("failed to initialize database schema: %w", err)
-	}
-
-	// Migrate existing file-based tasks if any exist
-	if err := MigrateFromFileStorage(db, tasksDir); err != nil {
-		return nil, fmt.Errorf("failed to migrate tasks from file storage: %w", err)
-	}
-
-	fileWatcher, err := NewFileWatcher(logger, tasksDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create file watcher: %w", err)
 	}
 
 	// Type assert eventBus to pluginsdk.EventBus
@@ -97,12 +86,12 @@ func NewTaskManagerPluginWithDatabase(
 	}
 
 	// Create base repository and wrap with event emission
-	baseRepository := NewSQLiteRoadmapRepository(db, logger)
-	var repository RoadmapRepository = baseRepository
+	baseRepository := persistence.NewSQLiteRoadmapRepository(db, logger)
+	var repository domain.RoadmapRepository = baseRepository
 
 	// Wrap with event-emitting decorator if eventBus is available
 	if eb != nil {
-		repository = NewEventEmittingRepository(baseRepository, eb, logger)
+		repository = persistence.NewEventEmittingRepository(baseRepository, eb, logger)
 	}
 
 	// Load configuration
@@ -112,13 +101,12 @@ func NewTaskManagerPluginWithDatabase(
 	}
 
 	plugin := &TaskManagerPlugin{
-		logger:      logger,
-		workingDir:  workingDir,
-		tasksDir:    tasksDir,
-		fileWatcher: fileWatcher,
-		eventBus:    eb,
-		repository:  repository,
-		config:      config,
+		logger:     logger,
+		workingDir: workingDir,
+		tasksDir:   tasksDir,
+		eventBus:   eb,
+		repository: repository,
+		config:     config,
 	}
 
 	// Migrate from old database location to project-based structure
@@ -131,7 +119,7 @@ func NewTaskManagerPluginWithDatabase(
 
 // GetRepository returns the optional RoadmapRepository for database operations
 // Returns nil if the plugin was initialized without database support
-func (p *TaskManagerPlugin) GetRepository() RoadmapRepository {
+func (p *TaskManagerPlugin) GetRepository() domain.RoadmapRepository {
 	return p.repository
 }
 
@@ -173,301 +161,318 @@ func (p *TaskManagerPlugin) GetEntityTypes() []pluginsdk.EntityTypeInfo {
 }
 
 // Query returns entities matching the given query (SDK interface)
+// Note: This method is deprecated in favor of using CLI commands with the database repository.
+// File-based storage has been replaced with SQLite database.
 func (p *TaskManagerPlugin) Query(ctx context.Context, query pluginsdk.EntityQuery) ([]pluginsdk.IExtensible, error) {
-	// Ensure tasks directory exists
-	if err := os.MkdirAll(p.tasksDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create tasks directory: %w", err)
-	}
-
-	// Read all task files
-	entries, err := os.ReadDir(p.tasksDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read tasks directory: %w", err)
-	}
-
-	entities := make([]pluginsdk.IExtensible, 0)
-
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-
-		filePath := filepath.Join(p.tasksDir, entry.Name())
-		task, err := p.loadTaskFromFile(filePath)
-		if err != nil {
-			p.logger.Warn("failed to load task", "path", filePath, "error", err)
-			continue
-		}
-
-		// Apply filters if specified
-		if !p.matchesFilters(task, query.Filters) {
-			continue
-		}
-
-		entities = append(entities, task)
-	}
-
-	// Apply offset and limit
-	if query.Offset > 0 {
-		if query.Offset >= len(entities) {
-			return []pluginsdk.IExtensible{}, nil
-		}
-		entities = entities[query.Offset:]
-	}
-
-	if query.Limit > 0 && len(entities) > query.Limit {
-		entities = entities[:query.Limit]
-	}
-
-	return entities, nil
+	return nil, fmt.Errorf("Query method is deprecated; use CLI commands with database repository")
 }
 
 // GetEntity retrieves a single entity by ID (SDK interface)
+// Note: This method is deprecated in favor of using CLI commands with the database repository.
+// File-based storage has been replaced with SQLite database.
 func (p *TaskManagerPlugin) GetEntity(ctx context.Context, entityID string) (pluginsdk.IExtensible, error) {
-	// Try exact match first
-	filePath := filepath.Join(p.tasksDir, entityID+".json")
-	task, err := p.loadTaskFromFile(filePath)
-	if err != nil {
-		// Try prefix match (abbreviated ID)
-		matchedFile, matchErr := p.findTaskByPrefix(entityID)
-		if matchErr != nil {
-			return nil, pluginsdk.ErrNotFound
-		}
-		task, err = p.loadTaskFromFile(matchedFile)
-		if err != nil {
-			return nil, pluginsdk.ErrNotFound
-		}
-	}
-	return task, nil
+	return nil, fmt.Errorf("GetEntity method is deprecated; use CLI commands with database repository")
 }
 
 // UpdateEntity updates an entity's fields (SDK interface)
+// Note: This method is deprecated in favor of using CLI commands with the database repository.
+// File-based storage has been replaced with SQLite database.
 func (p *TaskManagerPlugin) UpdateEntity(ctx context.Context, entityID string, fields map[string]interface{}) (pluginsdk.IExtensible, error) {
-	// Try exact match first
-	filePath := filepath.Join(p.tasksDir, entityID+".json")
-	task, err := p.loadTaskFromFile(filePath)
-	if err != nil {
-		// Try prefix match (abbreviated ID)
-		matchedFile, matchErr := p.findTaskByPrefix(entityID)
-		if matchErr != nil {
-			// Return the specific error from findTaskByPrefix
-			return nil, fmt.Errorf("%w: %v", pluginsdk.ErrNotFound, matchErr)
-		}
-		filePath = matchedFile
-		task, err = p.loadTaskFromFile(filePath)
-		if err != nil {
-			return nil, pluginsdk.ErrNotFound
-		}
-	}
-
-	// Update fields
-	if title, ok := fields["title"]; ok {
-		if titleStr, ok := title.(string); ok {
-			task.Title = titleStr
-		}
-	}
-	if description, ok := fields["description"]; ok {
-		if descStr, ok := description.(string); ok {
-			task.Description = descStr
-		}
-	}
-	if status, ok := fields["status"]; ok {
-		if statusStr, ok := status.(string); ok {
-			task.Status = statusStr
-		}
-	}
-	if priority, ok := fields["priority"]; ok {
-		if _, ok := priority.(string); ok {
-			task.Rank = 100 // Default rank for migrated tasks
-		}
-	}
-
-	// Save updated task
-	if err := p.saveTaskToFile(filePath, task); err != nil {
-		return nil, fmt.Errorf("failed to save task: %w", err)
-	}
-
-	return task, nil
+	return nil, fmt.Errorf("UpdateEntity method is deprecated; use CLI commands with database repository")
 }
 
 // GetCommands returns the CLI commands provided by this plugin (SDK interface)
 func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
+	// Create application services with injected dependencies
+	// Note: Services are created per GetCommands() call. Each adapter receives services
+	// configured to work with the RepoProvider (plugin) for per-project repository access.
+
+	// Get repository for service initialization (using active project)
+	// Services don't hold repository instances directly; adapters fetch repositories
+	// per-command execution via RepoProvider.GetRepositoryForProject()
+	repo, _, err := p.GetRepositoryForProject("")
+	if err != nil {
+		p.logger.Warn("failed to get repository for service initialization", "error", err)
+		// Return commands without services (will fail if executed, but plugin loads)
+		return p.getCommandsWithoutServices()
+	}
+	// NOTE: We do NOT call cleanup() here because the application services and repositories
+	// need to remain open for the lifetime of the application. The database connection
+	// will be closed when the application exits.
+
+	// Unwrap repository if it's wrapped in EventEmittingRepository decorator
+	var composite *persistence.SQLiteRepositoryComposite
+	if eventRepo, ok := repo.(*persistence.EventEmittingRepository); ok {
+		// Unwrap to get the underlying composite repository
+		composite, ok = eventRepo.Repo.(*persistence.SQLiteRepositoryComposite)
+		if !ok {
+			p.logger.Warn("wrapped repository is not SQLiteRepositoryComposite")
+			return p.getCommandsWithoutServices()
+		}
+	} else {
+		// Not wrapped, try direct cast
+		composite, ok = repo.(*persistence.SQLiteRepositoryComposite)
+		if !ok {
+			p.logger.Warn("repository is not SQLiteRepositoryComposite")
+			return p.getCommandsWithoutServices()
+		}
+	}
+
+	// Initialize domain services (stateless, no dependencies)
+	validationSvc := services.NewValidationService()
+	iterationSvc := services.NewIterationService()
+
+	// Initialize application services
+	trackService := application.NewTrackApplicationService(
+		composite.Track,
+		composite.Roadmap,
+		composite.Aggregate,
+		validationSvc,
+	)
+
+	taskService := application.NewTaskApplicationService(
+		composite.Task,
+		composite.Track,
+		composite.Aggregate,
+		validationSvc,
+	)
+
+	iterationService := application.NewIterationApplicationService(
+		composite.Iteration,
+		composite.Task,
+		composite.Aggregate,
+		iterationSvc,
+		validationSvc,
+	)
+
+	adrService := application.NewADRApplicationService(
+		composite.ADR,
+		composite.Track,
+		composite.Aggregate,
+		validationSvc,
+	)
+
+	acService := application.NewACApplicationService(
+		composite.AC,
+		composite.Task,
+		composite.Aggregate,
+		validationSvc,
+	)
+
+	roadmapService := application.NewRoadmapApplicationService(
+		composite.Roadmap,
+		composite.Track,
+		composite.Task,
+		composite.Iteration,
+		validationSvc,
+	)
+
 	return []pluginsdk.Command{
-		&InitCommand{plugin: p},
-		&CreateCommand{plugin: p},
-		&ListCommand{plugin: p},
-		&UpdateCommand{plugin: p},
-		// Project commands
-		&ProjectCreateCommand{Plugin: p},
-		&ProjectListCommand{Plugin: p},
-		&ProjectSwitchCommand{Plugin: p},
-		&ProjectShowCommand{Plugin: p},
-		&ProjectDeleteCommand{Plugin: p},
-		// Roadmap commands
-		&RoadmapInitCommand{Plugin: p},
-		&RoadmapShowCommand{Plugin: p},
-		&RoadmapUpdateCommand{Plugin: p},
-		&RoadmapFullCommand{Plugin: p},
+		// Project commands (infrastructure layer)
+		&infracli.ProjectCreateCommand{Provider: p},
+		&infracli.ProjectListCommand{Provider: p},
+		&infracli.ProjectSwitchCommand{Provider: p},
+		&infracli.ProjectShowCommand{Provider: p},
+		&infracli.ProjectDeleteCommand{Provider: p},
+		// Roadmap commands (migrated to CLI adapters)
+		&cli.RoadmapInitCommandAdapter{RoadmapService: roadmapService},
+		&cli.RoadmapShowCommandAdapter{RoadmapService: roadmapService},
+		&cli.RoadmapUpdateCommandAdapter{RoadmapService: roadmapService},
+		&cli.RoadmapFullCommandAdapter{RoadmapService: roadmapService},
+		// ========================================================================
+		// MIGRATED TO CLI ADAPTERS (using application layer services)
+		// ========================================================================
 		// Track commands
-		&TrackCreateCommand{Plugin: p},
-		&TrackListCommand{Plugin: p},
-		&TrackShowCommand{Plugin: p},
-		&TrackUpdateCommand{Plugin: p},
-		&TrackDeleteCommand{Plugin: p},
-		&TrackAddDependencyCommand{Plugin: p},
-		&TrackRemoveDependencyCommand{Plugin: p},
-		&TrackCheckCommand{Plugin: p},
-		&TrackListMissingADRsCommand{Plugin: p},
-		// ADR commands
-		&ADRCreateCommand{Plugin: p},
-		&ADRListCommand{Plugin: p},
-		&ADRShowCommand{Plugin: p},
-		&ADRUpdateCommand{Plugin: p},
-		&ADRSupersdeCommand{Plugin: p},
-		&ADRDeprecateCommand{Plugin: p},
-		// Task commands (database-backed hierarchical model)
-		&TaskCreateCommand{Plugin: p},
-		&TaskListCommand{Plugin: p},
-		&TaskShowCommand{Plugin: p},
-		&TaskUpdateCommand{Plugin: p},
-		&TaskDeleteCommand{Plugin: p},
-		&TaskMoveCommand{Plugin: p},
-		&TaskMigrateCommand{Plugin: p},
-		&TaskCheckReadyCommand{Plugin: p},
-		&TaskBacklogCommand{Plugin: p},
-		// Acceptance Criteria commands
-		&ACAddCommand{Plugin: p},
-		&ACListCommand{Plugin: p},
-		&ACShowCommand{Plugin: p},
-		&ACVerifyCommand{Plugin: p},
-		&ACFailCommand{Plugin: p},
-		&ACUpdateCommand{Plugin: p},
-		&ACDeleteCommand{Plugin: p},
-		&ACVerifyAutoCommand{Plugin: p},
-		&ACRequestReviewCommand{Plugin: p},
-		&ACListIterationCommand{Plugin: p},
-		&ACListTrackCommand{Plugin: p},
-		&ACFailedCommand{Plugin: p},
+		&cli.TrackCreateCommandAdapter{
+			TrackService: trackService,
+		},
+		&cli.TrackUpdateCommandAdapter{
+			TrackService: trackService,
+		},
+		// Task commands
+		&cli.TaskCreateCommandAdapter{
+			TaskService: taskService,
+		},
+		&cli.TaskUpdateCommandAdapter{
+			TaskService: taskService,
+		},
+		&cli.TaskDeleteCommandAdapter{
+			TaskService: taskService,
+		},
 		// Iteration commands
-		&IterationCreateCommand{Plugin: p},
-		&IterationListCommand{Plugin: p},
-		&IterationShowCommand{Plugin: p},
-		&IterationViewCommand{Plugin: p},
-		&IterationCurrentCommand{Plugin: p},
-		&IterationUpdateCommand{Plugin: p},
-		&IterationDeleteCommand{Plugin: p},
-		&IterationAddTaskCommand{Plugin: p},
-		&IterationRemoveTaskCommand{Plugin: p},
-		&IterationStartCommand{Plugin: p},
-		&IterationCompleteCommand{Plugin: p},
+		&cli.IterationCreateCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationUpdateCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationStartCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationCompleteCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationListCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationShowCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationCurrentCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationDeleteCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationAddTaskCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationRemoveTaskCommandAdapter{
+			IterationService: iterationService,
+		},
+		&cli.IterationViewCommandAdapter{
+			IterationService: iterationService,
+		},
+		// ADR commands
+		&cli.ADRCreateCommandAdapter{
+			ADRService: adrService,
+		},
+		&cli.ADRUpdateCommandAdapter{
+			ADRService: adrService,
+		},
+		// AC commands
+		&cli.ACAddCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACVerifyCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACFailCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACListCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACShowCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACUpdateCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACDeleteCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACVerifyAutoCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACRequestReviewCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACListIterationCommandAdapter{
+			ACService: acService,
+		},
+		&cli.ACListTrackCommandAdapter{
+			ACService:   acService,
+			TaskService: taskService,
+		},
+		&cli.ACFailedCommandAdapter{
+			ACService: acService,
+		},
+		// Task commands (query/list operations)
+		&cli.TaskListCommandAdapter{
+			TaskService: taskService,
+		},
+		&cli.TaskShowCommandAdapter{
+			TaskService: taskService,
+		},
+		&cli.TaskMoveCommandAdapter{
+			TaskService: taskService,
+		},
+		&cli.TaskBacklogCommandAdapter{
+			TaskService: taskService,
+		},
+		&cli.TaskCheckReadyCommandAdapter{
+			TaskService: taskService,
+			ACService:   acService,
+		},
+		&cli.TaskMigrateCommandAdapter{},
+
+		// ========================================================================
+		// NOT MIGRATED YET (still using old command pattern)
+		// ========================================================================
+		// Track commands (query/list operations) - MIGRATED TO CLI ADAPTERS
+		&cli.TrackListCommandAdapter{
+			TrackService: trackService,
+		},
+		&cli.TrackShowCommandAdapter{
+			TrackService: trackService,
+		},
+		&cli.TrackDeleteCommandAdapter{
+			TrackService: trackService,
+		},
+		&cli.TrackAddDependencyCommandAdapter{
+			TrackService: trackService,
+		},
+		&cli.TrackRemoveDependencyCommandAdapter{
+			TrackService: trackService,
+		},
+
+		// ========================================================================
+		// INFRASTRUCTURE COMMANDS (not migrated, appropriately structured)
+		// ========================================================================
 		// TUI command
-		&TUICommand{Plugin: p},
-		// Prompt command
-		&PromptCommand{Plugin: p},
-		// Migration commands
-		&MigrateIDsCommand{Plugin: p},
-		// Backup commands
-		&BackupCommand{Plugin: p},
-		&RestoreCommand{Plugin: p},
-		&BackupListCommand{Plugin: p},
+		&cli.TUICommand{Plugin: p},
+		// Prompt command (presentation layer)
+		&cli.PromptCommand{GetPrompt: cli.GetSystemPrompt},
+		// Backup commands (infrastructure layer)
+		&infracli.BackupCommand{Provider: p},
+		&infracli.RestoreCommand{Provider: p},
+		&infracli.BackupListCommand{Provider: p},
+	}
+}
+
+// getCommandsWithoutServices returns commands when service initialization fails
+// This allows the plugin to load even if repository access fails temporarily
+func (p *TaskManagerPlugin) getCommandsWithoutServices() []pluginsdk.Command {
+	return []pluginsdk.Command{
+		// Project commands (infrastructure layer)
+		&infracli.ProjectCreateCommand{Provider: p},
+		&infracli.ProjectListCommand{Provider: p},
+		&infracli.ProjectSwitchCommand{Provider: p},
+		&infracli.ProjectShowCommand{Provider: p},
+		&infracli.ProjectDeleteCommand{Provider: p},
+
+		// Note: CLI adapters that require services are omitted here (including roadmap commands)
+		// This function is only called when service initialization fails
+		// Commands will fail gracefully if executed without services
+
+		// ========================================================================
+		// INFRASTRUCTURE COMMANDS (not migrated, appropriately structured)
+		// ========================================================================
+		// TUI command
+		&cli.TUICommand{Plugin: p},
+		// Prompt command (presentation layer)
+		&cli.PromptCommand{GetPrompt: cli.GetSystemPrompt},
+		// Backup commands (infrastructure layer)
+		&infracli.BackupCommand{Provider: p},
+		&infracli.RestoreCommand{Provider: p},
+		&infracli.BackupListCommand{Provider: p},
 	}
 }
 
 // StartEventStream begins streaming events to the provided channel (SDK interface)
+// This is a no-op because events are already emitted by the EventEmittingRepository decorator
+// (see lines 96, 828 in plugin.go where repositories are wrapped with event emission).
 func (p *TaskManagerPlugin) StartEventStream(ctx context.Context, eventChan chan<- pluginsdk.Event) error {
-	p.logger.Info("starting event stream for task-manager plugin")
-	return p.fileWatcher.Start(ctx, eventChan)
+	p.logger.Info("task-manager event stream is handled by EventEmittingRepository decorator")
+	return nil
 }
 
 // StopEventStream stops the event stream (SDK interface)
+// This is a no-op because events are handled by repository decorator, not FileWatcher.
 func (p *TaskManagerPlugin) StopEventStream() error {
-	p.logger.Info("stopping event stream for task-manager plugin")
-	return p.fileWatcher.Stop()
-}
-
-// Helper methods
-
-// loadTaskFromFile loads a task from a JSON file
-func (p *TaskManagerPlugin) loadTaskFromFile(filePath string) (*TaskEntity, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var task TaskEntity
-	if err := json.Unmarshal(data, &task); err != nil {
-		return nil, err
-	}
-
-	return &task, nil
-}
-
-// saveTaskToFile saves a task to a JSON file
-func (p *TaskManagerPlugin) saveTaskToFile(filePath string, task *TaskEntity) error {
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
-		return err
-	}
-
-	data, err := json.MarshalIndent(task, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(filePath, data, 0644)
-}
-
-// findTaskByPrefix finds a task file that matches the given ID prefix
-// Returns the full file path if exactly one match is found
-// Returns error if no matches or multiple matches (ambiguous)
-func (p *TaskManagerPlugin) findTaskByPrefix(prefix string) (string, error) {
-	entries, err := os.ReadDir(p.tasksDir)
-	if err != nil {
-		return "", err
-	}
-
-	var matches []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		filename := entry.Name()
-		// Extract ID from filename (remove .json extension)
-		if !strings.HasSuffix(filename, ".json") {
-			continue
-		}
-		taskID := strings.TrimSuffix(filename, ".json")
-
-		// Check if ID starts with the prefix
-		if strings.HasPrefix(taskID, prefix) {
-			matches = append(matches, filepath.Join(p.tasksDir, filename))
-		}
-	}
-
-	if len(matches) == 0 {
-		return "", fmt.Errorf("no tasks found matching prefix: %s", prefix)
-	}
-	if len(matches) > 1 {
-		return "", fmt.Errorf("ambiguous task ID prefix: %s matches %d tasks", prefix, len(matches))
-	}
-
-	return matches[0], nil
-}
-
-// matchesFilters checks if an entity matches the given filters
-func (p *TaskManagerPlugin) matchesFilters(entity pluginsdk.IExtensible, filters map[string]interface{}) bool {
-	if len(filters) == 0 {
-		return true
-	}
-
-	for key, expectedValue := range filters {
-		actualValue := entity.GetField(key)
-		if actualValue != expectedValue {
-			return false
-		}
-	}
-
-	return true
+	p.logger.Info("task-manager event stream stop (no-op)")
+	return nil
 }
 
 // ============================================================================
@@ -490,7 +495,7 @@ func (p *TaskManagerPlugin) getProjectDatabase(projectName string) (*sql.DB, err
 	}
 
 	// Initialize schema
-	if err := InitSchema(db); err != nil {
+	if err := persistence.InitSchema(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
@@ -585,10 +590,10 @@ func (p *TaskManagerPlugin) migrateToProjects() error {
 	return nil
 }
 
-// getRepositoryForProject returns a repository for the specified project.
+// GetRepositoryForProject returns a repository for the specified project.
 // If projectName is empty, uses the active project.
 // Returns the repository and a cleanup function (close DB).
-func (p *TaskManagerPlugin) getRepositoryForProject(projectName string) (RoadmapRepository, func(), error) {
+func (p *TaskManagerPlugin) GetRepositoryForProject(projectName string) (domain.RoadmapRepository, func(), error) {
 	// Determine which project to use
 	if projectName == "" {
 		var err error
@@ -604,13 +609,13 @@ func (p *TaskManagerPlugin) getRepositoryForProject(projectName string) (Roadmap
 		return nil, nil, fmt.Errorf("failed to get project database: %w", err)
 	}
 
-	// Create repository for this project
-	baseRepo := NewSQLiteRoadmapRepository(db, p.logger)
-	var repo RoadmapRepository = baseRepo
+	// Create composite repository for this project (provides all focused repositories)
+	composite := persistence.NewSQLiteRepositoryComposite(db, p.logger)
+	var repo domain.RoadmapRepository = composite
 
 	// Wrap with event-emitting decorator if eventBus is available
 	if p.eventBus != nil {
-		repo = NewEventEmittingRepository(baseRepo, p.eventBus, p.logger)
+		repo = persistence.NewEventEmittingRepository(composite, p.eventBus, p.logger)
 	}
 
 	// Return repository and cleanup function
@@ -619,4 +624,33 @@ func (p *TaskManagerPlugin) getRepositoryForProject(projectName string) (Roadmap
 	}
 
 	return repo, cleanup, nil
+}
+
+// ============================================================================
+// PluginProvider Interface Implementation (for infrastructure CLI commands)
+// ============================================================================
+
+// GetWorkingDir returns the working directory
+func (p *TaskManagerPlugin) GetWorkingDir() string {
+	return p.workingDir
+}
+
+// GetLogger returns the plugin logger
+func (p *TaskManagerPlugin) GetLogger() pluginsdk.Logger {
+	return p.logger
+}
+
+// GetActiveProject returns the active project name (public wrapper)
+func (p *TaskManagerPlugin) GetActiveProject() (string, error) {
+	return p.getActiveProject()
+}
+
+// SetActiveProject sets the active project (public wrapper)
+func (p *TaskManagerPlugin) SetActiveProject(projectName string) error {
+	return p.setActiveProject(projectName)
+}
+
+// GetProjectDatabase returns a database connection for the specified project (public wrapper)
+func (p *TaskManagerPlugin) GetProjectDatabase(projectName string) (*sql.DB, error) {
+	return p.getProjectDatabase(projectName)
 }

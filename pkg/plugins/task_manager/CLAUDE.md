@@ -2,7 +2,34 @@
 
 **Path**: `pkg/plugins/task_manager`
 
-**Role**: Hierarchical roadmap management plugin (Roadmap → Track → Task → Iteration)
+**Role**: Hierarchical roadmap management plugin (Roadmap → Track → Task → Iteration → ADR → AcceptanceCriteria)
+
+---
+
+## ⚠️ REFACTORING IN PROGRESS ⚠️
+
+**Status**: Undergoing clean architecture refactoring (Iteration #27)
+
+**Active Iteration**: #27 - TM Refactoring: Foundation Layers (Domain/Application/Infrastructure)
+
+**Related Tasks**:
+- TM-task-126: Phase 1 - Domain Layer Extraction (in-progress)
+- TM-task-127: Phase 2 - Infrastructure Layer (in-progress)
+- TM-task-128: Phase 3 - Application Layer with Unified Services (COMPLETE ✅)
+- TM-task-136: Repository Interface Segregation (in-progress)
+- TM-task-137: Update CLI Adapters to Use Unified Services (todo - BLOCKING)
+
+**Current State**: Application layer complete with unified services. CLI adapters need update to use new services.
+
+**Target Architecture**: Clean architecture with DDD principles (Domain → Application → Infrastructure → Presentation)
+
+**Documentation References**:
+- **Main Architecture**: `/workspace/CLAUDE.md` - DarwinFlow architecture guide
+- **Domain Layer**: `domain/CLAUDE.md` - Domain entities, services, events, repository interfaces
+- **Application Layer**: `application/CLAUDE.md` - Unified application services (TM-task-128 ✅)
+- **Infrastructure Layer**: `infrastructure/CLAUDE.md` - Repository implementations, migrations
+- **Presentation Layer**: `presentation/CLAUDE.md` - CLI adapters (work in progress)
+- **Plugin SDK**: `pkg/pluginsdk/CLAUDE.md` - SDK documentation
 
 ---
 
@@ -10,18 +37,106 @@
 
 The task-manager plugin provides comprehensive project/product roadmap management with:
 - **Multi-project support** - Separate isolated roadmaps (e.g., "production" vs "test")
-- **Hierarchical structure** - Roadmap → Track → Task → Iteration
+- **Hierarchical structure** - Roadmap → Track → Task → Iteration → ADR → AcceptanceCriteria
 - **SQLite database storage** - Per-project databases with full schema management
-- **Full CLI commands** - 33 commands across all entities (28 entity + 5 project commands)
-- **Event bus integration** - Cross-plugin communication with 17 event types
+- **Full CLI commands** - Comprehensive commands across all entities
+- **Event bus integration** - Cross-plugin communication with event types
 - **Interactive TUI** - Visualization and management with project context
 - **Event sourcing** - Complete audit trail for all changes
+- **Clean Architecture** - DDD with separated layers (Domain, Application, Infrastructure, Presentation)
 
 ---
 
-## Architecture
+## Target Architecture (Clean Architecture + DDD)
 
-### Domain Model
+### Layer Structure
+
+```
+pkg/plugins/task_manager/
+├── domain/                          # Pure business logic (zero external dependencies)
+│   ├── entities/                    # Domain entities (7 aggregates)
+│   │   ├── roadmap_entity.go
+│   │   ├── track_entity.go
+│   │   ├── task_entity.go
+│   │   ├── iteration_entity.go
+│   │   ├── adr_entity.go
+│   │   ├── acceptance_criteria_entity.go
+│   │   └── *_entity_test.go
+│   ├── services/                    # Domain services (business rules)
+│   │   ├── validation_service.go    # ID validation, format validation
+│   │   ├── dependency_service.go    # Circular dependency detection (DFS)
+│   │   ├── iteration_service.go     # Iteration lifecycle validation
+│   │   └── *_service_test.go
+│   ├── events/                      # Domain events
+│   │   └── events.go
+│   ├── repositories/                # Repository interfaces (6 focused interfaces)
+│   │   ├── roadmap_repository.go    # Roadmap CRUD
+│   │   ├── track_repository.go      # Track CRUD + dependencies
+│   │   ├── task_repository.go       # Task CRUD + iteration management
+│   │   ├── iteration_repository.go  # Iteration CRUD + lifecycle
+│   │   ├── adr_repository.go        # ADR CRUD + track relationship
+│   │   └── acceptance_criteria_repository.go  # AC CRUD + verification
+│   └── CLAUDE.md                    # Domain layer architectural guidance
+│
+├── application/                     # Application services (use cases) ✅ COMPLETE
+│   ├── track_service.go             # All track operations (CRUD + dependencies)
+│   ├── task_service.go              # All task operations (CRUD + move)
+│   ├── iteration_service.go         # All iteration operations (CRUD + lifecycle)
+│   ├── adr_service.go               # All ADR operations (CRUD + status)
+│   ├── ac_service.go                # All AC operations (CRUD + verification)
+│   ├── dto/                         # Data Transfer Objects
+│   │   ├── track_dto.go
+│   │   ├── task_dto.go
+│   │   ├── iteration_dto.go
+│   │   ├── adr_dto.go
+│   │   ├── ac_dto.go
+│   │   └── helpers.go
+│   ├── *_service_test.go            # Service tests (126 tests, 82.1% coverage)
+│   └── CLAUDE.md                    # Application layer architectural guidance
+│
+├── infrastructure/                  # Infrastructure implementations
+│   └── persistence/                 # Repository implementations (6 focused repos)
+│       ├── roadmap_repository.go
+│       ├── track_repository.go
+│       ├── task_repository.go
+│       ├── iteration_repository.go
+│       ├── adr_repository.go
+│       ├── acceptance_criteria_repository.go
+│       ├── migrations.go            # Database migrations
+│       ├── event_emitting_repository.go  # Event emission decorator
+│       └── CLAUDE.md                # Infrastructure layer guidance
+│
+├── presentation/                    # Presentation layer (CLI adapters)
+│   └── cli/                         # CLI framework adapters (⚠️ NEEDS UPDATE)
+│       ├── track_adapters.go        # Bridge CLI → application services
+│       ├── task_adapters.go
+│       ├── iteration_adapters.go
+│       ├── adr_adapters.go
+│       ├── ac_adapters.go
+│       └── CLAUDE.md                # Presentation layer guidance
+│
+└── plugin.go                        # Plugin registration and wiring
+```
+
+### Dependency Flow (Clean Architecture)
+
+```
+Presentation (CLI adapters)
+    ↓ depends on
+Application (Services + DTOs)
+    ↓ depends on
+Domain (Entities + Interfaces + Services)
+    ↑ implemented by
+Infrastructure (Repository implementations)
+```
+
+**Key Principle**: Dependencies point inward. Domain layer has zero external dependencies.
+
+---
+
+## Domain Model
+
+### Aggregates (7 total)
 
 **Roadmap (Root Aggregate)**
 - Single active roadmap per project
@@ -34,6 +149,7 @@ The task-manager plugin provides comprehensive project/product roadmap managemen
 - Has priority (critical, high, medium, low)
 - Can depend on other tracks (with circular dependency prevention)
 - Contains multiple tasks
+- Associated with ADRs (Architecture Decision Records)
 
 **Task (Concrete Work Item)**
 - Belongs to a track
@@ -41,6 +157,7 @@ The task-manager plugin provides comprehensive project/product roadmap managemen
 - Can have git branch association
 - Atomic unit of work
 - Can be grouped into iterations
+- Has acceptance criteria
 
 **Iteration (Time-Boxed Grouping)**
 - Groups tasks from multiple tracks
@@ -49,7 +166,58 @@ The task-manager plugin provides comprehensive project/product roadmap managemen
 - Auto-incrementing iteration numbers
 - Deliverable-oriented (goal, deliverable description)
 
-### Multi-Project Architecture
+**ADR (Architecture Decision Record)**
+- Documents architectural decisions for tracks
+- Has status (proposed, accepted, rejected, superseded, deprecated)
+- Links to specific track
+- Can supersede other ADRs
+- Immutable once accepted (create new ADR to change)
+
+**AcceptanceCriteria (Task Verification)**
+- Defines what "done" means for a task
+- Has description and testing instructions
+- Has status (not-started, pending-review, verified, failed)
+- Can be verified or failed with feedback
+- Links to specific task
+
+---
+
+## Current Implementation Status
+
+### ✅ Complete (TM-task-128)
+- **Application Layer**: 5 unified services with 82.1% test coverage
+- **DTOs**: Input/output types for all services
+- **Tests**: 126 comprehensive tests (all passing)
+
+### 🚧 In Progress
+- **Domain Layer** (TM-task-126): Entities, services, repository interfaces
+- **Infrastructure Layer** (TM-task-127): Repository implementations, migrations
+- **Repository Segregation** (TM-task-136): Split monolithic repository into 6 focused interfaces
+
+### ⚠️ Blocking (TM-task-137)
+- **CLI Adapters**: Need update to use new application services
+- **Issue**: Adapters still import deleted CQRS packages (application/commands, application/queries)
+- **Impact**: Full build fails, CLI commands won't work until adapters updated
+
+### Migration Status
+
+**Deleted (TM-task-128)**:
+- Old CQRS pattern (application/commands/, application/queries/)
+- 11 command/query handler files
+
+**Created (TM-task-128)**:
+- 5 unified application services (Track, Task, Iteration, ADR, AC)
+- 6 DTO files (one per aggregate + helpers)
+- 10 comprehensive test files
+
+**Next Steps (TM-task-137)**:
+- Update 5 CLI adapter files to use application services
+- Remove imports to deleted packages
+- Full build/test suite will pass after completion
+
+---
+
+## Multi-Project Architecture
 
 **Project Isolation:**
 - Each project has its own SQLite database in `.darwinflow/projects/<project-name>/roadmap.db`
@@ -63,65 +231,22 @@ The task-manager plugin provides comprehensive project/product roadmap managemen
 - Experimentation without affecting real data
 
 **Commands:**
-- All 28 entity commands support `--project <name>` flag to override active project
+- All entity commands support `--project <name>` flag to override active project
 - 5 dedicated project management commands (create, list, switch, show, delete)
 
-### Package Structure
+---
 
-**Entity Files (4):**
-- `roadmap_entity.go` - RoadmapEntity with IExtensible interface
-- `track_entity.go` - TrackEntity with IExtensible and ITrackable interfaces
-- `task_entity.go` - TaskEntity with IExtensible and ITrackable interfaces
-- `iteration_entity.go` - IterationEntity with IExtensible interface
+## Database Schema
 
-**Repository Files (3):**
-- `repository.go` - RoadmapRepository interface (34 methods)
-- `sqlite_repository.go` - SQLite implementation with full CRUD and queries
-- `event_emitting_repository.go` - Decorator pattern for event emission
-
-**Command Files (6):**
-- `command_project.go` - Project commands (create, list, switch, show, delete)
-- `command_roadmap.go` - Roadmap commands (init, show, update)
-- `command_track.go` - Track commands (create, list, show, update, delete, dependencies)
-- `command_task.go` - Task commands (create, list, show, update, delete, move)
-- `command_iteration.go` - Iteration commands (create, list, show, current, start, complete, etc.)
-- `command_tui.go` - TUI launch command
-
-**TUI Files (1):**
-- `tui_models.go` - Bubble Tea models and views for all entity types
-
-**Event Files (1):**
-- `events.go` - Event type constants (17 event types)
-
-**Schema Files (1):**
-- `schema.go` - Database schema and migrations (6 tables)
-
-**Test Files (9):**
-- `roadmap_entity_test.go` - Roadmap entity tests
-- `track_entity_test.go` - Track entity tests (6 test cases)
-- `iteration_entity_test.go` - Iteration entity tests (3 test cases)
-- `sqlite_repository_test.go` - Repository integration tests (8 test cases)
-- `command_roadmap_test.go` - Roadmap command tests (7 test cases)
-- `command_track_test.go` - Track command tests (5 test cases)
-- `command_task_test.go` - Task command tests (9 test cases)
-- `command_iteration_test.go` - Iteration command tests (11 test cases)
-- `tui_models_test.go` - TUI tests (11 test cases)
-- `plugin_test.go` - Plugin integration tests (2 test cases)
-
-**Other Files (3):**
-- `plugin.go` - TaskManagerPlugin implementation (IEntityProvider, ICommandProvider)
-- `schema.go` - Database schema definitions and migrations
-- `watcher.go` - File system watcher for legacy functionality
-
-### Database Schema
-
-**6 Tables:**
+**8 Tables** (post-refactoring):
 - `roadmaps` - Roadmap entities (id, vision, success_criteria)
-- `tracks` - Track entities (id, roadmap_id, title, description, status, priority)
+- `tracks` - Track entities (id, roadmap_id, title, description, status, priority, rank)
 - `track_dependencies` - Track dependency relationships (track_id, depends_on_id)
-- `tasks` - Task entities (id, track_id, title, description, status, priority, branch)
-- `iterations` - Iteration entities (id, roadmap_id, number, name, goal, status, deliverable)
-- `iteration_tasks` - Iteration-task relationships (iteration_id, task_id)
+- `tasks` - Task entities (id, track_id, title, description, status, rank, branch)
+- `iterations` - Iteration entities (number, roadmap_id, name, goal, status, deliverable)
+- `iteration_tasks` - Iteration-task relationships (iteration_number, task_id)
+- `adrs` - Architecture Decision Records (id, track_id, title, context, decision, status)
+- `acceptance_criteria` - Acceptance criteria (id, task_id, description, testing_instructions, status)
 
 All tables have:
 - Primary keys and foreign keys
@@ -133,248 +258,98 @@ All tables have:
 
 ## Commands Overview
 
-### Project Commands
+**Note**: Commands currently use old implementation. After TM-task-137 completion, they will use new application services.
 
-**Create Command**
+### Project Commands (5 commands)
+
 ```bash
 dw task-manager project create <name>
-```
-- Creates new isolated project with dedicated database
-- Project names: alphanumeric, hyphens, underscores only
-- Auto-initializes project directory structure
-
-**List Command**
-```bash
 dw task-manager project list
-```
-- Lists all projects with active project marked (*)
-- Shows project names and database paths
-
-**Switch Command**
-```bash
 dw task-manager project switch <name>
-```
-- Changes active project for all subsequent commands
-- Updates `.darwinflow/active-project.txt`
-
-**Show Command**
-```bash
 dw task-manager project show
-```
-- Displays current active project name
-
-**Delete Command**
-```bash
 dw task-manager project delete <name> [--force]
 ```
-- Deletes project and all its data
-- Cannot delete currently active project (switch first)
-- Requires --force flag for safety
 
-### Roadmap Commands
+### Roadmap Commands (3 commands)
 
-**Init Command**
 ```bash
 dw task-manager roadmap init --vision "..." --success-criteria "..."
-```
-- Creates initial roadmap entity
-- Initializes database schema
-- Returns roadmap details
-
-**Show Command**
-```bash
 dw task-manager roadmap show
+dw task-manager roadmap update [--vision "..."] [--success-criteria "..."]
 ```
-- Displays current roadmap vision and success criteria
-- Shows summary of tracks and task counts
 
-**Update Command**
+### Track Commands (7 commands)
+
 ```bash
-dw task-manager roadmap update --vision "..." --success-criteria "..."
-```
-- Updates roadmap vision and/or success criteria
-- Emits roadmap.updated event
-
-### Track Commands
-
-**Create Command**
-```bash
-dw task-manager track create --id <id> --title <title> --description <desc> --priority <priority>
-```
-- Creates new track
-- Validates track ID format (track-*)
-- Emits track.created event
-
-**List Command**
-```bash
-dw task-manager track list [--status <status>] [--priority <priority>]
-```
-- Lists all tracks with optional filtering
-- Shows track ID, title, status, priority, task count, dependencies
-- Supports filtering by status and priority
-
-**Show Command**
-```bash
+dw task-manager track create --id <id> --title <title> [--description] [--rank]
+dw task-manager track list [--status <status>]
 dw task-manager track show <track-id>
-```
-- Displays track details including all nested tasks
-- Shows dependency information
-
-**Update Command**
-```bash
-dw task-manager track update <track-id> [--title] [--description] [--status] [--priority]
-```
-- Updates track fields
-- Emits track.updated event
-
-**Dependency Commands**
-```bash
+dw task-manager track update <track-id> [--title] [--description] [--status] [--rank]
+dw task-manager track delete <track-id> [--force]
 dw task-manager track add-dependency <track-id> <depends-on>
 dw task-manager track remove-dependency <track-id> <depends-on>
 ```
-- Manages track dependencies
-- Prevents circular dependencies
-- Validates dependency relationships
 
-**Delete Command**
+### Task Commands (7 commands)
+
 ```bash
-dw task-manager track delete <track-id> [--force]
-```
-- Deletes track and all child tasks
-- Requires --force flag for safety
-- Emits track.deleted event
-
-### Task Commands
-
-**Create Command**
-```bash
-dw task-manager task create --track <track-id> --title <title> [--description] [--priority]
-```
-- Creates new task in specified track
-- Auto-generates task ID
-- Emits task.created event
-
-**List Command**
-```bash
+dw task-manager task create --track <track-id> --title <title> [--description] [--rank]
 dw task-manager task list [--track <track-id>] [--status <status>]
-```
-- Lists all tasks with optional filtering
-- Shows task ID, title, track, status, priority
-- Supports filtering by track and status
-
-**Show Command**
-```bash
 dw task-manager task show <task-id>
-```
-- Displays task details including track, status, branch
-- Shows iteration membership if applicable
-
-**Update Command**
-```bash
-dw task-manager task update <task-id> [--title] [--description] [--status] [--priority] [--branch]
-```
-- Updates task fields
-- Supports branch association for git integration
-- Emits task.updated event
-
-**Move Command**
-```bash
-dw task-manager task move <task-id> --track <new-track-id>
-```
-- Moves task to different track
-- Updates parent track reference
-- Emits task.moved event
-
-**Delete Command**
-```bash
+dw task-manager task update <task-id> [--title] [--description] [--status] [--rank] [--branch]
 dw task-manager task delete <task-id> [--force]
+dw task-manager task move <task-id> --track <new-track-id>
+dw task-manager task validate <task-id>  # Validate acceptance criteria
 ```
-- Deletes task
-- Removes from any iterations
-- Requires --force flag
-- Emits task.deleted event
 
-### Iteration Commands
+### Iteration Commands (10 commands)
 
-**Create Command**
 ```bash
 dw task-manager iteration create --name <name> --goal <goal> --deliverable <deliverable>
-```
-- Creates new iteration (auto-numbered)
-- Sets status to "planned"
-- Emits iteration.created event
-
-**List Command**
-```bash
 dw task-manager iteration list
-```
-- Lists all iterations
-- Shows number, name, status, task count
-
-**Show Command**
-```bash
-dw task-manager iteration show <iteration-number>
-```
-- Displays iteration details with all tasks
-- Shows progress metrics
-
-**Current Command**
-```bash
+dw task-manager iteration show <iteration-number> [--full]
 dw task-manager iteration current
-```
-- Shows the current active iteration (status = "current")
-- Displays detailed task breakdown
-
-**Update Command**
-```bash
 dw task-manager iteration update <number> [--name] [--goal] [--deliverable]
-```
-- Updates iteration fields
-- Emits iteration.updated event
-
-**Add/Remove Task Commands**
-```bash
+dw task-manager iteration start <iteration-number>
+dw task-manager iteration complete <iteration-number>
 dw task-manager iteration add-task <iteration> <task-id> [<task-id>...]
 dw task-manager iteration remove-task <iteration> <task-id> [<task-id>...]
-```
-- Manages tasks in iterations
-- Handles multiple tasks at once
-- Validates task and iteration existence
-
-**Start Command**
-```bash
-dw task-manager iteration start <iteration-number>
-```
-- Sets iteration status to "current"
-- Only one iteration can be current
-- Emits iteration.started event
-
-**Complete Command**
-```bash
-dw task-manager iteration complete <iteration-number>
-```
-- Sets iteration status to "complete"
-- Marks iteration as finished
-- Emits iteration.completed event
-
-**Delete Command**
-```bash
 dw task-manager iteration delete <iteration-number> [--force]
 ```
-- Deletes iteration
-- Removes iteration-task relationships
-- Requires --force flag
-- Emits iteration.deleted event
+
+### ADR Commands (7 commands)
+
+```bash
+dw task-manager adr create <track-id> --title <title> --context <context> --decision <decision>
+dw task-manager adr list [--track <track-id>] [--status <status>]
+dw task-manager adr show <adr-id>
+dw task-manager adr update <adr-id> [--title] [--context] [--decision] [--consequences] [--alternatives]
+dw task-manager adr supersede <adr-id> --superseded-by <new-adr-id>
+dw task-manager adr deprecate <adr-id>
+dw task-manager adr check <track-id>  # Check if track has required ADR
+```
+
+### Acceptance Criteria Commands (9 commands)
+
+```bash
+dw task-manager ac add <task-id> --description <desc> --testing-instructions <instructions>
+dw task-manager ac list <task-id>
+dw task-manager ac list-iteration <iteration-number>
+dw task-manager ac show <ac-id>
+dw task-manager ac update <ac-id> [--description] [--testing-instructions]
+dw task-manager ac verify <ac-id>
+dw task-manager ac fail <ac-id> --feedback <feedback>
+dw task-manager ac failed [--task <task-id>] [--iteration <iteration-number>]
+dw task-manager ac delete <ac-id> [--force]
+```
 
 ### TUI Command
 
-**TUI Launch**
 ```bash
 dw task-manager tui
 ```
-- Launches interactive terminal user interface
-- Uses Bubble Tea framework
-- Provides multiple views (roadmap, tracks, iterations)
+
+**Total Commands**: ~48 commands across all entities
 
 ---
 
@@ -383,28 +358,39 @@ dw task-manager tui
 The plugin emits events for all CRUD operations:
 
 **Roadmap Events:**
-- `task-manager.roadmap.created` - Roadmap initialized
-- `task-manager.roadmap.updated` - Vision/criteria changed
+- `task-manager.roadmap.created`
+- `task-manager.roadmap.updated`
 
 **Track Events:**
-- `task-manager.track.created` - New track created
-- `task-manager.track.updated` - Track fields updated
-- `task-manager.track.status_changed` - Status changed (not-started → in-progress, etc.)
-- `task-manager.track.completed` - Track marked complete
-- `task-manager.track.blocked` - Track marked blocked
+- `task-manager.track.created`
+- `task-manager.track.updated`
+- `task-manager.track.status_changed`
+- `task-manager.track.completed`
+- `task-manager.track.blocked`
 
 **Task Events:**
-- `task-manager.task.created` - New task created
-- `task-manager.task.updated` - Task fields updated
-- `task-manager.task.status_changed` - Status changed (todo → in-progress, etc.)
-- `task-manager.task.completed` - Task marked done
-- `task-manager.task.moved` - Moved to different track
+- `task-manager.task.created`
+- `task-manager.task.updated`
+- `task-manager.task.status_changed`
+- `task-manager.task.completed`
+- `task-manager.task.moved`
 
 **Iteration Events:**
-- `task-manager.iteration.created` - New iteration created
-- `task-manager.iteration.updated` - Iteration fields updated
-- `task-manager.iteration.started` - Iteration marked as current
-- `task-manager.iteration.completed` - Iteration marked complete
+- `task-manager.iteration.created`
+- `task-manager.iteration.updated`
+- `task-manager.iteration.started`
+- `task-manager.iteration.completed`
+
+**ADR Events:**
+- `task-manager.adr.created`
+- `task-manager.adr.updated`
+- `task-manager.adr.superseded`
+- `task-manager.adr.deprecated`
+
+**Acceptance Criteria Events:**
+- `task-manager.ac.created`
+- `task-manager.ac.verified`
+- `task-manager.ac.failed`
 
 Other plugins can subscribe to these events for notifications, automation, etc.
 
@@ -412,34 +398,31 @@ Other plugins can subscribe to these events for notifications, automation, etc.
 
 ## Testing
 
-**Test Coverage:** 58.1% (156 tests)
+**Application Layer Coverage**: 82.1% (126 tests) ✅
 
-**Test Organization:**
-- Entity tests: 13 tests (roadmap, track, iteration)
-- Repository tests: 8 tests (SQLite integration)
-- Command tests: 32 tests (all command types)
-- TUI tests: 11 tests (views and navigation)
-- Plugin tests: 2 tests (plugin lifecycle)
+**Test Organization** (post-refactoring):
+- Domain entity tests: Validation, state transitions, business rules
+- Domain service tests: Circular dependencies, lifecycle validation
+- Application service tests: 126 tests (all CRUD + business operations)
+- Infrastructure repository tests: SQLite integration, migrations
+- CLI adapter tests: Command execution, flag parsing
 
-**Running Tests:**
+**Running Tests**:
 
 ```bash
-# Run all tests
-go test ./pkg/plugins/task_manager -v
+# Application layer (new unified services)
+go test ./pkg/plugins/task_manager/application/... -v -coverprofile=coverage.out
+go tool cover -func=coverage.out | grep total
+# Expected: 82.1% coverage
 
-# Run with coverage
-go test -cover ./pkg/plugins/task_manager
+# Domain layer
+go test ./pkg/plugins/task_manager/domain/... -v
 
-# Generate coverage report
-go test -coverprofile=coverage.out ./pkg/plugins/task_manager
-go tool cover -html=coverage.out
+# Infrastructure layer
+go test ./pkg/plugins/task_manager/infrastructure/... -v
 
-# Run specific test suites
-go test ./pkg/plugins/task_manager -run TestRoadmap
-go test ./pkg/plugins/task_manager -run TestTrack
-go test ./pkg/plugins/task_manager -run TestTask
-go test ./pkg/plugins/task_manager -run TestIteration
-go test ./pkg/plugins/task_manager -run TestTUI
+# All tests (will fail until TM-task-137 complete)
+go test ./pkg/plugins/task_manager/... -v
 ```
 
 ---
@@ -476,111 +459,6 @@ func TestGoodExample(t *testing.T) {
 4. **Safety**: Never risk corrupting real user data during testing
 5. **Cleanup**: `t.TempDir()` automatically removes test files after completion
 
-### Testing Commands That Use Home Directory
-
-For commands that use `~/.darwinflow` or `os.UserHomeDir()`:
-
-**Option 1: Environment Variable Override**
-```go
-func TestWithTempHome(t *testing.T) {
-    tmpHome := t.TempDir()
-    t.Setenv("HOME", tmpHome)  // Override HOME for this test
-
-    // Now code using os.UserHomeDir() will use tmpHome
-}
-```
-
-**Option 2: Pass Directory as Parameter**
-```go
-// Command accepts optional directory override for testing
-type BackupCommand struct {
-    testBackupDir string  // Only set in tests
-}
-
-func (c *BackupCommand) getBackupDir() string {
-    if c.testBackupDir != "" {
-        return c.testBackupDir  // Use test directory
-    }
-    return filepath.Join(os.UserHomeDir(), ".darwinflow")  // Production
-}
-```
-
-**Option 3: Dependency Injection**
-```go
-// Inject filesystem abstraction
-type FileSystem interface {
-    HomeDir() string
-}
-
-type Command struct {
-    fs FileSystem
-}
-```
-
-### Test Setup Template
-
-**Every test file should follow this pattern:**
-
-```go
-package task_manager_test
-
-import (
-    "testing"
-    "path/filepath"
-)
-
-func setupTestEnvironment(t *testing.T) string {
-    tmpDir := t.TempDir()  // ✅ ALWAYS start with this
-
-    // Set environment variables to use temp directory
-    t.Setenv("HOME", tmpDir)
-
-    // Create any needed subdirectories
-    testDataDir := filepath.Join(tmpDir, ".darwinflow")
-    os.MkdirAll(testDataDir, 0755)
-
-    return tmpDir
-}
-
-func TestExample(t *testing.T) {
-    tmpDir := setupTestEnvironment(t)
-
-    // All file operations now happen in tmpDir
-    // Automatic cleanup when test finishes
-}
-```
-
-### Common Pitfalls
-
-❌ **Using real ~/.darwinflow**
-❌ **Writing to /tmp without cleanup**
-❌ **Creating files in project directory**
-❌ **Hardcoding absolute paths**
-❌ **Assuming specific directory structure exists**
-
-✅ **Always use t.TempDir()**
-✅ **Override HOME environment variable in tests**
-✅ **Clean up manually created resources with t.Cleanup()**
-✅ **Use relative paths within test directory**
-✅ **Create all needed directories explicitly in tests**
-
-### Enforcement
-
-**Before committing:**
-1. Search test files for `os.UserHomeDir()` → Must use `t.Setenv("HOME", tmpDir)`
-2. Search test files for `~/.darwinflow` → Must be in `t.TempDir()`
-3. Run tests multiple times → Must pass every time
-4. Check for leftover files in `~/.darwinflow` after tests
-
-**If you find real directory usage in tests:**
-```bash
-# Find violations
-grep -r "UserHomeDir" pkg/plugins/task_manager/*_test.go
-grep -r ".darwinflow" pkg/plugins/task_manager/*_test.go
-
-# Every match must be preceded by t.TempDir() or t.Setenv("HOME")
-```
-
 ---
 
 ## Plugin Architecture
@@ -589,192 +467,70 @@ grep -r ".darwinflow" pkg/plugins/task_manager/*_test.go
 
 **TaskManagerPlugin** implements:
 - `pluginsdk.Plugin` - Base plugin interface
-- `pluginsdk.IEntityProvider` - Query roadmaps, tracks, tasks, iterations
+- `pluginsdk.IEntityProvider` - Query roadmaps, tracks, tasks, iterations, ADRs, ACs
 - `pluginsdk.ICommandProvider` - All CLI commands
 
 **Key Methods:**
 - `GetInfo()` - Plugin metadata (name, version, description)
 - `GetCapabilities()` - Lists implemented capabilities
-- `GetEntityTypes()` - Returns "roadmap", "track", "task", "iteration" entity types
+- `GetEntityTypes()` - Returns entity types (roadmap, track, task, iteration, adr, ac)
 - `Query(ctx, query)` - Query entities with filters and pagination
 - `GetEntity(ctx, id)` - Get entity by ID
 - `UpdateEntity(ctx, id, fields)` - Update entity fields
 - `GetCommands()` - Returns all CLI commands
 
-### Repository Pattern
-
-**RoadmapRepository Interface:**
-- 34 methods for complete CRUD and querying
-- Methods organized by entity type:
-  - Roadmap: Create, Get, Update, Delete
-  - Track: Create, Get, Update, Delete, AddDependency, RemoveDependency, GetDependencies
-  - Task: Create, Get, Update, Delete, GetByTrack
-  - Iteration: Create, Get, Update, Delete, GetCurrent, SetCurrent
-  - Query: List with filtering and pagination
-
-**SQLiteRepository Implementation:**
-- Implements all 34 methods
-- Manages all 6 database tables
-- Handles migrations and schema creation
-- Provides transaction support for complex operations
-- Full error handling and validation
-
-### Event Emission
-
-**EventEmittingRepository Decorator:**
-- Wraps underlying repository
-- Emits events after successful operations
-- Publishes to event bus
-- Non-blocking event emission (errors don't fail operations)
-
----
-
-## Usage Examples
-
-### Complete Workflow
-
-```bash
-# 1. Initialize roadmap
-dw task-manager roadmap init \
-  --vision "Build plugin ecosystem" \
-  --success-criteria "5 plugins, 80% coverage"
-
-# 2. Create tracks
-dw task-manager track create \
-  --id track-core \
-  --title "Core Framework" \
-  --priority critical
-
-dw task-manager track create \
-  --id track-plugins \
-  --title "Plugin System" \
-  --priority high
-
-# 3. Add dependency
-dw task-manager track add-dependency track-plugins track-core
-
-# 4. Create tasks
-dw task-manager task create \
-  --track track-core \
-  --title "Implement event bus" \
-  --priority high
-
-dw task-manager task create \
-  --track track-plugins \
-  --title "Create plugin SDK" \
-  --priority high
-
-# 5. Create iteration
-dw task-manager iteration create \
-  --name "Sprint 1" \
-  --goal "Foundation" \
-  --deliverable "Event bus and SDK"
-
-# 6. Add tasks to iteration
-dw task-manager iteration add-task 1 task-001 task-002
-
-# 7. Start iteration
-dw task-manager iteration start 1
-
-# 8. Track progress (in TUI)
-dw task-manager tui
-```
-
----
-
-## Performance Characteristics
-
-### Storage
-
-- **Roadmap size**: ~50 bytes
-- **Track entry**: ~200 bytes (plus dependencies)
-- **Task entry**: ~250 bytes
-- **Iteration entry**: ~150 bytes
-
-### Operations
-
-- **Create track**: O(1) - Direct insert
-- **List tracks**: O(n) - Full table scan
-- **Add dependency**: O(1) - Direct insert with validation
-- **Get task by ID**: O(1) - Index lookup
-- **Query tasks by track**: O(n) - Index scan
-- **Start iteration**: O(1) - Direct update
-
-### Database
-
-- All primary tables have indexes on ID and common query fields
-- Track dependencies indexed for fast lookups
-- Iteration-task relationships indexed both directions
-
 ---
 
 ## Key Design Decisions
 
-1. **Hierarchical Structure**: Roadmap → Track → Task → Iteration follows domain hierarchy naturally
-2. **Event Sourcing**: All changes emit events for audit trail and cross-plugin notifications
-3. **SQLite Persistence**: Reliable local storage without external dependencies
-4. **TUI Integration**: Bubble Tea framework for rich terminal user experience
-5. **Track Dependencies**: Enables workflow management and blocking detection
-6. **Iteration Grouping**: Time-boxed work organizing across tracks
+1. **Clean Architecture**: Separated concerns (Domain → Application → Infrastructure → Presentation)
+2. **Unified Services**: One service per aggregate handling all operations (NOT CQRS)
+3. **Repository Segregation**: 6 focused repository interfaces (ISP compliance)
+4. **Event Sourcing**: All changes emit events for audit trail and cross-plugin notifications
+5. **SQLite Persistence**: Reliable local storage without external dependencies
+6. **TUI Integration**: Bubble Tea framework for rich terminal user experience
+7. **Track Dependencies**: Enables workflow management and blocking detection
+8. **Iteration Grouping**: Time-boxed work organizing across tracks
+9. **ADR Pattern**: Documenting architectural decisions at track level
+10. **Acceptance Criteria**: Explicit verification requirements for tasks
 
 ---
 
-## Future Enhancements
+## Refactoring Progress
 
-Possible extensions:
+**Iteration #27**: TM Refactoring: Foundation Layers (Domain/Application/Infrastructure)
 
-1. **Batch Operations**: Bulk update/delete commands
-2. **Export/Import**: Export roadmaps to markdown or CSV
-3. **Recurring Tasks**: Auto-create tasks based on templates
-4. **Progress Analytics**: Generate reports and metrics
-5. **Git Integration**: Auto-create branches from tasks
-6. **Notifications**: Alert on status changes
-7. **Collaboration**: Multi-user roadmap management
-8. **Estimation**: Story points and burn-down charts
+**Goal**: Extract and establish the three foundation layers of clean architecture
 
----
+**Deliverable**: Complete domain/, application/, and infrastructure/ packages with full test coverage
 
-## Troubleshooting
+**Status**: Application layer complete (82.1% coverage). CLI adapters need update (TM-task-137).
 
-### Database Locked
+**Timeline**:
+- Phase 1 (TM-task-126): Domain Layer Extraction - in-progress
+- Phase 2 (TM-task-127): Infrastructure Layer - in-progress
+- Phase 3 (TM-task-128): Application Layer - COMPLETE ✅
+- Phase 4 (TM-task-136): Repository Segregation - in-progress
+- Phase 5 (TM-task-137): CLI Adapter Update - todo (BLOCKING)
 
-**Cause**: Multiple processes accessing the database simultaneously.
-
-**Solution**: Ensure only one instance of `dw task-manager` is running.
-
-### Circular Dependencies
-
-**Cause**: Attempting to create a circular dependency between tracks.
-
-**Solution**: The system prevents this automatically. Check your dependency graph.
-
-### Iteration Not Updating
-
-**Cause**: Iteration in "complete" status cannot be edited.
-
-**Solution**: Only planned and current iterations can be updated.
-
----
-
-## Files
-
-**Total: 28 files**
-
-**Entities:** 4 files
-**Repository:** 3 files
-**Commands:** 5 files
-**TUI:** 1 file
-**Tests:** 10 files
-**Other:** 3 files (plugin.go, events.go, schema.go, watcher.go)
+**Next Steps**:
+1. Complete TM-task-137 (update CLI adapters to use application services)
+2. Verify full build passes
+3. Complete remaining phases (TM-task-126, TM-task-127, TM-task-136)
+4. Close iteration #27
 
 ---
 
 ## References
 
-- **Plugin Development**: `pkg/pluginsdk/CLAUDE.md` - SDK documentation
-- **Architecture**: `/workspace/CLAUDE.md` - DarwinFlow architecture guide
-- **Commands**: See README.md for command examples and usage
+- **Main Architecture**: `/workspace/CLAUDE.md` - DarwinFlow architecture guide
+- **Domain Layer**: `domain/CLAUDE.md` - Domain layer architectural guidance
+- **Application Layer**: `application/CLAUDE.md` - Application layer architectural guidance (TM-task-128)
+- **Infrastructure Layer**: `infrastructure/CLAUDE.md` - Infrastructure layer guidance
+- **Presentation Layer**: `presentation/CLAUDE.md` - Presentation layer guidance
+- **Plugin SDK**: `pkg/pluginsdk/CLAUDE.md` - SDK documentation
+- **Iteration #27**: See `dw task-manager iteration show 27 --full` for refactoring details
 
 ---
 
-*Updated: 2025-10-31 (Phase 10 - Final documentation, testing, and polish)*
+*Last Updated: 2025-11-11 (Iteration #27 - Application Layer Complete)*

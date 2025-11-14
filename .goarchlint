@@ -6,6 +6,9 @@
 #
 
 module: github.com/kgatilin/darwinflow-pub
+ignore_paths:
+    - pkg/plugins/task_manager/e2e_test
+
 preset:
     name: ddd
     structure:
@@ -132,13 +135,14 @@ overrides:
         shared_external_imports:
             exclusions:
                 - github.com/google/uuid
-                - github.com/charmbracelet/bubbletea  # TUI framework (shared UI utility)
-                - github.com/charmbracelet/lipgloss   # TUI styling (shared UI utility)
-                - github.com/charmbracelet/bubbles/viewport   # TUI viewport component (shared UI utility)
-                - github.com/charmbracelet/bubbles/textinput  # TUI text input component (shared UI utility)
-                - github.com/charmbracelet/glamour    # Markdown rendering (shared UI utility)
-                - github.com/mattn/go-sqlite3         # SQLite driver (shared infrastructure)
-                - gopkg.in/yaml.v3                    # YAML config (shared configuration utility)
+                - github.com/charmbracelet/bubbletea # TUI framework (shared UI utility)
+                - github.com/charmbracelet/lipgloss # TUI styling (shared UI utility)
+                - github.com/charmbracelet/bubbles/viewport # TUI viewport component (shared UI utility)
+                - github.com/charmbracelet/bubbles/textinput # TUI text input component (shared UI utility)
+                - github.com/charmbracelet/glamour # Markdown rendering (shared UI utility)
+                - github.com/mattn/go-sqlite3 # SQLite driver (shared infrastructure)
+                - gopkg.in/yaml.v3 # YAML config (shared configuration utility)
+                - github.com/stretchr/testify/assert
         directories_import:
             cmd:
                 - internal/app
@@ -157,11 +161,86 @@ overrides:
                 - pkg/pluginsdk
             pkg/plugins/task_manager:
                 - pkg/pluginsdk
+                - pkg/plugins/task_manager/application
+                - pkg/plugins/task_manager/domain
+                - pkg/plugins/task_manager/domain/services
+                - pkg/plugins/task_manager/domain/entities
+                - pkg/plugins/task_manager/infrastructure/cli
+                - pkg/plugins/task_manager/infrastructure/persistence
+                - pkg/plugins/task_manager/presentation/cli
+
+            # Task Manager Clean Architecture - Domain Layer
+            pkg/plugins/task_manager/domain:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain/entities
+
+            pkg/plugins/task_manager/domain/entities:
+                - pkg/pluginsdk
+
+            pkg/plugins/task_manager/domain/repositories:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain/entities
+
+            pkg/plugins/task_manager/domain/services:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain/entities
+
+            pkg/plugins/task_manager/domain/events:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain/entities
+
+            # Task Manager Clean Architecture - Application Layer
+            pkg/plugins/task_manager/application:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain
+                - pkg/plugins/task_manager/application/dto
+                - pkg/plugins/task_manager/application/mocks # Test utilities
+
+            # Task Manager Clean Architecture - Infrastructure Layer
+            pkg/plugins/task_manager/infrastructure:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain
+
+            pkg/plugins/task_manager/infrastructure/cli:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain
+
+            pkg/plugins/task_manager/infrastructure/persistence:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain
+                - pkg/plugins/task_manager/domain/entities
+                - pkg/plugins/task_manager/domain/repositories
+
+            # Task Manager Clean Architecture - Presentation Layer
+            pkg/plugins/task_manager/presentation/cli:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/application
+                - pkg/plugins/task_manager/domain
+
+            pkg/plugins/task_manager/application/mocks:
+                - pkg/plugins/task_manager/domain/entities
+                - pkg/pluginsdk
+
             pkg/pluginsdk: [] # SDK has zero dependencies - fully public
         test_coverage:
             package_thresholds:
                 pkg/plugins/claude_code: 70
-                pkg/plugins/task_manager: 50
+                pkg/plugins/task_manager: 20 # Tested with e2e tests
+
+                # Task Manager Layer-Specific Coverage Thresholds
+                pkg/plugins/task_manager/domain: 0
+                pkg/plugins/task_manager/domain/entities: 90
+                pkg/plugins/task_manager/domain/services: 90
+                pkg/plugins/task_manager/domain/repositories: 0 # Interface-only, no tests needed
+                pkg/plugins/task_manager/domain/events: 0 # Data structures only, no logic to test
+                pkg/plugins/task_manager/application: 80
+                pkg/plugins/task_manager/application/dto: 0 # Data structures only, no logic to test
+                pkg/plugins/task_manager/application/mocks: 0 # Test utilities, no tests needed
+                pkg/plugins/task_manager/infrastructure/persistence: 50
+                pkg/plugins/task_manager/infrastructure/cli: 0 # CLI commands, tested via integration
+                pkg/plugins/task_manager/presentation/cli: 0 # Testes with e2e tests
+                pkg/plugins/task_manager/e2e_test: 0
+
                 pkg/pluginsdk: 0 # SDK is interface-only, no tests needed
                 cmd: 20
                 internal/app/tui: 70

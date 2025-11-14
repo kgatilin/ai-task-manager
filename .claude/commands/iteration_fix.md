@@ -391,7 +391,81 @@ dw task-manager ac list-iteration [iteration-number]
 dw task-manager ac failed --iteration [iteration-number]
 ```
 
-## Step 2: Verification Checklist
+## Step 2: Gate Check - Verify File Changes Are Appropriate
+
+**CRITICAL SAFETY CHECK**: Before proceeding with verification, analyze git changes to ensure fixes didn't cause unintended destruction.
+
+Execute:
+```bash
+# Check git status to see what changed
+git status --short
+
+# Get detailed diff stats
+git diff --stat
+
+# Count files by change type
+echo "Files added: $(git diff --name-status | grep '^A' | wc -l)"
+echo "Files modified: $(git diff --name-status | grep '^M' | wc -l)"
+echo "Files deleted: $(git diff --name-status | grep '^D' | wc -l)"
+```
+
+### Gate Check Analysis
+
+**For EACH file change type, critically analyze**:
+
+**Files Added:**
+- List each added file
+- Question: "Was adding this file necessary for the AC fixes?"
+- Question: "Does this represent new functionality or just missing tests?"
+- **Red Flag**: Adding files that duplicate existing functionality
+
+**Files Modified:**
+- List each modified file
+- Question: "Is this file related to the failed ACs being fixed?"
+- Question: "Are changes minimal and targeted to the specific issue?"
+- **Red Flag**: Modifying files unrelated to any failed AC
+
+**Files Deleted:** ⚠️ HIGHEST RISK ⚠️
+- List EVERY deleted file with its purpose
+- Question: "Why was this file deleted instead of modified?"
+- Question: "Did this file contain working code from a completed iteration?"
+- Question: "Is deletion absolutely necessary to fix the failed AC?"
+- **Red Flag**: Deleting test files, production code, or configuration
+- **Red Flag**: Deleting more than 2 files (almost always wrong)
+
+### Gate Check Decision
+
+**If ANY of these conditions are true, REJECT the fixes and STOP**:
+1. ❌ Any test files were deleted (unless explicitly required by AC)
+2. ❌ Any production code files were deleted (unless explicitly deprecated)
+3. ❌ More than 2 files deleted (extremely suspicious)
+4. ❌ Files modified that have NO relation to failed ACs
+5. ❌ Files added that duplicate existing functionality
+
+**If conditions are suspicious but not fatal**:
+- Document concerns in "Issues requiring immediate attention"
+- Continue verification but flag for user review
+
+**If all changes are appropriate**:
+- Document: "Gate check passed - all file changes are appropriate for the AC fixes"
+- Continue to Step 3
+
+### Rationale Check
+
+For each file change, provide brief rationale:
+```
+File: path/to/file.go
+Change: Modified
+Rationale: [Brief explanation of why this change was needed for AC-XXX]
+Appropriate: YES/NO
+
+File: path/to/test.go
+Change: Deleted
+Rationale: [Explanation - must be compelling for deletions]
+Appropriate: YES/NO - [If NO, explain why this is concerning]
+```
+
+## Step 3: Verification Checklist
 
 ### 1. Tests
 - [ ] Run: go test ./...
@@ -428,6 +502,22 @@ dw task-manager ac failed --iteration [iteration-number]
 
 Return:
 
+### Gate Check Results ⚠️ CRITICAL SECTION
+**Files Added**: [count] files
+[List each added file with rationale]
+
+**Files Modified**: [count] files
+[List each modified file with rationale]
+
+**Files Deleted**: [count] files ⚠️
+[List EVERY deleted file with compelling rationale]
+
+**Gate Check Decision**:
+- PASSED / FAILED / SUSPICIOUS
+- If FAILED: "STOP - Fixes rejected due to: [specific reason]"
+- If SUSPICIOUS: "Proceeding with concerns: [list concerns]"
+- If PASSED: "All file changes appropriate for AC fixes"
+
 ### Test Results
 [Pass/fail, any failures, coverage notes]
 
@@ -444,6 +534,7 @@ Return:
 [Are all fixed ACs verifiable by user? Clear instructions?]
 
 ### Overall Assessment
+- Gate check status: PASSED/FAILED/SUSPICIOUS
 - Ready for user re-verification: YES/NO
 - Issues requiring immediate attention: [list]
 - Recommendations: [list]
@@ -458,12 +549,26 @@ Use Task tool with:
 ```
 
 **Review verification report**:
+- **FIRST**: Check gate check status (PASSED/FAILED/SUSPICIOUS)
 - Check if tests passed
 - Check if linter clean
 - Note any issues found
 - Determine if ready for user re-verification
 
-**If verification finds issues**:
+**If gate check FAILED**:
+- **STOP IMMEDIATELY** - Do NOT proceed with reporting success
+- Report to user: "⛔ GATE CHECK FAILED - Fixes were rejected"
+- Include gate check details from verification report
+- List specific files deleted/modified inappropriately
+- Explain why changes were rejected
+- Recommend: Restore deleted files and re-run fixes manually
+
+**If gate check SUSPICIOUS**:
+- Proceed but include WARNING in final report
+- Highlight suspicious changes for user review
+- User must manually review git diff before accepting fixes
+
+**If verification finds other issues (tests/linter)**:
 - Create new fix phase for issues
 - Delegate to appropriate agent with issue details
 - Run verification again

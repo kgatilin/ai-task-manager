@@ -10,26 +10,33 @@ allowed-tools:
   - Bash(make:*)
   - Bash(git:*)
 argument-hint: "[iteration-number-or-id]"
-description: Implement iteration with multi-agent workflow (plan → implement → verify). User must verify acceptance criteria.
+description: Implement TODO tasks in iteration with multi-agent workflow (plan → implement → verify). Ignores in-progress/review tasks.
 ---
 
 # Iteration Implementation Command
 
-You are an iteration orchestrator. Your task is to implement a complete iteration using a multi-agent workflow: planning, implementation, and verification.
+You are an iteration orchestrator. Your task is to implement TODO tasks for an iteration using a multi-agent workflow: planning, implementation, and verification.
 
-**Critical**: You orchestrate agents. You do NOT check acceptance criteria or close the iteration. The user must verify all acceptance criteria and close the iteration manually.
+**Critical**:
+- You ONLY implement tasks with status "todo"
+- Tasks with status "in-progress", "review", "done", or "blocked" are IGNORED
+- You orchestrate agents. You do NOT check acceptance criteria or close the iteration
+- The user must verify all acceptance criteria and close the iteration manually
 
 ---
 
 ## Your Mission
 
-Implement a complete iteration from start to finish:
+Implement TODO tasks for an iteration from start to finish:
 1. Identify target iteration (current, next by rank, or specified)
-2. Gather iteration context (tasks, acceptance criteria, scope)
-3. Launch planning agent (creates detailed implementation plan)
-4. Launch implementation agents (can run phases in parallel)
-5. Launch verification agent (checks tests, linter, implementation quality)
-6. Report completion and remind user to verify acceptance criteria
+2. Filter to TODO tasks only (ignore "in-progress", "review", "done", "blocked")
+3. Gather iteration context for TODO tasks (tasks, acceptance criteria, scope)
+4. Launch planning agent (creates detailed implementation plan for TODO tasks)
+5. Launch implementation agents (can run phases in parallel)
+6. Launch verification agent (checks tests, linter, implementation quality)
+7. Report completion and remind user to verify acceptance criteria
+
+**CRITICAL**: Only implement tasks with status "todo". Leave all other tasks unchanged.
 
 **You coordinate; sub-agents execute.**
 
@@ -77,6 +84,35 @@ Check iteration status from Phase 1 output. If status is "planned", start it:
 ```bash
 dw task-manager iteration start $TARGET_ITERATION
 ```
+
+---
+
+### Phase 2.5: Identify TODO Tasks
+
+**CRITICAL**: This command only implements tasks with status "todo". Tasks with status "in-progress" or "review" are ignored.
+
+Execute these commands to identify todo tasks:
+
+```bash
+# Get iteration details with task statuses
+dw task-manager iteration show $TARGET_ITERATION --full
+
+# Parse output to identify tasks with status "todo"
+# Store list of TODO_TASKS (IDs of tasks with status "todo")
+```
+
+**Filter logic**:
+- Include: Tasks with status "todo"
+- Exclude: Tasks with status "in-progress", "review", "done", "blocked"
+
+**If no todo tasks found**:
+- Report: "No todo tasks in iteration [number]. All tasks are either in-progress, review, done, or blocked."
+- List task statuses for user visibility
+- Exit gracefully (no implementation needed)
+
+**Continue only if**:
+- At least one task has status "todo"
+- Store TODO_TASKS list for planning agent
 
 ---
 
@@ -144,11 +180,17 @@ Parse the output to understand:
 - All tasks in scope (IDs, titles, descriptions, status)
 - All acceptance criteria (descriptions, testing instructions, verification status)
 
+**CRITICAL - TODO Tasks Only**:
+- You are planning ONLY for tasks with status "todo"
+- The following TODO task IDs must be implemented: [TODO_TASKS from Phase 2.5]
+- Ignore tasks with status "in-progress", "review", "done", or "blocked"
+- Focus your plan exclusively on the todo tasks listed above
+
 ## Step 3: Synthesize and Plan
 
 Using **both exploration findings and iteration details**, create a comprehensive implementation plan that:
 
-1. **Analyzes all tasks** and their acceptance criteria
+1. **Analyzes TODO tasks only** and their acceptance criteria
 2. **Decomposes into implementation phases** (each phase should fit in agent context)
 3. **Identifies dependencies** between phases
 4. **Marks parallel opportunities** (which phases can run concurrently)
@@ -210,9 +252,11 @@ Think deeply about:
 ```
 Use Task tool with:
 - subagent_type: "general-purpose" (requires design and planning)
-- description: "Plan iteration implementation"
-- prompt: [constructed prompt above]
+- description: "Plan TODO tasks implementation"
+- prompt: [constructed prompt above with TODO_TASKS list from Phase 2.5]
 ```
+
+**IMPORTANT**: Replace `[TODO_TASKS from Phase 2.5]` in the prompt with the actual TODO task IDs identified in Phase 2.5.
 
 **Review planning agent report**:
 - Parse phases from report
@@ -249,6 +293,12 @@ You are implementing Phase [N]: [Phase Name] for iteration [Iteration Name]
 ## Iteration Context
 [Brief 2-3 sentence summary of iteration goal]
 
+## TODO Tasks Scope
+**CRITICAL**: You are implementing ONLY tasks with status "todo".
+- TODO task IDs in this iteration: [TODO_TASKS from Phase 2.5]
+- Ignore tasks with status "in-progress", "review", "done", or "blocked"
+- This phase addresses the following TODO tasks: [Task IDs for this phase]
+
 ## Phase Objective
 [What this specific phase should accomplish]
 
@@ -256,10 +306,10 @@ You are implementing Phase [N]: [Phase Name] for iteration [Iteration Name]
 [Specific checklist items for this phase from planning agent]
 
 ## Related Tasks
-[Task IDs and titles this phase addresses]
+[Task IDs and titles this phase addresses - must be from TODO_TASKS list]
 
 ## Acceptance Criteria Context
-[Relevant AC from tasks - for awareness, NOT for you to verify]
+[Relevant AC from TODO tasks - for awareness, NOT for you to verify]
 Note: You do NOT verify acceptance criteria. User will verify manually.
 
 ## Architecture Constraints
@@ -326,8 +376,11 @@ If phases X, Y, Z can run in parallel:
 
 **Update task statuses as appropriate**:
 ```bash
-# If phase completes a task, update status
+# If phase completes a TODO task, update status from "todo" to "done"
 dw task-manager task update <task-id> --status done
+
+# Note: Only update tasks that were in TODO_TASKS list
+# Do NOT update tasks that were already "in-progress", "review", or "done"
 ```
 
 ---
@@ -346,6 +399,12 @@ You are the verification agent for iteration [iteration-number].
 **Implementation plan summary**: [Brief summary of phases from planning agent]
 **Phases completed**: [List of phase names executed]
 **Files modified**: [List key files from all phase reports]
+**TODO tasks implemented**: [List of TODO_TASKS from Phase 2.5 that were implemented]
+
+**CRITICAL - Scope of Verification**:
+- This implementation focused ONLY on tasks with status "todo"
+- Tasks with status "in-progress", "review", "done", or "blocked" were NOT modified
+- Verify only the TODO tasks listed above were completed
 
 ## Step 1: Gather Current State
 
@@ -358,6 +417,11 @@ dw task-manager iteration show [iteration-number] --full
 # Get all acceptance criteria status
 dw task-manager ac list-iteration [iteration-number]
 ```
+
+**Filter verification scope**:
+- Focus on tasks that were in TODO_TASKS list
+- Confirm these tasks are now marked as "done" (if fully implemented)
+- Confirm tasks that were "in-progress", "review", or "done" remain unchanged
 
 ## Step 2: Verification Checklist
 
@@ -388,15 +452,16 @@ dw task-manager ac list-iteration [iteration-number]
 
 ### 5. Task Status Check
 - [ ] Review task statuses from iteration show output
-- [ ] All completed tasks marked as "done"
-- [ ] In-progress tasks reflect current state
+- [ ] All TODO tasks (from TODO_TASKS list) are now marked as "done"
+- [ ] Tasks that were "in-progress", "review", or "done" remain unchanged
 - [ ] No tasks stuck in wrong status
 
 ### 6. Acceptance Criteria Readiness
-- [ ] Review all AC from ac list-iteration output
-- [ ] Confirm implementation enables user to verify each AC
+- [ ] Review AC for TODO tasks only (from ac list-iteration output)
+- [ ] Confirm implementation enables user to verify each AC for TODO tasks
 - [ ] Note: You do NOT verify AC yourself (user must do this)
 - [ ] Check if testing instructions are clear for user
+- [ ] AC for non-TODO tasks (in-progress/review/done) are not your concern
 
 ## Final Report Format
 
@@ -415,10 +480,10 @@ Return:
 [Missing functionality, plan adherence, scope notes]
 
 ### Task Status Verification
-[Tasks completed, tasks remaining, status accuracy]
+[TODO tasks completed (from TODO_TASKS list), tasks unchanged (in-progress/review/done), status accuracy]
 
 ### Acceptance Criteria Readiness
-[Are all AC verifiable by user? Clear instructions?]
+[Are all AC for TODO tasks verifiable by user? Clear instructions?]
 
 ### Overall Assessment
 - Ready for user acceptance: YES/NO
@@ -462,73 +527,137 @@ Use Task tool with:
 
 ---
 
-### Phase 7: Final Report to User
+### Phase 7: Create Git Commit
 
-**IMPORTANT**: Do NOT close iteration. Do NOT verify acceptance criteria.
+**MANDATORY**: After all implementation and verification is complete, create a git commit to save the work.
+
+**Process**:
+
+1. **Check git status** to see all changes:
+   ```bash
+   git status
+   git diff --stat
+   ```
+
+2. **Review all modified files** from implementation phases
+
+3. **Create commit with descriptive message**:
+   - Summarize the iteration goal and what was implemented
+   - Reference the iteration number
+   - Keep message concise (1-2 sentences)
+
+   Example:
+   ```bash
+   git add .
+   git commit -m "$(cat <<'EOF'
+   feat: implement iteration #5 - task validation and comment system
+
+   Adds task validation commands, comment entities, and TUI integration for iteration #5.
+   EOF
+   )"
+   ```
+
+4. **Verify commit was created**:
+   ```bash
+   git log -1 --oneline
+   ```
+
+**Commit Message Guidelines**:
+- Start with conventional commit prefix (feat/fix/refactor/docs)
+- Include iteration number
+- Briefly describe deliverable
+- Use HEREDOC format for multi-line messages
+
+**Important**:
+- Commit ALL changes from implementation (don't leave uncommitted work)
+- Do NOT push to remote (user will push after AC verification)
+- Commit should happen even if user will verify AC later
+
+---
+
+### Phase 8: Final Report to User
+
+**IMPORTANT**: Follow the reporting guidelines from CLAUDE.md. Focus on deviations, questions, and issues - not what was implemented (user knows the tasks).
 
 **Report format**:
 
 ```markdown
-# ✅ Iteration Implementation Complete: [Iteration Name]
+# Implementation Complete: [Iteration Name]
+
+## Status
+[One line: Complete / Complete with deviations / Blocked]
+
+## Deviations from Plan
+[Only if there were deviations - explain what and why]
+
+## Questions for User
+[Only if decisions needed - clear, actionable questions]
+
+## Issues Requiring Attention
+[Only if there are blockers or problems]
+
+## Commit
+[Commit hash and one-line summary from git log -1 --oneline]
+```
+
+**Guidelines**:
+
+**DO**:
+- ✅ Highlight deviations from the original plan
+- ✅ Emphasize questions that require user decision
+- ✅ Call out issues that need user attention
+- ✅ Note any blockers or unexpected challenges
+- ✅ Use clear, separate blocks for user action items
+
+**DON'T**:
+- ❌ Provide detailed summaries of what was implemented (user knows the tasks)
+- ❌ Include standard "verify acceptance criteria" instructions (goes without saying)
+- ❌ Repeat task descriptions or requirements back to user
+- ❌ List every file changed or every test added (user can see git commit)
+- ❌ Explain what was supposed to happen (user defined the tasks)
+
+**Example - Good Report**:
+```markdown
+# Implementation Complete: Iteration #27 TODO Tasks
+
+## Status
+Complete with minor deviations
+
+## Deviations from Plan
+1. Mocks placed in `application/mocks/` instead of `domain/repositories/mocks/` (AC-482 specifies domain layer)
+2. Infrastructure coverage at 52.3% vs 60% target (7.7% gap)
+
+## Questions for User
+1. Should mocks stay in application/ or move to domain/repositories/? (affects linter violations)
+2. Is 52.3% infrastructure coverage acceptable, or should I add more tests?
+
+## Commit
+8b103f8 feat: complete iteration #27 TODO tasks - test architecture refactoring
+```
+
+**Example - Bad Report**:
+```markdown
+# Implementation Complete: Iteration #27 TODO Tasks
 
 ## Summary
-[2-3 sentence summary of what was implemented]
+Successfully implemented all 4 TODO tasks...
+[3 paragraphs explaining what was done]
 
 ## Implementation Phases
-[List each phase with brief description and status]
-
-## Sub-Agents Used
-- Planning agent: 1
-- Implementation agents: [count] ([types used])
-- Verification agent: 1
-
-## Final Verification Status
-- ✅ All tests pass
-- ✅ Zero linter violations
-- ✅ Implementation matches plan
-- ✅ Code quality verified
+Phase 1: Created mocks...
+Phase 2: Refactored tests...
+[Detailed breakdown of every step]
 
 ## Files Modified
-[List key files created/modified from phase reports]
-
-## Tasks Completed
-[List task IDs and titles marked as "done"]
+- Created: application/mocks/ (6 files)
+- Modified: 10 files
+[Long list of every file]
 
 ## Next Steps - USER ACTION REQUIRED
-
-⚠️ **CRITICAL**: You must complete these steps manually:
-
-1. **Review All Acceptance Criteria**:
-   ```bash
-   # View all acceptance criteria for the iteration
-   dw task-manager ac list-iteration [iteration-number]
-   ```
-
-2. **Verify Each Acceptance Criterion**:
-   ```bash
-   # For each AC, follow testing instructions and verify manually
-   # Then mark as verified:
-   dw task-manager ac verify <ac-id>
-
-   # Or mark as failed with feedback:
-   dw task-manager ac fail <ac-id> --feedback "..."
-   ```
-
-3. **Review Implementation**:
-   - Test the functionality manually
-   - Verify deliverable matches iteration goal
-   - Check that implementation meets your requirements
-
-4. **Close Iteration** (only after ALL AC verified):
-   ```bash
-   dw task-manager iteration complete [iteration-number]
-   ```
-
----
-
-**Remember**: The implementation is complete, but YOU must verify acceptance criteria and close the iteration. The agents cannot do this for you.
-
-Use `dw task-manager ac list-iteration [iteration-number]` to see all acceptance criteria with their testing instructions.
+1. Review All Acceptance Criteria
+2. Verify Each AC
+3. Close Tasks
+[Standard AC verification instructions]
 ```
 
 ---
@@ -576,12 +705,15 @@ Use `dw task-manager ac list-iteration [iteration-number]` to see all acceptance
 ## Success Criteria
 
 You succeed when:
-- ✅ Planning agent created detailed plan
-- ✅ All implementation phases completed
+- ✅ TODO tasks identified and filtered correctly
+- ✅ Planning agent created detailed plan for TODO tasks
+- ✅ All implementation phases completed for TODO tasks
 - ✅ Verification agent confirms implementation quality
 - ✅ All tests pass
 - ✅ Zero linter violations
-- ✅ Tasks marked with correct status
+- ✅ TODO tasks marked as "done"
+- ✅ Non-TODO tasks (in-progress/review/done/blocked) remain unchanged
+- ✅ Git commit created with all changes
 - ✅ User notified with clear next steps (verify AC, close iteration)
 
 **Not your responsibility**:
@@ -593,14 +725,16 @@ You succeed when:
 
 ## Key Principles
 
-1. **Orchestrate, don't implement** - Coordinate agents, don't code yourself
-2. **Plan first** - Always use planning agent before implementation
-3. **Respect dependencies** - Sequential unless planning agent says parallel
-4. **Verify thoroughly** - Verification agent checks everything
-5. **Track progress** - Update todos and task statuses continuously
-6. **User owns acceptance** - Never verify AC or close iteration yourself
-7. **Report clearly** - User must know exactly what to do next
+1. **TODO tasks only** - Focus exclusively on tasks with status "todo", ignore all others
+2. **Orchestrate, don't implement** - Coordinate agents, don't code yourself
+3. **Plan first** - Always use planning agent before implementation
+4. **Respect dependencies** - Sequential unless planning agent says parallel
+5. **Verify thoroughly** - Verification agent checks everything
+6. **Track progress** - Update todos and task statuses continuously
+7. **Commit always** - Create git commit after implementation is complete
+8. **User owns acceptance** - Never verify AC or close iteration yourself
+9. **Report clearly** - User must know exactly what to do next
 
 ---
 
-Remember: You coordinate a multi-agent workflow. Planning agent designs, implementation agents execute, verification agent checks. You track progress and report results. The user verifies acceptance criteria and closes the iteration.
+Remember: You coordinate a multi-agent workflow. You work ONLY on TODO tasks, leaving in-progress/review/done/blocked tasks unchanged. Planning agent designs, implementation agents execute, verification agent checks. You create a git commit to save all work. You track progress and report results. The user verifies acceptance criteria and closes the iteration.

@@ -29,3 +29,7 @@ go.work
 .claude/*.json
 .claude/*.backup
 .darwinflow/claude-code.log
+
+coverage.html
+
+*.log

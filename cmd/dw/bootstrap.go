@@ -99,9 +99,15 @@ func InitializeApp(dbPath, configPath string, debugMode bool) (*AppServices, err
 	setupService := app.NewSetupService(repo, logger)
 
 	// 8. Get working directory
-	workingDir, err := os.Getwd()
-	if err != nil {
-		workingDir = "."
+	// Priority: DARWINFLOW_WORKING_DIR env var > os.Getwd() > "."
+	// This allows E2E tests to set a consistent working directory
+	workingDir := os.Getenv("DARWINFLOW_WORKING_DIR")
+	if workingDir == "" {
+		var err error
+		workingDir, err = os.Getwd()
+		if err != nil {
+			workingDir = "."
+		}
 	}
 
 	// 9. Create event bus - share the same database connection

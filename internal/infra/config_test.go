@@ -381,9 +381,15 @@ func TestConfigLoader_InitializeDefaultConfig_InCurrentDir(t *testing.T) {
 	}
 
 	// Verify file exists in current dir
+	// Use EvalSymlinks to resolve both paths to canonical form (handles macOS /var -> /private/var)
 	configPath := filepath.Join(tmpDir, ".darwinflow.yaml")
-	if createdPath != configPath {
-		t.Errorf("InitializeDefaultConfig returned path %s, expected %s", createdPath, configPath)
+	expectedPath, err := filepath.EvalSymlinks(configPath)
+	if err != nil {
+		// If symlink resolution fails, fall back to original path
+		expectedPath = configPath
+	}
+	if createdPath != expectedPath {
+		t.Errorf("InitializeDefaultConfig returned path %s, expected %s", createdPath, expectedPath)
 	}
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		t.Error("Config file was not created in current directory")
