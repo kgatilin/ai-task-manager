@@ -38,7 +38,6 @@ pkg/plugins/task_manager/
 │   │   ├── iteration_repository.go  # Iteration CRUD + task relationships
 │   │   ├── adr_repository.go        # ADR CRUD + track association
 │   │   └── acceptance_criteria_repository.go  # AC CRUD + verification status
-│   └── CLAUDE.md                    # Domain layer guidance
 │
 ├── application/                     # Use cases and orchestration
 │   ├── track_service.go             # Track operations (CRUD + dependencies)
@@ -57,8 +56,7 @@ pkg/plugins/task_manager/
 │   │   ├── mock_track_repository.go
 │   │   ├── mock_task_repository.go
 │   │   └── ... (6 repository mocks)
-│   ├── *_service_test.go            # Service tests (126 tests, 82.1% coverage)
-│   └── CLAUDE.md                    # Application layer guidance
+│   └── *_service_test.go            # Service tests (126 tests, 82.1% coverage)
 │
 ├── infrastructure/                  # Technical implementations
 │   └── persistence/                 # Database persistence
@@ -71,8 +69,7 @@ pkg/plugins/task_manager/
 │       ├── migrations.go            # Schema migrations (8 tables)
 │       ├── event_emitting_repository.go  # Decorator for event emission
 │       ├── repository_composite.go  # Composite pattern (legacy compatibility)
-│       ├── *_repository_test.go     # Integration tests with real SQLite
-│       └── CLAUDE.md                # Infrastructure layer guidance
+│       └── *_repository_test.go     # Integration tests with real SQLite
 │
 ├── presentation/                    # User interface layer
 │   └── cli/                         # CLI command adapters
@@ -82,8 +79,7 @@ pkg/plugins/task_manager/
 │       ├── adr_adapters.go          # 7 ADR commands (create/list/show/update/supersede/deprecate/check)
 │       ├── ac_adapters.go           # 9 AC commands (add/list/list-iteration/show/update/verify/fail/failed/delete)
 │       ├── project_adapters.go      # 5 project commands (create/list/switch/show/delete)
-│       ├── roadmap_adapters.go      # 3 roadmap commands (init/show/update)
-│       └── CLAUDE.md                # Presentation layer guidance
+│       └── roadmap_adapters.go      # 3 roadmap commands (init/show/update)
 │
 ├── e2e_test/                        # End-to-end tests
 │   ├── e2e_test.go                  # Base suite (binary build, project setup)
@@ -463,14 +459,10 @@ trackCommands := cli.NewTrackCommands(trackService)
 
 ## Key References
 
-- **Workflow**: `/workspace/CLAUDE.md` "Task Manager - Core Workflow" - How to use plugin (commands, best practices)
+- **Workflow**: Root `CLAUDE.md` "Task Manager - Core Workflow" - How to use plugin (commands, best practices)
+- **Framework**: Root `CLAUDE.md` - DarwinFlow architecture
 - **E2E Tests**: `e2e_test/CLAUDE.md` - E2E test patterns, best practices, examples
-- **Domain Layer**: `domain/CLAUDE.md` - Domain-specific guidance
-- **Application Layer**: `application/CLAUDE.md` - Application service patterns
-- **Infrastructure Layer**: `infrastructure/CLAUDE.md` - Repository implementation guidance
-- **Presentation Layer**: `presentation/CLAUDE.md` - CLI adapter patterns
-- **SDK**: `pkg/pluginsdk/CLAUDE.md` - Plugin SDK documentation
-- **Framework**: `/workspace/CLAUDE.md` - DarwinFlow architecture
+- **SDK**: `pkg/pluginsdk/CLAUDE.md` - Plugin SDK documentation (from root)
 
 ---
 

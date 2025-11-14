@@ -287,7 +287,7 @@ Too Granular (should be merged):
 **Entry Layer**:
 - `cmd/dw` - CLI entry points and bootstrap → See `cmd/dw/CLAUDE.md`
 
-**Architecture Reference**: `@docs/arch-index.md` - Full dependency graph and package details
+**Architecture Reference**: `docs/arch-index.md` - Full dependency graph and package details
 
 **Package-Level Docs**: Each package has a `CLAUDE.md` with architectural guidance. Claude will read these automatically when working in those packages.
 
@@ -619,8 +619,8 @@ go-arch-lint docs  # Regenerates docs/arch-index.md
 
 ## Key References
 
-- **Architecture Index**: `@docs/arch-index.md` - Package structure and dependencies
-- **Plugin Development**: `@docs/plugin-development-guide.md` - Complete plugin guide
+- **Architecture Index**: `docs/arch-index.md` - Package structure and dependencies
+- **Plugin Template**: `template/go-plugin/README.md` - Plugin template with framework capabilities
 - **Package Documentation**: `<package>/CLAUDE.md` - Package-specific architectural guidance
 - **Linter**: `go-arch-lint .` - Validate architecture compliance
 
