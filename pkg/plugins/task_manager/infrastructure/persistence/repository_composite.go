@@ -23,6 +23,7 @@ type SQLiteRepositoryComposite struct {
 	Iteration repositories.IterationRepository
 	ADR       repositories.ADRRepository
 	AC        repositories.AcceptanceCriteriaRepository
+	Document  repositories.DocumentRepository
 	Aggregate repositories.AggregateRepository
 
 	DB     *sql.DB
@@ -38,6 +39,7 @@ func NewSQLiteRepositoryComposite(db *sql.DB, logger pluginsdk.Logger) *SQLiteRe
 		Iteration: NewSQLiteIterationRepository(db, logger),
 		ADR:       NewSQLiteADRRepository(db, logger),
 		AC:        NewSQLiteAcceptanceCriteriaRepository(db, logger),
+		Document:  NewSQLiteDocumentRepository(db),
 		Aggregate: NewSQLiteAggregateRepository(db, logger),
 		DB:        db,
 		logger:    logger,

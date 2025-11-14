@@ -404,7 +404,8 @@ func truncateString(s string, maxLen int) string {
 // ============================================================================
 
 type TrackShowCommandAdapter struct {
-	TrackService *application.TrackApplicationService
+	TrackService     *application.TrackApplicationService
+	DocumentService  *application.DocumentApplicationService
 
 	// CLI flags
 	project string
@@ -479,6 +480,29 @@ func (c *TrackShowCommandAdapter) Execute(ctx context.Context, cmdCtx pluginsdk.
 		}
 	} else {
 		fmt.Fprintf(out, "\nDependencies: None\n")
+	}
+
+	// Show attached documents
+	fmt.Fprintf(out, "\nAttached Documents:\n")
+	documents, err := c.DocumentService.ListDocuments(ctx, &c.trackID, nil, nil)
+	if err != nil {
+		return fmt.Errorf("failed to list documents: %w", err)
+	}
+
+	if len(documents) == 0 {
+		fmt.Fprintf(out, "  (none)\n")
+	} else {
+		// Print header
+		fmt.Fprintf(out, "  %-20s %-30s %-12s %s\n",
+			"ID", "Title", "Type", "Status")
+		fmt.Fprintf(out, "  %s\n",
+			strings.Repeat("-", 80))
+
+		// Print each document
+		for _, doc := range documents {
+			fmt.Fprintf(out, "  %-20s %-30s %-12s %s\n",
+				doc.ID, truncateString(doc.Title, 29), doc.Type, doc.Status)
+		}
 	}
 
 	// Note: Task details would need to be fetched separately via TaskService

@@ -267,6 +267,12 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		validationSvc,
 	)
 
+	documentService := application.NewDocumentApplicationService(
+		composite.Document,
+		composite.Track,
+		composite.Iteration,
+	)
+
 	return []pluginsdk.Command{
 		// Project commands (infrastructure layer)
 		&infracli.ProjectCreateCommand{Provider: p},
@@ -316,7 +322,8 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 			IterationService: iterationService,
 		},
 		&cli.IterationShowCommandAdapter{
-			IterationService: iterationService,
+			IterationService:    iterationService,
+			DocumentService:     documentService,
 		},
 		&cli.IterationCurrentCommandAdapter{
 			IterationService: iterationService,
@@ -378,6 +385,29 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&cli.ACFailedCommandAdapter{
 			ACService: acService,
 		},
+		// Document commands
+		&cli.DocCreateCommandAdapter{
+			DocumentService: documentService,
+		},
+		&cli.DocUpdateCommandAdapter{
+			DocumentService: documentService,
+		},
+		&cli.DocShowCommandAdapter{
+			DocumentService: documentService,
+		},
+		&cli.DocListCommandAdapter{
+			DocumentService: documentService,
+		},
+		&cli.DocAttachCommandAdapter{
+			DocumentService: documentService,
+		},
+		&cli.DocDetachCommandAdapter{
+			DocumentService: documentService,
+		},
+		&cli.DocDeleteCommandAdapter{
+			DocumentService: documentService,
+		},
+		&cli.DocHelpCommandAdapter{},
 		// Task commands (query/list operations)
 		&cli.TaskListCommandAdapter{
 			TaskService: taskService,
@@ -405,7 +435,8 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 			TrackService: trackService,
 		},
 		&cli.TrackShowCommandAdapter{
-			TrackService: trackService,
+			TrackService:    trackService,
+			DocumentService: documentService,
 		},
 		&cli.TrackDeleteCommandAdapter{
 			TrackService: trackService,

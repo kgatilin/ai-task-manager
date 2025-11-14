@@ -13,7 +13,7 @@ import (
 
 const (
 	// SchemaVersion is the current database schema version
-	SchemaVersion = 5
+	SchemaVersion = 6
 )
 
 // SQL table creation statements
@@ -188,6 +188,34 @@ CREATE INDEX IF NOT EXISTS idx_adrs_track_id ON adrs(track_id)
 	createADRsStatusIndex = `
 CREATE INDEX IF NOT EXISTS idx_adrs_status ON adrs(status)
 `
+
+	createDocumentsTable = `
+CREATE TABLE IF NOT EXISTS documents (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL CHECK(length(title) > 0 AND length(title) <= 200),
+    type TEXT NOT NULL CHECK(type IN ('adr', 'plan', 'retrospective', 'other')),
+    status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'archived')),
+    content TEXT NOT NULL,
+    track_id TEXT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    iteration_number INTEGER NULL REFERENCES iterations(number) ON DELETE CASCADE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    metadata TEXT DEFAULT '{}',
+    CHECK(NOT (track_id IS NOT NULL AND iteration_number IS NOT NULL))
+)
+`
+
+	createDocumentsTrackIDIndex = `
+CREATE INDEX IF NOT EXISTS idx_documents_track_id ON documents(track_id)
+`
+
+	createDocumentsIterationNumberIndex = `
+CREATE INDEX IF NOT EXISTS idx_documents_iteration_number ON documents(iteration_number)
+`
+
+	createDocumentsTypeIndex = `
+CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type)
+`
 )
 
 // InitSchema initializes the database schema with all required tables and indexes.
@@ -258,6 +286,7 @@ func InitSchema(db *sql.DB) error {
 		createProjectMetadataTable,
 		createAcceptanceCriteriaTable,
 		createADRsTable,
+		createDocumentsTable,
 		createTracksRoadmapIDIndex,
 		createTracksStatusIndex,
 		createTracksRankIndex,
@@ -272,6 +301,9 @@ func InitSchema(db *sql.DB) error {
 		createAcceptanceCriteriaStatusIndex,
 		createADRsTrackIDIndex,
 		createADRsStatusIndex,
+		createDocumentsTrackIDIndex,
+		createDocumentsIterationNumberIndex,
+		createDocumentsTypeIndex,
 	}
 
 	for _, stmt := range statements {

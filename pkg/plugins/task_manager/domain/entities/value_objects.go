@@ -1,5 +1,11 @@
 package entities
 
+import (
+	"fmt"
+
+	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
+)
+
 // TrackStatus represents valid status values for tracks
 type TrackStatus string
 
@@ -136,4 +142,74 @@ type ACFilters struct {
 	IterationNum *int   // Filter by iteration number
 	TrackID      string // Filter by track ID (via tasks)
 	TaskID       string // Filter by task ID
+}
+
+// DocumentType represents valid document type values
+type DocumentType string
+
+const (
+	DocumentTypeADR            DocumentType = "adr"
+	DocumentTypePlan           DocumentType = "plan"
+	DocumentTypeRetrospective  DocumentType = "retrospective"
+	DocumentTypeOther          DocumentType = "other"
+)
+
+// Valid document types
+var validDocumentTypes = map[string]bool{
+	string(DocumentTypeADR):            true,
+	string(DocumentTypePlan):           true,
+	string(DocumentTypeRetrospective):  true,
+	string(DocumentTypeOther):          true,
+}
+
+// NewDocumentType creates a DocumentType with validation
+func NewDocumentType(docType string) (DocumentType, error) {
+	if !validDocumentTypes[docType] {
+		return "", fmt.Errorf("%w: invalid document type: must be one of adr, plan, retrospective, other", pluginsdk.ErrInvalidArgument)
+	}
+	return DocumentType(docType), nil
+}
+
+// String returns the string representation of the document type
+func (dt DocumentType) String() string {
+	return string(dt)
+}
+
+// IsValid checks if the document type is valid
+func (dt DocumentType) IsValid() bool {
+	return validDocumentTypes[string(dt)]
+}
+
+// DocumentStatus represents valid document status values
+type DocumentStatus string
+
+const (
+	DocumentStatusDraft     DocumentStatus = "draft"
+	DocumentStatusPublished DocumentStatus = "published"
+	DocumentStatusArchived  DocumentStatus = "archived"
+)
+
+// Valid document statuses
+var validDocumentStatuses = map[string]bool{
+	string(DocumentStatusDraft):     true,
+	string(DocumentStatusPublished): true,
+	string(DocumentStatusArchived):  true,
+}
+
+// NewDocumentStatus creates a DocumentStatus with validation
+func NewDocumentStatus(status string) (DocumentStatus, error) {
+	if !validDocumentStatuses[status] {
+		return "", fmt.Errorf("%w: invalid document status: must be one of draft, published, archived", pluginsdk.ErrInvalidArgument)
+	}
+	return DocumentStatus(status), nil
+}
+
+// String returns the string representation of the document status
+func (ds DocumentStatus) String() string {
+	return string(ds)
+}
+
+// IsValid checks if the document status is valid
+func (ds DocumentStatus) IsValid() bool {
+	return validDocumentStatuses[string(ds)]
 }

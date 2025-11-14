@@ -429,7 +429,8 @@ func (a *IterationListCommandAdapter) Execute(ctx context.Context, cmdCtx plugin
 // ============================================================================
 
 type IterationShowCommandAdapter struct {
-	IterationService *application.IterationApplicationService
+	IterationService    *application.IterationApplicationService
+	DocumentService     *application.DocumentApplicationService
 
 	// CLI flags
 	number int
@@ -507,6 +508,38 @@ func (a *IterationShowCommandAdapter) Execute(ctx context.Context, cmdCtx plugin
 		fmt.Fprintf(out, "\nTasks:\n")
 		for _, task := range tasks {
 			fmt.Fprintf(out, "  - %s (%s)\n", task.ID, task.Status)
+		}
+	}
+
+	// Display attached documents
+	iterationNum := a.number
+	documents, err := a.DocumentService.ListDocuments(ctx, nil, &iterationNum, nil)
+	if err != nil {
+		// Log error but don't fail the command - documents are optional
+		fmt.Fprintf(out, "\nWarning: failed to load documents: %v\n", err)
+	} else {
+		fmt.Fprintf(out, "\nAttached Documents:\n")
+		if len(documents) == 0 {
+			fmt.Fprintf(out, "  (none)\n")
+		} else {
+			// Display table header
+			fmt.Fprintf(out, "  %-20s %-30s %-15s %-10s\n",
+				"ID", "Title", "Type", "Status")
+			fmt.Fprintf(out, "  %s %s %s %s\n",
+				"--------------------", "------------------------------", "---------------", "----------")
+
+			// Display documents
+			for _, doc := range documents {
+				title := doc.Title
+				if len(title) > 30 {
+					title = title[:27] + "..."
+				}
+				fmt.Fprintf(out, "  %-20s %-30s %-15s %-10s\n",
+					doc.ID,
+					title,
+					doc.Type,
+					doc.Status)
+			}
 		}
 	}
 
