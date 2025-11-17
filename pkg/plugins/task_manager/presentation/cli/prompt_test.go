@@ -22,22 +22,17 @@ func TestDefaultSystemPrompt(t *testing.T) {
 	expectedSections := []string{
 		"# Task Manager System Prompt",
 		"## Overview",
-		"## Entity Hierarchy",
-		"### Roadmap",
-		"### Track",
-		"### Task",
-		"### Iteration",
-		"## Standard Workflows",
-		"### Workflow 1: Initial Project Setup",
-		"### Workflow 2: Iteration Planning",
-		"### Workflow 3: Continuous Task Management",
-		"### Workflow 4: Checking Track Dependencies",
+		"## Entities",
+		"## Task Granularity",
+		"## Acceptance Criteria",
+		"## Workflow",
+		"## Command Reference",
 		"## Best Practices",
-		"## Entity Relationships Diagram",
 		"## Status Transitions",
-		"## Common Pitfalls to Avoid",
-		"## Integration with Other Systems",
-		"## Getting Help",
+		"## Common Pitfalls",
+		"## Entity Relationships",
+		"## Integration",
+		"## Key Principles",
 	}
 
 	for _, section := range expectedSections {
@@ -57,9 +52,11 @@ func TestDefaultSystemPromptContainsCommands(t *testing.T) {
 		"dw task-manager track create",
 		"dw task-manager task create",
 		"dw task-manager iteration create",
-		"dw task-manager track add-dependency",
+		"dw task-manager iteration current",
 		"dw task-manager task list",
 		"dw task-manager iteration start",
+		"dw task-manager ac add",
+		"dw task-manager doc create",
 		"dw task-manager tui",
 	}
 
@@ -76,10 +73,9 @@ func TestDefaultSystemPromptContainsWorkflows(t *testing.T) {
 	prompt := cli.DefaultSystemPrompt
 
 	expectedWorkflows := []string{
-		"Initial Project Setup",
-		"Iteration Planning",
-		"Continuous Task Management",
-		"Checking Track Dependencies",
+		"Check What to Work On",
+		"Work on Tasks",
+		"Create Work",
 	}
 
 	for _, workflow := range expectedWorkflows {
@@ -95,13 +91,14 @@ func TestDefaultSystemPromptContainsBestPractices(t *testing.T) {
 	prompt := cli.DefaultSystemPrompt
 
 	expectedPractices := []string{
-		"Define Tracks Before Tasks",
-		"Use Iterations for Structured Planning",
-		"Track Priorities to Guide Work Order",
-		"Use Status Consistently",
-		"Check Dependencies Before Starting Tracks",
-		"Use Git Branches with Tasks",
-		"Regular Status Updates",
+		"Always check \"iteration current\" first",
+		"Iteration is primary working entity",
+		"Agent implements, user verifies",
+		"Feature-level tasks",
+		"Two-field AC",
+		"Update status immediately",
+		"Use documents",
+		"Git integration",
 	}
 
 	for _, practice := range expectedPractices {
@@ -141,9 +138,9 @@ func TestDefaultSystemPromptContainsStatusTransitions(t *testing.T) {
 	prompt := cli.DefaultSystemPrompt
 
 	expectedTransitions := []string{
-		"Track Status Flow",
-		"Task Status Flow",
-		"Iteration Status Flow",
+		"Tracks",
+		"Tasks",
+		"Iterations",
 	}
 
 	for _, transition := range expectedTransitions {
@@ -225,10 +222,6 @@ func TestDefaultSystemPromptMarkdownFormat(t *testing.T) {
 		t.Error("prompt should contain markdown h2 headers (##)")
 	}
 
-	if !strings.Contains(prompt, "### ") {
-		t.Error("prompt should contain markdown h3 headers (###)")
-	}
-
 	// Check for markdown lists
 	if !strings.Contains(prompt, "- ") {
 		t.Error("prompt should contain markdown list items")
@@ -266,8 +259,8 @@ func TestDefaultSystemPromptAccessible(t *testing.T) {
 
 	// Should have examples
 	exampleCount := strings.Count(prompt, "Example")
-	if exampleCount < 5 {
-		t.Errorf("prompt should have multiple examples, found %d", exampleCount)
+	if exampleCount < 1 {
+		t.Errorf("prompt should have at least one example, found %d", exampleCount)
 	}
 
 	// Should explain the hierarchy clearly

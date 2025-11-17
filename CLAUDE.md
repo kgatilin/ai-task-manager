@@ -45,7 +45,7 @@ DarwinFlow uses a plugin-based architecture:
 **Understanding What to Work On:**
 
 ```bash
-# Check current iteration and tasks
+# CRITICAL: Always check this first (shows current or next planned iteration)
 dw task-manager iteration current
 
 # View all tasks (with status filtering)
@@ -66,7 +66,7 @@ dw task-manager task show TM-task-X
 # Start a task (todo → in-progress)
 dw task-manager task update TM-task-X --status in-progress
 
-# Complete a task (in-progress → done)
+# Complete a task (USER ONLY - agent does NOT mark done unless asked)
 dw task-manager task update TM-task-X --status done
 
 # Return to backlog (in-progress → todo)
@@ -82,16 +82,18 @@ dw task-manager ac add TM-task-X --description "..."
 # List task acceptance criteria
 dw task-manager ac list TM-task-X
 
-# Mark as verified (when done)
+# Mark as verified (USER ONLY - agent does NOT verify unless asked)
 dw task-manager ac verify TM-ac-X
 
-# Mark as failed with feedback
+# Mark as failed with feedback (USER ONLY)
 dw task-manager ac fail TM-ac-X --feedback "..."
 
-# List all failed ACs (for debugging/fixing)
-dw task-manager ac failed
-dw task-manager ac failed --task TM-task-X     # Filter by task
-dw task-manager ac failed --iteration 11       # Filter by iteration
+# List failed ACs in current iteration (most useful)
+dw task-manager ac failed --iteration <current-iteration-num>
+
+# Or filter by task/track
+dw task-manager ac failed --task TM-task-X
+dw task-manager ac failed --track TM-track-X
 ```
 
 **Creating New Work:**
@@ -163,13 +165,17 @@ dw task-manager doc detach TM-doc-X
 dw task-manager doc delete TM-doc-X [--force]
 ```
 
-**Priority Guidance**: Work on current iteration first → critical/high priority tracks → planned iterations.
+**Priority Guidance**:
+- **CRITICAL**: Always run `dw task-manager iteration current` first to see what to work on
+- Shows current active iteration OR next planned iteration if none active
+- Iteration is the primary working entity (tracks are just grouping)
 
 **Best Practices**:
 - Update task status as you work (don't batch updates)
-- Verify all acceptance criteria before marking task "done"
+- **Agent responsibility**: Implement work defined in tasks
+- **User responsibility**: Verify all acceptance criteria and mark tasks "done"
+- Agent does NOT verify AC or mark tasks done unless explicitly asked
 - Use `dw task-manager iteration current` to stay focused
-- Check track dependencies before starting new tracks
 - Use documents (ADRs, plans, retrospectives) for architecture decisions and planning
 
 ### Writing Good Acceptance Criteria
