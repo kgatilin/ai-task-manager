@@ -60,6 +60,11 @@ type IterationRepository interface {
 	// Returns ErrInvalidArgument if the iteration status is not "current".
 	CompleteIteration(ctx context.Context, iterationNum int) error
 
+	// RevertIteration reverts a completed iteration back to planned status.
+	// Returns ErrNotFound if the iteration doesn't exist.
+	// Returns ErrInvalidArgument if the iteration status is not "complete".
+	RevertIteration(ctx context.Context, iterationNum int) error
+
 	// GetIterationByNumber is an alias for GetIteration for consistency with other repositories.
 	GetIterationByNumber(ctx context.Context, number int) (*entities.IterationEntity, error)
 

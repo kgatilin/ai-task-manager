@@ -27,6 +27,7 @@ func TransformToRoadmapListViewModel(
 	// Filter and transform iterations (exclude complete)
 	for _, iter := range iterations {
 		if iter.Status != string(entities.IterationStatusComplete) {
+			isCurrent := iter.Status == string(entities.IterationStatusCurrent)
 			vm.ActiveIterations = append(vm.ActiveIterations, &viewmodels.IterationCardViewModel{
 				Number:      iter.Number,
 				Name:        iter.Name,
@@ -34,6 +35,11 @@ func TransformToRoadmapListViewModel(
 				Status:      iter.Status,
 				TaskCount:   len(iter.TaskIDs),
 				Deliverable: iter.Deliverable,
+				// Pre-computed display fields
+				StatusLabel: GetIterationStatusLabel(iter.Status),
+				StatusColor: GetIterationColor(iter.Status),
+				Icon:        GetIterationIcon(iter.Status),
+				IsCurrent:   isCurrent,
 			})
 		}
 	}
@@ -53,6 +59,10 @@ func TransformToRoadmapListViewModel(
 				Description: track.Description,
 				Status:      track.Status,
 				TaskCount:   trackTaskCounts[track.ID],
+				// Pre-computed display fields
+				StatusLabel: GetTrackStatusLabel(track.Status),
+				StatusColor: GetTrackColor(track.Status),
+				Icon:        GetTrackIcon(track.Status),
 			})
 		}
 	}
@@ -66,6 +76,10 @@ func TransformToRoadmapListViewModel(
 				Status:      task.Status,
 				TrackID:     task.TrackID,
 				Description: task.Description,
+				// Pre-computed display fields
+				StatusLabel: GetTaskStatusLabel(task.Status),
+				StatusColor: GetTaskColor(task.Status),
+				Icon:        GetTaskIcon(task.Status),
 			})
 		}
 	}

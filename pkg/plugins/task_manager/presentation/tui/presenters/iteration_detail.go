@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain/entities"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/components"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/viewmodels"
 	"github.com/muesli/reflow/wordwrap"
@@ -35,6 +37,11 @@ type IterationDetailKeyMap struct {
 	Fail     key.Binding // f - fail AC
 	PageUp   key.Binding // pgup/b - page up
 	PageDown key.Binding // pgdn - page down
+	// Task state transitions
+	InProgress key.Binding // i - todo → in-progress
+	Review     key.Binding // r - in-progress → review
+	Done       key.Binding // d - review → done (with AC verification)
+	Reopen     key.Binding // o - done → todo
 }
 
 // NewIterationDetailKeyMap creates default keybindings for iteration detail
@@ -70,13 +77,29 @@ func NewIterationDetailKeyMap() IterationDetailKeyMap {
 			key.WithKeys("pgdn"),
 			key.WithHelp("pgdn", "page down"),
 		),
+		InProgress: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "in progress"),
+		),
+		Review: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "review"),
+		),
+		Done: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "done"),
+		),
+		Reopen: key.NewBinding(
+			key.WithKeys("o"),
+			key.WithHelp("o", "reopen"),
+		),
 	}
 }
 
 // ShortHelp returns keybindings based on active tab
 func (k IterationDetailKeyMap) ShortHelp(activeTab IterationDetailTab) []key.Binding {
 	if activeTab == IterationDetailTabTasks {
-		return []key.Binding{k.Up, k.Down, k.Enter, k.Tab, k.Back, k.Quit}
+		return []key.Binding{k.Up, k.Down, k.Enter, k.InProgress, k.Review, k.Done, k.Tab, k.Back, k.Quit}
 	}
 	// ACs view
 	return []key.Binding{k.Up, k.Down, k.Enter, k.Verify, k.Skip, k.Fail, k.Tab, k.Back, k.Quit}
@@ -88,6 +111,7 @@ func (k IterationDetailKeyMap) FullHelp(activeTab IterationDetailTab) [][]key.Bi
 		return [][]key.Binding{
 			{k.Up, k.Down, k.Enter},
 			{k.PageUp, k.PageDown},
+			{k.InProgress, k.Review, k.Done, k.Reopen},
 			{k.Tab, k.Back, k.Help, k.Quit},
 		}
 	}
@@ -180,7 +204,7 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 
 		// Ensure current selection is visible with new viewport height
 		if p.activeTab == IterationDetailTabTasks {
-			totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
+			totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 			p.scrollHelperTasks.EnsureVisible(totalTasks, p.selectedIndex)
 		} else {
 			lineCounts := p.calculateACLineCounts()
@@ -220,7 +244,7 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 			p.selectedIndex = 0
 		case key.Matches(msg, p.keys.Up):
 			if p.activeTab == IterationDetailTabTasks {
-				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
+				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 				if p.selectedIndex > 0 {
 					p.selectedIndex--
 					p.scrollHelperTasks.EnsureVisible(totalTasks, p.selectedIndex)
@@ -237,7 +261,7 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 			if p.selectedIndex < maxIndex {
 				p.selectedIndex++
 				if p.activeTab == IterationDetailTabTasks {
-					totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
+					totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 					p.scrollHelperTasks.EnsureVisible(totalTasks, p.selectedIndex)
 				} else {
 					lineCounts := p.calculateACLineCounts()
@@ -246,13 +270,13 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 			}
 		case key.Matches(msg, p.keys.PageUp):
 			if p.activeTab == IterationDetailTabTasks {
-				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
+				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 				newIndex := p.scrollHelperTasks.PageUp(totalTasks)
 				p.selectedIndex = newIndex
 			}
 		case key.Matches(msg, p.keys.PageDown):
 			if p.activeTab == IterationDetailTabTasks {
-				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
+				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 				newIndex := p.scrollHelperTasks.PageDown(totalTasks, p.selectedIndex)
 				p.selectedIndex = newIndex
 			}
@@ -304,6 +328,34 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 					return p, p.acListComponent.StartFeedback(acID)
 				}
 			}
+		case key.Matches(msg, p.keys.InProgress):
+			if p.activeTab == IterationDetailTabTasks {
+				task := p.getSelectedTask()
+				if task != nil && task.Status == "todo" {
+					return p, p.transitionTaskStatus(task.ID, "in-progress", p.activeTab, p.selectedIndex)
+				}
+			}
+		case key.Matches(msg, p.keys.Review):
+			if p.activeTab == IterationDetailTabTasks {
+				task := p.getSelectedTask()
+				if task != nil && task.Status == "in-progress" {
+					return p, p.transitionTaskStatus(task.ID, "review", p.activeTab, p.selectedIndex)
+				}
+			}
+		case key.Matches(msg, p.keys.Done):
+			if p.activeTab == IterationDetailTabTasks {
+				task := p.getSelectedTask()
+				if task != nil && task.Status == "review" {
+					return p, p.transitionTaskToDone(task.ID, p.activeTab, p.selectedIndex)
+				}
+			}
+		case key.Matches(msg, p.keys.Reopen):
+			if p.activeTab == IterationDetailTabTasks {
+				task := p.getSelectedTask()
+				if task != nil && task.Status == "done" {
+					return p, p.transitionTaskStatus(task.ID, "todo", p.activeTab, p.selectedIndex)
+				}
+			}
 		}
 	}
 
@@ -340,8 +392,9 @@ func (p *IterationDetailPresenter) View() string {
 		b.WriteString("\n")
 	}
 
-	// Status
-	b.WriteString(components.Styles.MetadataStyle.Render(fmt.Sprintf("Status: %s", p.viewModel.Status)))
+	// Status with color
+	statusText := getStatusStyle(p.viewModel.StatusColor).Render(p.viewModel.Status)
+	b.WriteString(components.Styles.MetadataStyle.Render(fmt.Sprintf("Status: %s", statusText)))
 	b.WriteString("\n")
 	if p.viewModel.StartedAt != "" {
 		b.WriteString(components.Styles.MetadataStyle.Render(fmt.Sprintf("Started: %s", p.viewModel.StartedAt)))
@@ -428,6 +481,9 @@ func (p *IterationDetailPresenter) renderTasksView(b *strings.Builder) {
 	for _, task := range p.viewModel.InProgressTasks {
 		allTasks = append(allTasks, taskItem{task: task, section: "in-progress", sectionName: "IN PROGRESS"})
 	}
+	for _, task := range p.viewModel.ReviewTasks {
+		allTasks = append(allTasks, taskItem{task: task, section: "review", sectionName: "REVIEW"})
+	}
 	for _, task := range p.viewModel.DoneTasks {
 		allTasks = append(allTasks, taskItem{task: task, section: "done", sectionName: "DONE"})
 	}
@@ -458,12 +514,13 @@ func (p *IterationDetailPresenter) renderTasksView(b *strings.Builder) {
 			b.WriteString("\n")
 		}
 
-		// Render task
+		// Render task with colored status
+		statusText := getStatusStyle(item.task.StatusColor).Render(item.task.Status)
 		var output string
 		if i == p.selectedIndex {
-			output = components.Styles.SelectedStyle.Render(fmt.Sprintf("  %s: %s", item.task.ID, item.task.Title))
+			output = components.Styles.SelectedStyle.Render(fmt.Sprintf("  %s: %s - %s", item.task.ID, item.task.Title, statusText))
 		} else {
-			output = fmt.Sprintf("  %s: %s", item.task.ID, item.task.Title)
+			output = fmt.Sprintf("  %s: %s - %s", item.task.ID, item.task.Title, statusText)
 		}
 		b.WriteString(output)
 		b.WriteString("\n")
@@ -484,9 +541,9 @@ func (p *IterationDetailPresenter) renderACsView(b *strings.Builder) {
 
 	// Build flat AC list with task context
 	type acItem struct {
-		ac          *viewmodels.IterationACViewModel
-		taskID      string
-		taskTitle   string
+		ac             *viewmodels.IterationACViewModel
+		taskID         string
+		taskTitle      string
 		isFirstInGroup bool
 	}
 	allACs := make([]acItem, 0)
@@ -517,8 +574,10 @@ func (p *IterationDetailPresenter) renderACsView(b *strings.Builder) {
 		b.WriteString("\n")
 	}
 
-	// Render visible ACs
+	// Render visible ACs: group by task and use ACListComponent for AC rendering
 	currentTaskID := ""
+	acIndex := 0 // Track index within the visible AC section (not global)
+
 	for i := firstItem; i <= lastItem && i < len(allACs); i++ {
 		item := allACs[i]
 
@@ -537,41 +596,27 @@ func (p *IterationDetailPresenter) renderACsView(b *strings.Builder) {
 
 		// Render AC header (unless skipped by lineOffset)
 		if skipLines == 0 {
-			prefix := "  "
-			if i == p.selectedIndex {
-				prefix = "> "
+			ac := &IterationACViewModelWrapper{IterationACViewModel: item.ac}
+			// Create a single-item list and render it
+			singleACList := []ACViewModel{ac}
+			// Determine if this AC is selected (selectedIndex tracks global index, not visible index)
+			isSelected := i == p.selectedIndex
+			selectedIndexInList := -1
+			if isSelected {
+				selectedIndexInList = 0
 			}
-
-			// Status icon and description
-			statusIcon := "○" // default
-			switch item.ac.Status {
-			case "verified":
-				statusIcon = "✓"
-			case "failed":
-				statusIcon = "✗"
-			case "skipped":
-				statusIcon = "⊘"
-			}
-
-			description := item.ac.Description
-			if item.ac.TestingInstructions != "" {
-				description = "📋 " + description // Indicator for testing instructions
-			}
-
-			b.WriteString(fmt.Sprintf("%s%s %s\n", prefix, statusIcon, description))
-		}
-
-		// If expanded and has testing instructions, render them (respecting lineOffset)
-		if item.ac.IsExpanded && item.ac.TestingInstructions != "" {
-			instructionLines := strings.Split(item.ac.TestingInstructions, "\n")
-			for j, line := range instructionLines {
-				// Skip lines before lineOffset (only for first visible item)
-				if i == firstItem && j+1 < skipLines {
-					continue
+			p.acListComponent.RenderACList(b, singleACList, selectedIndexInList, p.width)
+		} else {
+			// If lineOffset skips this AC's header, we still need to show partial content
+			if item.ac.IsExpanded && item.ac.TestingInstructions != "" {
+				instructionLines := strings.Split(item.ac.TestingInstructions, "\n")
+				for j := skipLines; j < len(instructionLines); j++ {
+					b.WriteString(fmt.Sprintf("    %s\n", instructionLines[j]))
 				}
-				b.WriteString(fmt.Sprintf("    %s\n", line))
 			}
 		}
+
+		acIndex++
 	}
 
 	// Scroll indicator (below)
@@ -585,6 +630,7 @@ func (p *IterationDetailPresenter) getMaxIndex() int {
 	if p.activeTab == IterationDetailTabTasks {
 		return len(p.viewModel.TODOTasks) +
 			len(p.viewModel.InProgressTasks) +
+			len(p.viewModel.ReviewTasks) +
 			len(p.viewModel.DoneTasks) - 1
 	}
 	// ACs view - count total ACs across all task groups
@@ -604,6 +650,7 @@ func (p *IterationDetailPresenter) getSelectedTaskID() string {
 	index := p.selectedIndex
 	todoLen := len(p.viewModel.TODOTasks)
 	inProgressLen := len(p.viewModel.InProgressTasks)
+	reviewLen := len(p.viewModel.ReviewTasks)
 
 	if index < todoLen {
 		return p.viewModel.TODOTasks[index].ID
@@ -615,11 +662,49 @@ func (p *IterationDetailPresenter) getSelectedTaskID() string {
 	}
 	index -= inProgressLen
 
+	if index < reviewLen {
+		return p.viewModel.ReviewTasks[index].ID
+	}
+	index -= reviewLen
+
 	if index < len(p.viewModel.DoneTasks) {
 		return p.viewModel.DoneTasks[index].ID
 	}
 
 	return ""
+}
+
+// getSelectedTask returns the task view model of the currently selected task
+func (p *IterationDetailPresenter) getSelectedTask() *viewmodels.TaskRowViewModel {
+	if p.activeTab != IterationDetailTabTasks {
+		return nil
+	}
+
+	index := p.selectedIndex
+	todoLen := len(p.viewModel.TODOTasks)
+	inProgressLen := len(p.viewModel.InProgressTasks)
+	reviewLen := len(p.viewModel.ReviewTasks)
+
+	if index < todoLen {
+		return p.viewModel.TODOTasks[index]
+	}
+	index -= todoLen
+
+	if index < inProgressLen {
+		return p.viewModel.InProgressTasks[index]
+	}
+	index -= inProgressLen
+
+	if index < reviewLen {
+		return p.viewModel.ReviewTasks[index]
+	}
+	index -= reviewLen
+
+	if index < len(p.viewModel.DoneTasks) {
+		return p.viewModel.DoneTasks[index]
+	}
+
+	return nil
 }
 
 // getSelectedACID returns the AC ID of the currently selected AC from grouped ACs
@@ -638,4 +723,74 @@ func (p *IterationDetailPresenter) getSelectedACID() string {
 	}
 
 	return ""
+}
+
+// transitionTaskStatus transitions a task to a new status using repository
+func (p *IterationDetailPresenter) transitionTaskStatus(taskID, newStatus string, activeTab IterationDetailTab, currentSelectedIndex int) tea.Cmd {
+	return func() tea.Msg {
+		// Fetch task
+		task, err := p.repo.GetTask(p.ctx, taskID)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("failed to get task: %w", err)}
+		}
+
+		// Update task status (newStatus is already a valid string)
+		task.Status = newStatus
+		task.UpdatedAt = time.Now()
+
+		// Save
+		err = p.repo.UpdateTask(p.ctx, task)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("failed to update task: %w", err)}
+		}
+
+		return TaskTransitionCompletedMsg{ActiveTab: activeTab, SelectedIndex: currentSelectedIndex}
+	}
+}
+
+// transitionTaskToDone transitions a task to done status with AC verification check
+func (p *IterationDetailPresenter) transitionTaskToDone(taskID string, activeTab IterationDetailTab, currentSelectedIndex int) tea.Cmd {
+	return func() tea.Msg {
+		// Check for unverified ACs
+		acs, err := p.repo.ListAC(p.ctx, taskID)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("failed to check acceptance criteria: %w", err)}
+		}
+
+		// Filter for unverified ACs (status != verified and status != skipped)
+		var unverifiedACs []string
+		for _, ac := range acs {
+			if ac.Status != entities.ACStatusVerified && ac.Status != entities.ACStatusSkipped {
+				unverifiedACs = append(unverifiedACs, ac.ID)
+			}
+		}
+
+		// Block transition if unverified ACs exist
+		if len(unverifiedACs) > 0 {
+			return ErrorMsg{
+				Err: fmt.Errorf("cannot mark task as done: %d unverified acceptance criteria (%s). Please verify or skip ACs first",
+					len(unverifiedACs),
+					strings.Join(unverifiedACs, ", ")),
+			}
+		}
+
+		// All ACs verified/skipped - proceed with transition
+		// Fetch task
+		task, err := p.repo.GetTask(p.ctx, taskID)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("failed to get task: %w", err)}
+		}
+
+		// Update task status to done
+		task.Status = "done"
+		task.UpdatedAt = time.Now()
+
+		// Save
+		err = p.repo.UpdateTask(p.ctx, task)
+		if err != nil {
+			return ErrorMsg{Err: fmt.Errorf("failed to update task: %w", err)}
+		}
+
+		return TaskTransitionCompletedMsg{ActiveTab: activeTab, SelectedIndex: currentSelectedIndex}
+	}
 }

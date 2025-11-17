@@ -19,6 +19,11 @@ func TransformToIterationDetailViewModel(
 		iteration.Status,
 	)
 
+	// Pre-compute display fields for iteration
+	vm.StatusLabel = GetIterationStatusLabel(iteration.Status)
+	vm.StatusColor = GetIterationColor(iteration.Status)
+	vm.Icon = GetIterationIcon(iteration.Status)
+
 	// Format timestamps
 	if iteration.StartedAt != nil {
 		vm.StartedAt = iteration.StartedAt.Format("2006-01-02 15:04:05")
@@ -35,6 +40,10 @@ func TransformToIterationDetailViewModel(
 			Title:       task.Title,
 			Status:      task.Status,
 			Description: task.Description,
+			// Pre-computed display fields
+			StatusLabel: GetTaskStatusLabel(task.Status),
+			StatusColor: GetTaskColor(task.Status),
+			Icon:        GetTaskIcon(task.Status),
 		}
 
 		// Store in map for AC grouping
@@ -43,8 +52,10 @@ func TransformToIterationDetailViewModel(
 		switch task.Status {
 		case string(entities.TaskStatusTodo):
 			vm.TODOTasks = append(vm.TODOTasks, taskRow)
-		case string(entities.TaskStatusInProgress), string(entities.TaskStatusReview):
+		case string(entities.TaskStatusInProgress):
 			vm.InProgressTasks = append(vm.InProgressTasks, taskRow)
+		case string(entities.TaskStatusReview):
+			vm.ReviewTasks = append(vm.ReviewTasks, taskRow)
 		case string(entities.TaskStatusDone):
 			vm.DoneTasks = append(vm.DoneTasks, taskRow)
 		}
@@ -60,6 +71,10 @@ func TransformToIterationDetailViewModel(
 			StatusIcon:          ac.StatusIndicator(),
 			TestingInstructions: ac.TestingInstructions,
 			Notes:               ac.Notes,
+			// Pre-computed display fields
+			StatusLabel: GetACStatusLabel(ac.Status),
+			StatusColor: GetACColor(ac.Status),
+			IsFailed:    ac.Status == entities.ACStatusFailed,
 		}
 		vm.AcceptanceCriteria = append(vm.AcceptanceCriteria, acVM)
 

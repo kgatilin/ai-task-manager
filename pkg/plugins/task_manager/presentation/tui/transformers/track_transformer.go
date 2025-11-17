@@ -40,6 +40,10 @@ func TransformToTrackDetailViewModel(
 		dependencyLabels,
 	)
 
+	// Pre-compute display fields for track
+	vm.StatusColor = GetTrackColor(track.Status)
+	vm.Icon = GetTrackIcon(track.Status)
+
 	// Group tasks by status and create task map
 	taskMap := make(map[string]*viewmodels.TrackDetailTaskViewModel)
 	for _, task := range tasks {
@@ -48,6 +52,10 @@ func TransformToTrackDetailViewModel(
 			Title:       task.Title,
 			Status:      task.Status,
 			Description: task.Description,
+			// Pre-computed display fields
+			StatusLabel: GetTaskStatusLabel(task.Status),
+			StatusColor: GetTaskColor(task.Status),
+			Icon:        GetTaskIcon(task.Status),
 		}
 
 		// Store in map

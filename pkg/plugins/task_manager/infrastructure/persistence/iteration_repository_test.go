@@ -19,7 +19,7 @@ func TestSaveAndGetIteration(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()
 
-	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Create iteration
@@ -63,7 +63,7 @@ func TestIterationTaskManagement(t *testing.T) {
 	roadmapRepo := persistence.NewSQLiteRoadmapRepository(db, createTestLogger())
 	trackRepo := persistence.NewSQLiteTrackRepository(db, createTestLogger())
 	taskRepo := persistence.NewSQLiteTaskRepository(db, createTestLogger())
-	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Setup iteration
@@ -110,7 +110,7 @@ func TestStartAndCompleteIteration(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()
 
-	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Create iteration
@@ -150,7 +150,7 @@ func TestGetCurrentIteration(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()
 
-	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Create iterations
@@ -181,7 +181,7 @@ func TestGetIterationTasksWithWarnings_MissingTask(t *testing.T) {
 	roadmapRepo := persistence.NewSQLiteRoadmapRepository(db, createTestLogger())
 	trackRepo := persistence.NewSQLiteTrackRepository(db, createTestLogger())
 	taskRepo := persistence.NewSQLiteTaskRepository(db, createTestLogger())
-	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Create roadmap and track
@@ -250,7 +250,7 @@ func TestListIterations(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()
 
-	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Create multiple iterations
@@ -274,7 +274,7 @@ func TestAddTaskToNonexistentIteration(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()
 
-	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	err := repo.AddTaskToIteration(ctx, 999, "task-1")
@@ -289,7 +289,7 @@ func TestUpdateIteration(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()
 
-	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Create iteration
@@ -319,7 +319,7 @@ func TestDeleteIteration(t *testing.T) {
 	db := createTestDB(t)
 	defer db.Close()
 
-	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	ctx := context.Background()
 
 	// Create iteration
@@ -344,7 +344,7 @@ func TestGetNextPlannedIteration(t *testing.T) {
 	t.Run("returns first planned iteration ordered by rank", func(t *testing.T) {
 		db := createTestDB(t)
 		defer db.Close()
-		repo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+		repo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 
 		// Create multiple planned iterations with different ranks
 		iter1, _ := entities.NewIterationEntity(1, "Sprint 1", "Goal 1", "", []string{}, "planned", 300, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
@@ -374,7 +374,7 @@ func TestGetNextPlannedIteration(t *testing.T) {
 		// Create a new DB for this test
 		db2 := createTestDB(t)
 		defer db2.Close()
-		repo2 := persistence.NewSQLiteIterationRepository(db2, createTestLogger())
+		repo2 := persistence.NewSQLiteIterationRepository(db2, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db2, createTestLogger()))
 
 		// Create only completed iterations
 		iter1, _ := entities.NewIterationEntity(1, "Sprint 1", "Goal 1", "", []string{}, "complete", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
@@ -391,7 +391,7 @@ func TestGetNextPlannedIteration(t *testing.T) {
 		// Create a new DB for this test
 		db3 := createTestDB(t)
 		defer db3.Close()
-		repo3 := persistence.NewSQLiteIterationRepository(db3, createTestLogger())
+		repo3 := persistence.NewSQLiteIterationRepository(db3, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db3, createTestLogger()))
 
 		// Create iterations with different statuses
 		iter1, _ := entities.NewIterationEntity(1, "Sprint 1", "Goal 1", "", []string{}, "current", 100, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
@@ -415,3 +415,142 @@ func TestGetNextPlannedIteration(t *testing.T) {
 	})
 }
 
+
+func TestCompleteIteration_BlockedByUnverifiedACs(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	acRepo := persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger())
+	iterRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), acRepo)
+	taskRepo := persistence.NewSQLiteTaskRepository(db, createTestLogger())
+	roadmapRepo := persistence.NewSQLiteRoadmapRepository(db, createTestLogger())
+	trackRepo := persistence.NewSQLiteTrackRepository(db, createTestLogger())
+
+	// Create roadmap and track
+	roadmap, _ := entities.NewRoadmapEntity("roadmap-1", "Test", "Test", time.Now().UTC(), time.Now().UTC())
+	roadmapRepo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := entities.NewTrackEntity("TM-track-1", "roadmap-1", "Track 1", "", "not-started", 100, []string{}, time.Now().UTC(), time.Now().UTC())
+	trackRepo.SaveTrack(ctx, track)
+
+	// Create task
+	task, _ := entities.NewTaskEntity("TM-task-1", "TM-track-1", "Task 1", "", "todo", 100, "", time.Now().UTC(), time.Now().UTC())
+	taskRepo.SaveTask(ctx, task)
+
+	// Create iteration with the task
+	iteration, _ := entities.NewIterationEntity(1, "Sprint 1", "Goal", "", []string{"TM-task-1"}, "planned", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+	iterRepo.SaveIteration(ctx, iteration)
+
+	// Start iteration
+	if err := iterRepo.StartIteration(ctx, 1); err != nil {
+		t.Fatalf("failed to start iteration: %v", err)
+	}
+
+	// Create unverified AC for the task
+	ac := entities.NewAcceptanceCriteriaEntity("TM-ac-1", "TM-task-1", "Must pass tests", entities.VerificationTypeManual, "Run tests", time.Now().UTC(), time.Now().UTC())
+	acRepo.SaveAC(ctx, ac)
+
+	// Attempt to complete iteration - should fail
+	err := iterRepo.CompleteIteration(ctx, 1)
+	if err == nil {
+		t.Fatal("expected error when completing iteration with unverified ACs, got nil")
+	}
+
+	// Verify error message contains AC ID
+	if !errors.Is(err, pluginsdk.ErrInvalidArgument) {
+		t.Errorf("expected ErrInvalidArgument, got: %v", err)
+	}
+	errMsg := err.Error()
+	if !contains(errMsg, "TM-ac-1") {
+		t.Errorf("expected error message to contain AC ID 'TM-ac-1', got: %s", errMsg)
+	}
+	if !contains(errMsg, "unverified acceptance criteria") {
+		t.Errorf("expected error message to mention unverified ACs, got: %s", errMsg)
+	}
+
+	// Verify iteration is still current (not completed)
+	current, _ := iterRepo.GetIteration(ctx, 1)
+	if current.Status != "current" {
+		t.Errorf("expected iteration to remain current, got: %s", current.Status)
+	}
+
+	// Now verify the AC
+	ac.Status = entities.ACStatusVerified
+	ac.UpdatedAt = time.Now().UTC()
+	acRepo.UpdateAC(ctx, ac)
+
+	// Should now succeed
+	if err := iterRepo.CompleteIteration(ctx, 1); err != nil {
+		t.Fatalf("failed to complete iteration after verifying ACs: %v", err)
+	}
+
+	// Verify completion
+	completed, _ := iterRepo.GetIteration(ctx, 1)
+	if completed.Status != "complete" {
+		t.Errorf("expected complete, got %s", completed.Status)
+	}
+}
+
+func TestCompleteIteration_AllowsWithSkippedACs(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+
+	ctx := context.Background()
+	acRepo := persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger())
+	iterRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), acRepo)
+	taskRepo := persistence.NewSQLiteTaskRepository(db, createTestLogger())
+	roadmapRepo := persistence.NewSQLiteRoadmapRepository(db, createTestLogger())
+	trackRepo := persistence.NewSQLiteTrackRepository(db, createTestLogger())
+
+	// Create roadmap and track
+	roadmap, _ := entities.NewRoadmapEntity("roadmap-1", "Test", "Test", time.Now().UTC(), time.Now().UTC())
+	roadmapRepo.SaveRoadmap(ctx, roadmap)
+
+	track, _ := entities.NewTrackEntity("TM-track-1", "roadmap-1", "Track 1", "", "not-started", 100, []string{}, time.Now().UTC(), time.Now().UTC())
+	trackRepo.SaveTrack(ctx, track)
+
+	// Create task
+	task, _ := entities.NewTaskEntity("TM-task-1", "TM-track-1", "Task 1", "", "todo", 100, "", time.Now().UTC(), time.Now().UTC())
+	taskRepo.SaveTask(ctx, task)
+
+	// Create iteration with the task
+	iteration, _ := entities.NewIterationEntity(1, "Sprint 1", "Goal", "", []string{"TM-task-1"}, "planned", 500, time.Time{}, time.Time{}, time.Now().UTC(), time.Now().UTC())
+	iterRepo.SaveIteration(ctx, iteration)
+
+	// Start iteration
+	if err := iterRepo.StartIteration(ctx, 1); err != nil {
+		t.Fatalf("failed to start iteration: %v", err)
+	}
+
+	// Create skipped AC
+	ac := entities.NewAcceptanceCriteriaEntity("TM-ac-1", "TM-task-1", "Must pass tests", entities.VerificationTypeManual, "Run tests", time.Now().UTC(), time.Now().UTC())
+	ac.Status = entities.ACStatusSkipped
+	ac.Notes = "Skipped due to X"
+	acRepo.SaveAC(ctx, ac)
+
+	// Should succeed with skipped AC
+	if err := iterRepo.CompleteIteration(ctx, 1); err != nil {
+		t.Fatalf("expected success with skipped AC, got: %v", err)
+	}
+
+	// Verify completion
+	completed, _ := iterRepo.GetIteration(ctx, 1)
+	if completed.Status != "complete" {
+		t.Errorf("expected complete, got %s", completed.Status)
+	}
+}
+
+// Helper to check if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && anySubstring(s, substr))
+}
+
+func anySubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

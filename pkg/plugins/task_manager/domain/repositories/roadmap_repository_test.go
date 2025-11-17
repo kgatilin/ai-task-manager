@@ -174,6 +174,10 @@ func (m *mockIterationRepository) CompleteIteration(ctx context.Context, iterati
 	return nil
 }
 
+func (m *mockIterationRepository) RevertIteration(ctx context.Context, iterationNumber int) error {
+	return nil
+}
+
 func (m *mockIterationRepository) GetIterationByNumber(ctx context.Context, iterationNumber int) (*entities.IterationEntity, error) {
 	return nil, nil
 }

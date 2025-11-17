@@ -318,6 +318,23 @@ func (e *EventEmittingRepository) CompleteIteration(ctx context.Context, iterati
 	return nil
 }
 
+func (e *EventEmittingRepository) RevertIteration(ctx context.Context, iterationNum int) error {
+	if err := e.Repo.RevertIteration(ctx, iterationNum); err != nil {
+		return err
+	}
+
+	// Get the iteration to include in the event
+	iteration, err := e.Repo.GetIteration(ctx, iterationNum)
+	if err != nil {
+		e.logger.Warn("failed to get iteration for event emission", "number", iterationNum, "error", err)
+		return nil
+	}
+
+	// Emit iteration updated event (status changed from complete to planned)
+	e.emitIterationUpdatedEvent(ctx, iteration)
+	return nil
+}
+
 // GetIterationByNumber is an alias for GetIteration for consistency (read-only, no event).
 func (e *EventEmittingRepository) GetIterationByNumber(ctx context.Context, number int) (*entities.IterationEntity, error) {
 	return e.Repo.GetIterationByNumber(ctx, number)

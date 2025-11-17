@@ -461,6 +461,10 @@ func (m *MockRepository) CompleteIteration(ctx context.Context, iterationNumber 
 	return nil
 }
 
+func (m *MockRepository) RevertIteration(ctx context.Context, iterationNumber int) error {
+	return nil
+}
+
 func (m *MockRepository) GetIterationByNumber(ctx context.Context, iterationNumber int) (*entities.IterationEntity, error) {
 	return nil, nil
 }

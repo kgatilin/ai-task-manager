@@ -350,6 +350,75 @@ func (c *IterationCompleteCommandAdapter) Execute(ctx context.Context, cmdCtx pl
 }
 
 // ============================================================================
+// IterationRevertCommandAdapter - Adapts CLI to RevertIteration use case
+// ============================================================================
+
+type IterationRevertCommandAdapter struct {
+	IterationService *application.IterationApplicationService
+
+	// CLI flags
+	project string
+	number  int
+}
+
+func (c *IterationRevertCommandAdapter) GetName() string {
+	return "iteration revert"
+}
+
+func (c *IterationRevertCommandAdapter) GetDescription() string {
+	return "Revert a completed iteration back to planned status"
+}
+
+func (c *IterationRevertCommandAdapter) GetUsage() string {
+	return "dw task-manager iteration revert <iteration-number>"
+}
+
+func (c *IterationRevertCommandAdapter) GetHelp() string {
+	return `Reverts a completed iteration back to planned status.
+
+This allows re-opening a completed iteration for additional work.
+Clears the completion timestamp but preserves started timestamp.`
+}
+
+func (c *IterationRevertCommandAdapter) Execute(ctx context.Context, cmdCtx pluginsdk.CommandContext, args []string) error {
+	// Parse iteration number
+	if len(args) == 0 {
+		return fmt.Errorf("iteration number is required")
+	}
+	fmt.Sscanf(args[0], "%d", &c.number)
+	args = args[1:]
+
+	// Parse flags
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--project":
+			if i+1 < len(args) {
+				c.project = args[i+1]
+				i++
+			}
+		}
+	}
+
+	// Execute via application service
+	if err := c.IterationService.RevertIteration(ctx, c.number); err != nil {
+		return fmt.Errorf("failed to revert iteration: %w", err)
+	}
+
+	// Get updated iteration for output
+	iteration, err := c.IterationService.GetIteration(ctx, c.number)
+	if err != nil {
+		return fmt.Errorf("failed to get iteration: %w", err)
+	}
+
+	// Format output
+	out := cmdCtx.GetStdout()
+	fmt.Fprintf(out, "Iteration %d reverted successfully\n", iteration.Number)
+	fmt.Fprintf(out, "  Status: %s\n", iteration.Status)
+
+	return nil
+}
+
+// ============================================================================
 // IterationListCommandAdapter - Adapts CLI to ListIterations query use case
 // ============================================================================
 

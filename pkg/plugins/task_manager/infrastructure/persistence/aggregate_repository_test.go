@@ -335,7 +335,7 @@ func TestGetNextSequenceNumber_Iteration_WithExisting(t *testing.T) {
 
 	ctx := context.Background()
 	repo := persistence.NewSQLiteAggregateRepository(db, createTestLogger())
-	iterRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	iterRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 
 	// Create iterations
 	now := time.Now().UTC()

@@ -9,6 +9,10 @@ type ACDetailViewModel struct {
 	TestingInstructions string
 	Notes               string
 	IsExpanded          bool // Whether testing instructions are visible
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	IsFailed    bool   // True if status is "failed" (for highlighting)
 }
 
 // TrackInfoViewModel represents track context for task detail view
@@ -17,6 +21,10 @@ type TrackInfoViewModel struct {
 	Title       string
 	Description string
 	Status      string
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	Icon        string // Status icon
 }
 
 // IterationMembershipViewModel represents iteration membership for a task
@@ -24,6 +32,10 @@ type IterationMembershipViewModel struct {
 	Number int
 	Name   string
 	Status string
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	Icon        string // Status icon
 }
 
 // TaskDetailViewModel represents the task detail view with expandable ACs
@@ -45,6 +57,11 @@ type TaskDetailViewModel struct {
 
 	// Acceptance criteria with expandable testing instructions
 	AcceptanceCriteria []*ACDetailViewModel
+
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	Icon        string // Status icon
 }
 
 // NewTaskDetailViewModel creates a new task detail view model

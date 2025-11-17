@@ -20,6 +20,11 @@ func TransformToTaskDetailViewModel(
 		task.Branch,
 	)
 
+	// Pre-compute display fields for task
+	vm.StatusLabel = GetTaskStatusLabel(task.Status)
+	vm.StatusColor = GetTaskColor(task.Status)
+	vm.Icon = GetTaskIcon(task.Status)
+
 	// Format timestamps
 	vm.CreatedAt = task.CreatedAt.Format("2006-01-02 15:04:05")
 	vm.UpdatedAt = task.UpdatedAt.Format("2006-01-02 15:04:05")
@@ -31,6 +36,10 @@ func TransformToTaskDetailViewModel(
 			Title:       track.Title,
 			Description: track.Description,
 			Status:      track.Status,
+			// Pre-computed display fields
+			StatusLabel: GetTrackStatusLabel(track.Status),
+			StatusColor: GetTrackColor(track.Status),
+			Icon:        GetTrackIcon(track.Status),
 		}
 	}
 
@@ -40,6 +49,10 @@ func TransformToTaskDetailViewModel(
 			Number: iter.Number,
 			Name:   iter.Name,
 			Status: iter.Status,
+			// Pre-computed display fields
+			StatusLabel: GetIterationStatusLabel(iter.Status),
+			StatusColor: GetIterationColor(iter.Status),
+			Icon:        GetIterationIcon(iter.Status),
 		})
 	}
 
@@ -53,6 +66,10 @@ func TransformToTaskDetailViewModel(
 			TestingInstructions: ac.TestingInstructions,
 			Notes:               ac.Notes,
 			IsExpanded:          false, // Initially collapsed
+			// Pre-computed display fields
+			StatusLabel: GetACStatusLabel(ac.Status),
+			StatusColor: GetACColor(ac.Status),
+			IsFailed:    ac.Status == entities.ACStatusFailed,
 		}
 		vm.AcceptanceCriteria = append(vm.AcceptanceCriteria, acVM)
 	}

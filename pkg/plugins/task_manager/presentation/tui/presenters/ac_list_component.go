@@ -43,6 +43,7 @@ import (
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain/entities"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/components"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/viewmodels"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 // ACViewModel is an interface satisfied by both ACDetailViewModel and IterationACViewModel.
@@ -50,11 +51,13 @@ import (
 type ACViewModel interface {
 	GetID() string
 	GetDescription() string
+	GetStatus() string
 	GetStatusIcon() string
 	GetTestingInstructions() string
 	GetNotes() string
 	GetIsExpanded() bool
 	SetIsExpanded(bool)
+	GetStatusColor() string
 }
 
 // Ensure ACDetailViewModel implements ACViewModel
@@ -67,11 +70,13 @@ type ACDetailViewModelWrapper struct {
 
 func (w *ACDetailViewModelWrapper) GetID() string                     { return w.ID }
 func (w *ACDetailViewModelWrapper) GetDescription() string            { return w.Description }
+func (w *ACDetailViewModelWrapper) GetStatus() string                 { return w.Status }
 func (w *ACDetailViewModelWrapper) GetStatusIcon() string             { return w.StatusIcon }
 func (w *ACDetailViewModelWrapper) GetTestingInstructions() string    { return w.TestingInstructions }
 func (w *ACDetailViewModelWrapper) GetNotes() string                  { return w.Notes }
 func (w *ACDetailViewModelWrapper) GetIsExpanded() bool               { return w.IsExpanded }
 func (w *ACDetailViewModelWrapper) SetIsExpanded(expanded bool)       { w.IsExpanded = expanded }
+func (w *ACDetailViewModelWrapper) GetStatusColor() string            { return w.StatusColor }
 
 // IterationACViewModelWrapper wraps viewmodels.IterationACViewModel to implement ACViewModel
 type IterationACViewModelWrapper struct {
@@ -80,11 +85,29 @@ type IterationACViewModelWrapper struct {
 
 func (w *IterationACViewModelWrapper) GetID() string                     { return w.ID }
 func (w *IterationACViewModelWrapper) GetDescription() string            { return w.Description }
+func (w *IterationACViewModelWrapper) GetStatus() string                 { return w.Status }
 func (w *IterationACViewModelWrapper) GetStatusIcon() string             { return w.StatusIcon }
 func (w *IterationACViewModelWrapper) GetTestingInstructions() string    { return w.TestingInstructions }
 func (w *IterationACViewModelWrapper) GetNotes() string                  { return w.Notes }
 func (w *IterationACViewModelWrapper) GetIsExpanded() bool               { return w.IsExpanded }
 func (w *IterationACViewModelWrapper) SetIsExpanded(expanded bool)       { w.IsExpanded = expanded }
+func (w *IterationACViewModelWrapper) GetStatusColor() string            { return w.StatusColor }
+
+// getACStyleForStatus returns the appropriate style for an AC based on its status color
+func getACStyleForStatus(statusColor string) lipgloss.Style {
+	switch statusColor {
+	case "failed":
+		return components.Styles.ACFailedStyle
+	case "success":
+		return components.Styles.ACVerifiedStyle
+	case "warning":
+		return components.Styles.ACPendingStyle
+	case "skipped":
+		return components.Styles.ACSkippedStyle
+	default:
+		return lipgloss.NewStyle()
+	}
+}
 
 // ACListComponent handles rendering and actions for acceptance criteria lists.
 // This component is shared between IterationDetailPresenter and TaskDetailPresenter
@@ -239,7 +262,9 @@ func (c *ACListComponent) RenderACList(b *strings.Builder, acViewModels []ACView
 		if i == selectedIndex {
 			b.WriteString(components.Styles.SelectedStyle.Render(wrappedHeaderText))
 		} else {
-			b.WriteString(wrappedHeaderText)
+			// Apply status-based styling
+			statusStyle := getACStyleForStatus(ac.GetStatusColor())
+			b.WriteString(statusStyle.Render(wrappedHeaderText))
 		}
 		b.WriteString("\n")
 
@@ -258,11 +283,40 @@ func (c *ACListComponent) RenderACList(b *strings.Builder, acViewModels []ACView
 			}
 		}
 
-		// Show notes if present
-		if ac.GetNotes() != "" {
-			notesText := lipgloss.NewStyle().Width(availableWidth - 4).Render(ac.GetNotes())
-			b.WriteString(components.Styles.TestingStyle.Render(fmt.Sprintf("    Notes: %s", notesText)))
-			b.WriteString("\n")
+		// Show notes/failure reason if present (skip for verified ACs)
+		if ac.GetNotes() != "" &&
+			ac.GetStatus() != string(entities.ACStatusVerified) &&
+			ac.GetStatus() != string(entities.ACStatusAutomaticallyVerified) {
+			// Use "Failure Reason:" label for failed ACs, otherwise "Notes:"
+			label := "Notes:"
+			style := components.Styles.TestingStyle
+			if ac.GetStatusColor() == "failed" {
+				label = "Failure Reason:"
+				style = components.Styles.ACFailedStyle
+			}
+
+			// Calculate available width for notes (total width - indentation - label length - margins)
+			availableNoteWidth := availableWidth - 4 - len(label) - 2
+			if availableNoteWidth < 20 {
+				availableNoteWidth = 20 // Minimum width
+			}
+			// Wrap the notes text
+			wrappedNotes := wordwrap.String(ac.GetNotes(), availableNoteWidth)
+			// Split into lines and render with indentation
+			notesLines := strings.Split(wrappedNotes, "\n")
+			for i, line := range notesLines {
+				if i == 0 {
+					// First line with label
+					notesLine := fmt.Sprintf("    %s %s", label, line)
+					b.WriteString(style.Render(notesLine))
+				} else {
+					// Subsequent lines with matching indentation
+					indent := strings.Repeat(" ", 4+len(label)+1)
+					notesLine := fmt.Sprintf("%s%s", indent, line)
+					b.WriteString(style.Render(notesLine))
+				}
+				b.WriteString("\n")
+			}
 		}
 	}
 }

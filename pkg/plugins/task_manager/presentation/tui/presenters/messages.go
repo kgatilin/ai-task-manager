@@ -31,6 +31,12 @@ type ACActionCompletedMsg struct {
 	SelectedIndex int                // Preserve selected index across reload
 }
 
+// TaskTransitionCompletedMsg is sent after a successful task status transition
+type TaskTransitionCompletedMsg struct {
+	ActiveTab     IterationDetailTab // Preserve active tab (Tasks=0, ACs=1)
+	SelectedIndex int                // Preserve selected index across reload
+}
+
 // ReorderCompletedMsg is sent after iterations are successfully reordered
 type ReorderCompletedMsg struct {
 	SelectedIterationNumber int
@@ -48,6 +54,7 @@ var (
 	_ tea.Msg = TaskSelectedMsg{}
 	_ tea.Msg = ErrorMsg{}
 	_ tea.Msg = ACActionCompletedMsg{}
+	_ tea.Msg = TaskTransitionCompletedMsg{}
 	_ tea.Msg = ReorderCompletedMsg{}
 	_ tea.Msg = RefreshDashboardMsg{}
 )

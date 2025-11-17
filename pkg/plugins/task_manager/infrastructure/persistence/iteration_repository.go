@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain/entities"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain/repositories"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain/services"
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
@@ -17,15 +19,17 @@ var _ repositories.IterationRepository = (*SQLiteIterationRepository)(nil)
 
 // SQLiteIterationRepository implements repositories.IterationRepository using SQLite as the backend.
 type SQLiteIterationRepository struct {
-	DB     *sql.DB
-	logger pluginsdk.Logger
+	DB           *sql.DB
+	logger       pluginsdk.Logger
+	ACRepository repositories.AcceptanceCriteriaRepository
 }
 
 // NewSQLiteIterationRepository creates a new SQLite-backed repository.
-func NewSQLiteIterationRepository(db *sql.DB, logger pluginsdk.Logger) *SQLiteIterationRepository {
+func NewSQLiteIterationRepository(db *sql.DB, logger pluginsdk.Logger, acRepo repositories.AcceptanceCriteriaRepository) *SQLiteIterationRepository {
 	return &SQLiteIterationRepository{
-		DB:     db,
-		logger: logger,
+		DB:           db,
+		logger:       logger,
+		ACRepository: acRepo,
 	}
 }
 
@@ -418,9 +422,10 @@ func (r *SQLiteIterationRepository) StartIteration(ctx context.Context, iteratio
 		return err
 	}
 
-	// Check if status is "planned"
-	if iteration.Status != "planned" {
-		return fmt.Errorf("%w: iteration must be in planned status to start", pluginsdk.ErrInvalidArgument)
+	// Use domain service for validation (checks status and no other current iteration)
+	iterService := services.NewIterationService()
+	if err := iterService.CanStartIteration(ctx, iteration, r.GetCurrentIteration); err != nil {
+		return err
 	}
 
 	// Update status to current and set started_at
@@ -445,11 +450,51 @@ func (r *SQLiteIterationRepository) CompleteIteration(ctx context.Context, itera
 		return fmt.Errorf("%w: iteration must be in current status to complete", pluginsdk.ErrInvalidArgument)
 	}
 
+	// Check for unverified ACs in iteration tasks
+	acs, err := r.ACRepository.ListACByIteration(ctx, iterationNum)
+	if err != nil {
+		return fmt.Errorf("failed to check acceptance criteria: %w", err)
+	}
+
+	// Filter for unverified ACs (status != verified, automatically_verified, or skipped)
+	var unverifiedACIDs []string
+	for _, ac := range acs {
+		if ac.Status != entities.ACStatusVerified &&
+			ac.Status != entities.ACStatusAutomaticallyVerified &&
+			ac.Status != entities.ACStatusSkipped {
+			unverifiedACIDs = append(unverifiedACIDs, ac.ID)
+		}
+	}
+
+	// Block completion if unverified ACs exist
+	if len(unverifiedACIDs) > 0 {
+		return fmt.Errorf("%w: cannot complete iteration: %d unverified acceptance criteria (%s). Please verify or skip ACs first",
+			pluginsdk.ErrInvalidArgument,
+			len(unverifiedACIDs),
+			strings.Join(unverifiedACIDs, ", "))
+	}
+
 	// Update status to complete and set completed_at
 	now := time.Now().UTC()
 	iteration.Status = "complete"
 	iteration.CompletedAt = &now
 	iteration.UpdatedAt = now
+
+	return r.UpdateIteration(ctx, iteration)
+}
+
+// RevertIteration reverts a completed iteration back to planned status.
+func (r *SQLiteIterationRepository) RevertIteration(ctx context.Context, iterationNum int) error {
+	// Get iteration first
+	iteration, err := r.GetIteration(ctx, iterationNum)
+	if err != nil {
+		return err
+	}
+
+	// Use entity's Revert method for validation
+	if err := iteration.Revert(); err != nil {
+		return err
+	}
 
 	return r.UpdateIteration(ctx, iteration)
 }

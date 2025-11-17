@@ -288,6 +288,14 @@ func (m *AppModelNew) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case presenters.TaskTransitionCompletedMsg:
+		// Save the active tab and reload current view after task status transition
+		m.currentActiveTab = msg.ActiveTab
+		if m.currentView == ViewIterationDetailNew && m.currentIterationNumber > 0 {
+			return m, m.loadIterationDetailWithTabAndSelection(m.currentIterationNumber, msg.ActiveTab, msg.SelectedIndex)
+		}
+		return m, nil
+
 	case presenters.ReorderCompletedMsg:
 		// Reload dashboard after iteration reordering, preserving selected iteration
 		selectedIterationNumber := msg.SelectedIterationNumber

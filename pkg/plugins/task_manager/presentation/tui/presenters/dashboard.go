@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/domain"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/components"
@@ -16,17 +17,20 @@ import (
 
 // RoadmapListKeyMap defines keybindings for the dashboard view
 type RoadmapListKeyMap struct {
-	Up       key.Binding
-	Down     key.Binding
-	Enter    key.Binding
-	Quit     key.Binding
-	Help     key.Binding
-	Refresh  key.Binding
-	Tab      key.Binding // Tab to cycle between sections
-	MoveUp   key.Binding // Shift+up or K for reordering
-	MoveDown key.Binding // Shift+down or J for reordering
-	PageUp   key.Binding // Page up or b
-	PageDown key.Binding // Page down or space
+	Up              key.Binding
+	Down            key.Binding
+	Enter           key.Binding
+	Quit            key.Binding
+	Help            key.Binding
+	Refresh         key.Binding
+	Tab             key.Binding // Tab to cycle between sections
+	MoveUp          key.Binding // Shift+up or K for reordering
+	MoveDown        key.Binding // Shift+down or J for reordering
+	PageUp          key.Binding // Page up or b
+	PageDown        key.Binding // Page down or space
+	StartIteration  key.Binding // s - Start iteration (planned → current)
+	CompleteIter    key.Binding // c - Complete iteration (current → complete)
+	RevertIteration key.Binding // p - Revert iteration (complete → planned)
 }
 
 // NewRoadmapListKeyMap creates default keybindings for dashboard
@@ -61,6 +65,18 @@ func NewRoadmapListKeyMap() RoadmapListKeyMap {
 			key.WithKeys("pgdn", "space"),
 			key.WithHelp("pgdn/space", "page down"),
 		),
+		StartIteration: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "start iteration"),
+		),
+		CompleteIter: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "complete iteration"),
+		),
+		RevertIteration: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "revert iteration"),
+		),
 	}
 }
 
@@ -74,9 +90,27 @@ func (k RoadmapListKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Enter},
 		{k.Tab, k.Refresh},
+		{k.StartIteration, k.CompleteIter, k.RevertIteration},
 		{k.PageUp, k.PageDown},
 		{k.MoveUp, k.MoveDown},
 		{k.Help, k.Quit},
+	}
+}
+
+// ContextualHelp returns keybindings based on selected item state
+func (k RoadmapListKeyMap) ContextualHelp(iterationStatus string) []key.Binding {
+	base := []key.Binding{k.Up, k.Down, k.Enter, k.Tab, k.Refresh}
+
+	// Add iteration state transition keys based on current status
+	switch iterationStatus {
+	case "planned":
+		return append(base, k.StartIteration, k.Quit)
+	case "current":
+		return append(base, k.CompleteIter, k.Quit)
+	case "complete":
+		return append(base, k.RevertIteration, k.Quit)
+	default:
+		return append(base, k.Quit)
 	}
 }
 
@@ -234,6 +268,30 @@ func (p *RoadmapListPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 			if p.selectedIndex < len(p.viewModel.ActiveIterations)-1 {
 				return p, p.reorderIterations(p.selectedIndex, p.selectedIndex+1)
 			}
+		case key.Matches(msg, p.keys.StartIteration):
+			// Start iteration (planned → current)
+			if p.selectedIndex < len(p.viewModel.ActiveIterations) {
+				iter := p.viewModel.ActiveIterations[p.selectedIndex]
+				if iter.Status == "planned" {
+					return p, p.startIteration(iter.Number)
+				}
+			}
+		case key.Matches(msg, p.keys.CompleteIter):
+			// Complete iteration (current → complete)
+			if p.selectedIndex < len(p.viewModel.ActiveIterations) {
+				iter := p.viewModel.ActiveIterations[p.selectedIndex]
+				if iter.Status == "current" {
+					return p, p.completeIteration(iter.Number)
+				}
+			}
+		case key.Matches(msg, p.keys.RevertIteration):
+			// Revert iteration (complete → planned)
+			if p.selectedIndex < len(p.viewModel.ActiveIterations) {
+				iter := p.viewModel.ActiveIterations[p.selectedIndex]
+				if iter.Status == "complete" {
+					return p, p.revertIteration(iter.Number)
+				}
+			}
 		}
 	}
 
@@ -316,14 +374,20 @@ func (p *RoadmapListPresenter) View() string {
 				break
 			}
 
+			// Format with icon
+			text := fmt.Sprintf("  %s #%d %s (%d tasks)",
+				iter.Icon, iter.Number, iter.Name, iter.TaskCount)
+
+			// Apply status style
+			statusStyle := getIterationStyle(iter.StatusColor)
 			var itemStyle string
 			if p.isSelected(currentItemIndex, "iteration") {
-				itemStyle = components.Styles.SelectedStyle.Render(
-					fmt.Sprintf("  #%d %s (%d tasks) - %s",
-						iter.Number, iter.Name, iter.TaskCount, iter.Status))
+				// Compose: status style + selection highlight
+				itemStyle = statusStyle.
+					Foreground(lipgloss.Color(components.ColorScheme.Accent)).
+					Render(text)
 			} else {
-				itemStyle = fmt.Sprintf("  #%d %s (%d tasks) - %s",
-					iter.Number, iter.Name, iter.TaskCount, iter.Status)
+				itemStyle = statusStyle.Render(text)
 			}
 			b.WriteString(itemStyle)
 			b.WriteString("\n")
@@ -357,14 +421,18 @@ func (p *RoadmapListPresenter) View() string {
 				break
 			}
 
+			// Apply color to status
+			statusStyle := getStatusStyle(track.StatusColor)
+			statusText := statusStyle.Render(track.Status)
+
 			var itemStyle string
 			if p.isSelected(currentItemIndex, "track") {
 				itemStyle = components.Styles.SelectedStyle.Render(
 					fmt.Sprintf("  %s: %s (%d tasks) - %s",
-						track.ID, track.Title, track.TaskCount, track.Status))
+						track.ID, track.Title, track.TaskCount, statusText))
 			} else {
 				itemStyle = fmt.Sprintf("  %s: %s (%d tasks) - %s",
-					track.ID, track.Title, track.TaskCount, track.Status)
+					track.ID, track.Title, track.TaskCount, statusText)
 			}
 			b.WriteString(itemStyle)
 			b.WriteString("\n")
@@ -398,14 +466,18 @@ func (p *RoadmapListPresenter) View() string {
 				break
 			}
 
+			// Apply color to status
+			statusStyle := getStatusStyle(task.StatusColor)
+			statusText := statusStyle.Render(task.Status)
+
 			var itemStyle string
 			if p.isSelected(currentItemIndex, "task") {
 				itemStyle = components.Styles.SelectedStyle.Render(
 					fmt.Sprintf("  %s: %s - %s",
-						task.ID, task.Title, task.Status))
+						task.ID, task.Title, statusText))
 			} else {
 				itemStyle = fmt.Sprintf("  %s: %s - %s",
-					task.ID, task.Title, task.Status)
+					task.ID, task.Title, statusText)
 			}
 			b.WriteString(itemStyle)
 			b.WriteString("\n")
@@ -549,6 +621,45 @@ func (p *RoadmapListPresenter) reorderIterations(fromIndex, toIndex int) tea.Cmd
 	}
 }
 
+// startIteration starts a planned iteration (planned → current)
+func (p *RoadmapListPresenter) startIteration(iterationNumber int) tea.Cmd {
+	return func() tea.Msg {
+		// Call repository lifecycle method
+		if err := p.repo.StartIteration(p.ctx, iterationNumber); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		// Reload dashboard to reflect changes, preserving selection
+		return RefreshDashboardMsg{SelectedIndex: p.selectedIndex}
+	}
+}
+
+// completeIteration completes the current iteration (current → complete)
+func (p *RoadmapListPresenter) completeIteration(iterationNumber int) tea.Cmd {
+	return func() tea.Msg {
+		// Call repository lifecycle method
+		if err := p.repo.CompleteIteration(p.ctx, iterationNumber); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		// Reload dashboard to reflect changes, preserving selection
+		return RefreshDashboardMsg{SelectedIndex: p.selectedIndex}
+	}
+}
+
+// revertIteration reverts a completed iteration (complete → planned)
+func (p *RoadmapListPresenter) revertIteration(iterationNumber int) tea.Cmd {
+	return func() tea.Msg {
+		// Call repository lifecycle method
+		if err := p.repo.RevertIteration(p.ctx, iterationNumber); err != nil {
+			return ErrorMsg{Err: err}
+		}
+
+		// Reload dashboard to reflect changes, preserving selection
+		return RefreshDashboardMsg{SelectedIndex: p.selectedIndex}
+	}
+}
+
 // cycleActiveSection cycles through sections: Iterations → Tracks → Backlog → Iterations
 // Updates activeSection and adjusts selectedIndex to first item in new section
 func (p *RoadmapListPresenter) cycleActiveSection() {
@@ -587,5 +698,19 @@ func (p *RoadmapListPresenter) cycleActiveSection() {
 		if p.activeSection == startSection {
 			break
 		}
+	}
+}
+
+// getIterationStyle returns the appropriate style for an iteration based on its status color
+func getIterationStyle(statusColor string) lipgloss.Style {
+	switch statusColor {
+	case "current":
+		return components.Styles.StatusCurrentStyle
+	case "info": // Planned iterations return "info"
+		return components.Styles.StatusPlannedStyle
+	case "success": // Complete iterations return "success"
+		return components.Styles.StatusCompleteStyle
+	default:
+		return lipgloss.NewStyle()
 	}
 }

@@ -26,6 +26,10 @@ type TaskRowViewModel struct {
 	Title       string
 	Status      string
 	Description string
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	Icon        string // Status icon
 }
 
 // IterationACViewModel represents an AC row with skipped status support
@@ -37,6 +41,10 @@ type IterationACViewModel struct {
 	TestingInstructions string
 	Notes               string
 	IsExpanded          bool // Whether testing instructions are visible (same as ACDetailViewModel)
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	IsFailed    bool   // True if status is "failed" (for highlighting)
 }
 
 // TaskACGroupViewModel represents a task with its ACs grouped together
@@ -58,6 +66,7 @@ type IterationDetailViewModel struct {
 	// Task grouping by status
 	TODOTasks       []*TaskRowViewModel
 	InProgressTasks []*TaskRowViewModel
+	ReviewTasks     []*TaskRowViewModel
 	DoneTasks       []*TaskRowViewModel
 
 	// All ACs for the iteration
@@ -68,6 +77,11 @@ type IterationDetailViewModel struct {
 
 	// Progress tracking
 	Progress *ProgressViewModel
+
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	Icon        string // Status icon
 }
 
 // NewIterationDetailViewModel creates a new iteration detail view model
@@ -80,6 +94,7 @@ func NewIterationDetailViewModel(number int, name, goal, deliverable, status str
 		Status:             status,
 		TODOTasks:          []*TaskRowViewModel{},
 		InProgressTasks:    []*TaskRowViewModel{},
+		ReviewTasks:        []*TaskRowViewModel{},
 		DoneTasks:          []*TaskRowViewModel{},
 		AcceptanceCriteria: []*IterationACViewModel{},
 		TaskACs:            []*TaskACGroupViewModel{},

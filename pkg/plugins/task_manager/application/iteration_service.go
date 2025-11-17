@@ -249,6 +249,33 @@ func (s *IterationApplicationService) CompleteIteration(ctx context.Context, ite
 	return nil
 }
 
+// RevertIteration reverts a completed iteration back to planned status.
+// This allows re-opening a completed iteration.
+func (s *IterationApplicationService) RevertIteration(ctx context.Context, iterationNum int) error {
+	// Validate iteration number
+	if err := s.validationService.ValidateIterationNumber(iterationNum); err != nil {
+		return err
+	}
+
+	// Retrieve iteration
+	iteration, err := s.iterationRepo.GetIteration(ctx, iterationNum)
+	if err != nil {
+		return fmt.Errorf("failed to get iteration: %w", err)
+	}
+
+	// Revert to planned status
+	if err := iteration.Revert(); err != nil {
+		return fmt.Errorf("failed to revert iteration: %w", err)
+	}
+
+	// Persist changes
+	if err := s.iterationRepo.UpdateIteration(ctx, iteration); err != nil {
+		return fmt.Errorf("failed to update iteration: %w", err)
+	}
+
+	return nil
+}
+
 // ============================================================================
 // Task Management
 // ============================================================================

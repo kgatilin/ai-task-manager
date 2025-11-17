@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/components"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/viewmodels"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 // ErrorPresenter presents an error view with message and help text
@@ -15,6 +16,7 @@ type ErrorPresenter struct {
 	help      components.Help
 	quitKey   key.Binding
 	backKey   key.Binding
+	width     int
 }
 
 // NewErrorPresenter creates a new error presenter
@@ -24,6 +26,7 @@ func NewErrorPresenter(vm *viewmodels.ErrorViewModel) *ErrorPresenter {
 		help:      components.NewHelp(),
 		quitKey:   components.NewQuitKey(),
 		backKey:   components.NewBackKey(),
+		width:     80, // default width
 	}
 }
 
@@ -33,6 +36,8 @@ func (p *ErrorPresenter) Init() tea.Cmd {
 
 func (p *ErrorPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		p.width = msg.Width
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, p.quitKey):
@@ -49,21 +54,32 @@ func (p *ErrorPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 func (p *ErrorPresenter) View() string {
 	var b strings.Builder
 
+	// Calculate available width (leave margin)
+	availableWidth := p.width - 4
+	if availableWidth < 40 {
+		availableWidth = 40
+	}
+
 	b.WriteString("\n")
 	b.WriteString(components.Styles.ErrorTitleStyle.Render("Error"))
 	b.WriteString("\n\n")
-	b.WriteString(components.Styles.ErrorMessageStyle.Render(p.viewModel.ErrorMessage))
+
+	// Wrap error message
+	wrappedMessage := wordwrap.String(p.viewModel.ErrorMessage, availableWidth)
+	b.WriteString(components.Styles.ErrorMessageStyle.Render(wrappedMessage))
 	b.WriteString("\n")
 
 	if p.viewModel.Details != "" {
 		b.WriteString("\n")
-		b.WriteString(components.Styles.ErrorDetailsStyle.Render(p.viewModel.Details))
+		wrappedDetails := wordwrap.String(p.viewModel.Details, availableWidth)
+		b.WriteString(components.Styles.ErrorDetailsStyle.Render(wrappedDetails))
 		b.WriteString("\n")
 	}
 
 	if p.viewModel.RetryAction != "" {
 		b.WriteString("\n")
-		b.WriteString(components.Styles.ErrorDetailsStyle.Render("Suggestion: " + p.viewModel.RetryAction))
+		wrappedRetry := wordwrap.String("Suggestion: "+p.viewModel.RetryAction, availableWidth)
+		b.WriteString(components.Styles.ErrorDetailsStyle.Render(wrappedRetry))
 		b.WriteString("\n")
 	}
 

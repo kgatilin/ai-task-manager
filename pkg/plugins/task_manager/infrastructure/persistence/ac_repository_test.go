@@ -262,7 +262,7 @@ func TestListFailedACWithIterationFilter(t *testing.T) {
 	roadmapRepo := persistence.NewSQLiteRoadmapRepository(db, createTestLogger())
 	trackRepo := persistence.NewSQLiteTrackRepository(db, createTestLogger())
 	taskRepo := persistence.NewSQLiteTaskRepository(db, createTestLogger())
-	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	acRepo := persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger())
 	ctx := context.Background()
 
@@ -371,7 +371,7 @@ func TestListACForIteration(t *testing.T) {
 	roadmapRepo := persistence.NewSQLiteRoadmapRepository(db, createTestLogger())
 	trackRepo := persistence.NewSQLiteTrackRepository(db, createTestLogger())
 	taskRepo := persistence.NewSQLiteTaskRepository(db, createTestLogger())
-	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger())
+	iterationRepo := persistence.NewSQLiteIterationRepository(db, createTestLogger(), persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger()))
 	acRepo := persistence.NewSQLiteAcceptanceCriteriaRepository(db, createTestLogger())
 	ctx := context.Background()
 

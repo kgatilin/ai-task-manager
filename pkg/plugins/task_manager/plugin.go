@@ -320,6 +320,9 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		&cli.IterationCompleteCommandAdapter{
 			IterationService: iterationService,
 		},
+		&cli.IterationRevertCommandAdapter{
+			IterationService: iterationService,
+		},
 		&cli.IterationListCommandAdapter{
 			IterationService: iterationService,
 		},

@@ -47,6 +47,9 @@ type MockIterationRepository struct {
 	// CompleteIterationFunc is called by CompleteIteration. If nil, returns nil.
 	CompleteIterationFunc func(ctx context.Context, iterationNum int) error
 
+	// RevertIterationFunc is called by RevertIteration. If nil, returns nil.
+	RevertIterationFunc func(ctx context.Context, iterationNum int) error
+
 	// GetIterationByNumberFunc is called by GetIterationByNumber. If nil, returns nil, nil.
 	GetIterationByNumberFunc func(ctx context.Context, number int) (*entities.IterationEntity, error)
 
@@ -171,6 +174,14 @@ func (m *MockIterationRepository) StartIteration(ctx context.Context, iterationN
 func (m *MockIterationRepository) CompleteIteration(ctx context.Context, iterationNum int) error {
 	if m.CompleteIterationFunc != nil {
 		return m.CompleteIterationFunc(ctx, iterationNum)
+	}
+	return nil
+}
+
+// RevertIteration implements repositories.IterationRepository.
+func (m *MockIterationRepository) RevertIteration(ctx context.Context, iterationNum int) error {
+	if m.RevertIterationFunc != nil {
+		return m.RevertIterationFunc(ctx, iterationNum)
 	}
 	return nil
 }

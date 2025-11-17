@@ -21,7 +21,8 @@ You orchestrate a multi-agent workflow to implement TODO tasks in an iteration.
 - ONLY implement tasks with status "todo"
 - IGNORE tasks with status "in-progress", "review", "done", or "blocked"
 - You orchestrate; sub-agents execute
-- You do NOT verify acceptance criteria or close iterations
+- Move completed tasks to "review" status (NOT "done")
+- You do NOT verify acceptance criteria, mark tasks "done", or close iterations
 
 ---
 
@@ -34,7 +35,7 @@ You orchestrate a multi-agent workflow to implement TODO tasks in an iteration.
 5. **Read attached documents** (MANDATORY if documents exist)
 6. **Planning agent** → Reads documents, explores codebase, retrieves full context, creates implementation plan
 7. **Implementation agents** → Execute phases (sequential or parallel)
-8. **Verification agent** → Tests, linter, code quality, task status
+8. **Verification agent** → Tests, linter, code quality, move tasks to "review"
 9. **Git commit** → Save all work
 10. **Report to user** → Deviations, questions, issues only (see CLAUDE.md reporting guidelines)
 
@@ -284,8 +285,9 @@ Wait for ALL before dependent phases
 - Check tests/linter
 - Update task statuses:
   ```bash
-  dw task-manager task update <task-id> --status done  # If phase completes TODO task
+  dw task-manager task update <task-id> --status review  # If phase completes TODO task implementation
   ```
+  **Note**: Move to "review" (not "done") so user can verify before final approval
 - **If issues**: Don't proceed, report blocker, ask user
 
 ---
@@ -335,8 +337,9 @@ Filter: Focus on TODO_TASKS, confirm now "done" (if fully implemented)
 - No missing functionality
 
 ### Task Status
-- All TODO tasks (from TODO_TASKS) marked "done"
+- All TODO tasks (from TODO_TASKS) moved to "review" (ready for user verification)
 - Other statuses unchanged
+- **Note**: Tasks moved to "review" status, NOT "done" (user verifies and marks done)
 
 ### AC Readiness
 - Implementation enables user to verify each AC for TODO tasks
@@ -437,13 +440,14 @@ git log -1 --oneline
 - ✅ Planning agent created plan for TODO tasks
 - ✅ All phases completed
 - ✅ Verification passed (tests, linter, quality)
-- ✅ TODO tasks marked "done"
+- ✅ TODO tasks moved to "review" status (ready for user verification)
 - ✅ Non-TODO tasks unchanged
 - ✅ Git commit created
 - ✅ User notified with clear report
 
 **Not your responsibility**:
 - ❌ Verifying acceptance criteria (user does this)
+- ❌ Marking tasks as "done" (user does this after AC verification)
 - ❌ Closing iteration (user does this)
 
 ---
@@ -464,4 +468,4 @@ git log -1 --oneline
 
 ---
 
-Remember: First ensure iteration branch. Work ONLY on TODO tasks. READ ALL ATTACHED DOCUMENTS (orchestrator + planning agent). Planning agent independently retrieves all iteration data (tasks + AC + documents). Implementation agents execute. Verification agent checks. Commit all work. Report deviations/questions/issues to user. User verifies AC and closes iteration.
+Remember: First ensure iteration branch. Work ONLY on TODO tasks. READ ALL ATTACHED DOCUMENTS (orchestrator + planning agent). Planning agent independently retrieves all iteration data (tasks + AC + documents). Implementation agents execute. Verification agent checks. Move completed tasks to "review" status (NOT "done"). Commit all work. Report deviations/questions/issues to user. User verifies AC, marks tasks "done", and closes iteration.

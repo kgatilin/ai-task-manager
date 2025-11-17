@@ -110,6 +110,22 @@ func (i *IterationEntity) TransitionTo(newStatus string) error {
 	return nil
 }
 
+// Revert allows reverting a completed iteration back to planned state.
+// This is a special operation outside the normal state machine flow.
+// Clears completion timestamp but preserves started timestamp.
+func (i *IterationEntity) Revert() error {
+	if i.Status != string(IterationStatusComplete) {
+		return fmt.Errorf("%w: can only revert completed iterations", pluginsdk.ErrInvalidArgument)
+	}
+
+	i.Status = string(IterationStatusPlanned)
+	i.CompletedAt = nil // Clear completion timestamp
+	// Keep StartedAt to preserve history
+	i.UpdatedAt = time.Now()
+
+	return nil
+}
+
 // IExtensible implementation
 
 // GetID returns the unique identifier for this entity

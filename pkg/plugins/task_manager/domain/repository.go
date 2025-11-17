@@ -69,6 +69,7 @@ type RoadmapRepository interface {
 	// Iteration lifecycle operations
 	StartIteration(ctx context.Context, iterationNumber int) error
 	CompleteIteration(ctx context.Context, iterationNumber int) error
+	RevertIteration(ctx context.Context, iterationNumber int) error
 	GetIterationByNumber(ctx context.Context, iterationNumber int) (*entities.IterationEntity, error)
 
 	// ADR operations

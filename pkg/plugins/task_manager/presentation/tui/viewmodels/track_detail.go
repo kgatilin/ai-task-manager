@@ -6,6 +6,10 @@ type TrackDetailTaskViewModel struct {
 	Title       string
 	Status      string
 	Description string
+	// Display fields (pre-computed by transformer)
+	StatusLabel string // Human-readable status label
+	StatusColor string // Color name for status styling
+	Icon        string // Status icon
 }
 
 // TrackDetailViewModel represents the track detail view with track info and tasks
@@ -26,6 +30,10 @@ type TrackDetailViewModel struct {
 
 	// Progress tracking
 	Progress *ProgressViewModel
+
+	// Display fields (pre-computed by transformer)
+	StatusColor string // Color name for status styling
+	Icon        string // Status icon
 }
 
 // NewTrackDetailViewModel creates a new track detail view model

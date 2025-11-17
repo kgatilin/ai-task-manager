@@ -32,13 +32,16 @@ type SQLiteRepositoryComposite struct {
 
 // NewSQLiteRepositoryComposite creates a composite repository with all focused repositories.
 func NewSQLiteRepositoryComposite(db *sql.DB, logger pluginsdk.Logger) *SQLiteRepositoryComposite {
+	// Create AC repository first since iteration repository depends on it
+	acRepo := NewSQLiteAcceptanceCriteriaRepository(db, logger)
+
 	return &SQLiteRepositoryComposite{
 		Roadmap:   NewSQLiteRoadmapOnlyRepository(db, logger),
 		Track:     NewSQLiteTrackRepository(db, logger),
 		Task:      NewSQLiteTaskRepository(db, logger),
-		Iteration: NewSQLiteIterationRepository(db, logger),
+		Iteration: NewSQLiteIterationRepository(db, logger, acRepo),
 		ADR:       NewSQLiteADRRepository(db, logger),
-		AC:        NewSQLiteAcceptanceCriteriaRepository(db, logger),
+		AC:        acRepo,
 		Document:  NewSQLiteDocumentRepository(db),
 		Aggregate: NewSQLiteAggregateRepository(db, logger),
 		DB:        db,
@@ -231,6 +234,11 @@ func (c *SQLiteRepositoryComposite) StartIteration(ctx context.Context, iteratio
 // CompleteIteration marks an iteration as complete and sets completed_at timestamp.
 func (c *SQLiteRepositoryComposite) CompleteIteration(ctx context.Context, iterationNum int) error {
 	return c.Iteration.CompleteIteration(ctx, iterationNum)
+}
+
+// RevertIteration reverts a completed iteration back to planned status.
+func (c *SQLiteRepositoryComposite) RevertIteration(ctx context.Context, iterationNum int) error {
+	return c.Iteration.RevertIteration(ctx, iterationNum)
 }
 
 // GetIterationByNumber is an alias for GetIteration for consistency with other repositories.

@@ -259,7 +259,9 @@ func (p *TaskDetailPresenter) View() string {
 	b.WriteString(components.Styles.TitleStyle.Render(titleText))
 	b.WriteString("\n")
 
-	statusText := lipgloss.NewStyle().Width(availableWidth).Render(fmt.Sprintf("Status: %s", p.viewModel.Status))
+	// Apply color to status
+	coloredStatus := getStatusStyle(p.viewModel.StatusColor).Render(p.viewModel.Status)
+	statusText := lipgloss.NewStyle().Width(availableWidth).Render(fmt.Sprintf("Status: %s", coloredStatus))
 	b.WriteString(components.Styles.MetadataStyle.Render(statusText))
 	b.WriteString("\n")
 
@@ -292,8 +294,10 @@ func (p *TaskDetailPresenter) View() string {
 		b.WriteString(components.Styles.SectionStyle.Render("Iterations"))
 		b.WriteString("\n")
 		for _, iter := range p.viewModel.Iterations {
+			// Apply color to iteration status
+			coloredStatus := getStatusStyle(iter.StatusColor).Render(iter.Status)
 			iterText := lipgloss.NewStyle().Width(availableWidth).Render(
-				fmt.Sprintf("  #%d %s (%s)", iter.Number, iter.Name, iter.Status))
+				fmt.Sprintf("  #%d %s (%s)", iter.Number, iter.Name, coloredStatus))
 			b.WriteString(iterText)
 			b.WriteString("\n")
 		}
@@ -317,7 +321,7 @@ func (p *TaskDetailPresenter) View() string {
 		b.WriteString(components.Styles.MetadataStyle.Render("  No acceptance criteria"))
 		b.WriteString("\n")
 	} else {
-		p.renderACs(&b, availableWidth)
+		p.renderACsWithComponent(&b, availableWidth)
 	}
 
 	// Feedback input component renders inline at bottom if active
@@ -354,7 +358,10 @@ func (p *TaskDetailPresenter) calculateACLineCounts() []int {
 	return lineCounts
 }
 
-func (p *TaskDetailPresenter) renderACs(b *strings.Builder, availableWidth int) {
+// renderACsWithComponent renders ACs using ACListComponent.RenderACList()
+// This method handles scrolling and visible range calculation, delegating
+// the actual rendering to ACListComponent for code reuse.
+func (p *TaskDetailPresenter) renderACsWithComponent(b *strings.Builder, availableWidth int) {
 	acs := p.viewModel.AcceptanceCriteria
 	if len(acs) == 0 {
 		return
@@ -362,64 +369,28 @@ func (p *TaskDetailPresenter) renderACs(b *strings.Builder, availableWidth int) 
 
 	// Get visible range from multiline scroll helper
 	lineCounts := p.calculateACLineCounts()
-	firstItem, lastItem, lineOffset := p.scrollHelperACs.VisibleRangeMultiline(lineCounts)
+	firstItem, lastItem, _ := p.scrollHelperACs.VisibleRangeMultiline(lineCounts)
 
 	// Scroll indicator (above)
 	if firstItem > 0 {
 		b.WriteString("  ↑ More ACs above\n")
 	}
 
-	// Render visible ACs
-	for i := firstItem; i <= lastItem && i < len(acs); i++ {
-		ac := acs[i]
-
-		// Determine if this AC should show partial content (due to lineOffset)
-		skipLines := 0
-		if i == firstItem {
-			skipLines = lineOffset
-		}
-
-		// Highlight selected
-		prefix := "  "
-		if i == p.selectedIndex {
-			prefix = "> "
-		}
-
-		// Render AC header (unless skipped by lineOffset)
-		if skipLines == 0 {
-			statusIcon := "○" // default
-			switch ac.Status {
-			case "verified":
-				statusIcon = "✓"
-			case "failed":
-				statusIcon = "✗"
-			case "pending-review":
-				statusIcon = "⧗"
-			case "skipped":
-				statusIcon = "⊘"
-			}
-
-			// Show clipboard icon if AC has testing instructions
-			description := ac.Description
-			if ac.TestingInstructions != "" {
-				description = "📋 " + description
-			}
-
-			b.WriteString(fmt.Sprintf("%s%s %s\n", prefix, statusIcon, description))
-		}
-
-		// If expanded, render testing instructions (respecting lineOffset)
-		if ac.IsExpanded && ac.TestingInstructions != "" {
-			instructionLines := strings.Split(ac.TestingInstructions, "\n")
-			for j, line := range instructionLines {
-				// Skip lines before lineOffset (only for first visible item)
-				if i == firstItem && j+1 < skipLines {
-					continue
-				}
-				b.WriteString(fmt.Sprintf("    %s\n", line))
-			}
-		}
+	// Extract visible ACs and adjust selectedIndex for component
+	visibleACs := acs[firstItem : lastItem+1]
+	if lastItem >= len(acs) {
+		visibleACs = acs[firstItem:]
 	}
+	adjustedSelectedIndex := -1 // Not selected in visible range
+	if p.selectedIndex >= firstItem && p.selectedIndex <= lastItem {
+		adjustedSelectedIndex = p.selectedIndex - firstItem
+	}
+
+	// Wrap ACs to ACViewModel interface
+	wrappedACs := WrapACDetailViewModels(visibleACs)
+
+	// Use ACListComponent to render the ACs
+	p.acListComponent.RenderACList(b, wrappedACs, adjustedSelectedIndex, availableWidth)
 
 	// Scroll indicator (below)
 	if lastItem < len(acs)-1 {

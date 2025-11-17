@@ -68,8 +68,12 @@ func TestTransformToIterationDetailViewModel(t *testing.T) {
 		t.Errorf("expected 1 TODO task, got %d", len(vm.TODOTasks))
 	}
 
-	if len(vm.InProgressTasks) != 2 { // in-progress + review
-		t.Errorf("expected 2 in-progress/review tasks, got %d", len(vm.InProgressTasks))
+	if len(vm.InProgressTasks) != 1 {
+		t.Errorf("expected 1 in-progress task, got %d", len(vm.InProgressTasks))
+	}
+
+	if len(vm.ReviewTasks) != 1 {
+		t.Errorf("expected 1 review task, got %d", len(vm.ReviewTasks))
 	}
 
 	if len(vm.DoneTasks) != 1 {
@@ -82,7 +86,11 @@ func TestTransformToIterationDetailViewModel(t *testing.T) {
 	}
 
 	if vm.InProgressTasks[0].ID != "TM-task-2" {
-		t.Errorf("expected first in-progress task ID 'TM-task-2', got %q", vm.InProgressTasks[0].ID)
+		t.Errorf("expected in-progress task ID 'TM-task-2', got %q", vm.InProgressTasks[0].ID)
+	}
+
+	if vm.ReviewTasks[0].ID != "TM-task-4" {
+		t.Errorf("expected review task ID 'TM-task-4', got %q", vm.ReviewTasks[0].ID)
 	}
 
 	// Verify ACs
