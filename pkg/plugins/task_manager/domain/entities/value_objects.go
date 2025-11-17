@@ -39,6 +39,7 @@ const (
 	TaskStatusInProgress TaskStatus = "in-progress"
 	TaskStatusReview     TaskStatus = "review"
 	TaskStatusDone       TaskStatus = "done"
+	TaskStatusCancelled  TaskStatus = "cancelled"
 )
 
 // Valid status values for tasks
@@ -47,6 +48,7 @@ var validTaskStatuses = map[string]bool{
 	string(TaskStatusInProgress): true,
 	string(TaskStatusReview):     true,
 	string(TaskStatusDone):       true,
+	string(TaskStatusCancelled):  true,
 }
 
 // IsValidTaskStatus validates a task status string

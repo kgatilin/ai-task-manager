@@ -139,6 +139,8 @@ overrides:
                 - github.com/charmbracelet/lipgloss # TUI styling (shared UI utility)
                 - github.com/charmbracelet/bubbles/viewport # TUI viewport component (shared UI utility)
                 - github.com/charmbracelet/bubbles/textinput # TUI text input component (shared UI utility)
+                - github.com/charmbracelet/bubbles/spinner # TUI spinner component (shared UI utility)
+                - github.com/charmbracelet/bubbles/key # TUI key binding utility (shared UI utility)
                 - github.com/charmbracelet/glamour # Markdown rendering (shared UI utility)
                 - github.com/mattn/go-sqlite3 # SQLite driver (shared infrastructure)
                 - gopkg.in/yaml.v3 # YAML config (shared configuration utility)
@@ -168,6 +170,7 @@ overrides:
                 - pkg/plugins/task_manager/infrastructure/cli
                 - pkg/plugins/task_manager/infrastructure/persistence
                 - pkg/plugins/task_manager/presentation/cli
+                - pkg/plugins/task_manager/presentation/tui
 
             # Task Manager Clean Architecture - Domain Layer
             pkg/plugins/task_manager/domain:
@@ -217,6 +220,42 @@ overrides:
                 - pkg/plugins/task_manager/application
                 - pkg/plugins/task_manager/domain
 
+            # Task Manager TUI - MVP Architecture
+            pkg/plugins/task_manager/presentation/tui:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain
+                - pkg/plugins/task_manager/infrastructure/cli # For PluginProvider interface
+                - pkg/plugins/task_manager/presentation/tui/components
+                - pkg/plugins/task_manager/presentation/tui/presenters
+                - pkg/plugins/task_manager/presentation/tui/viewmodels
+                - pkg/plugins/task_manager/presentation/tui/queries
+
+            pkg/plugins/task_manager/presentation/tui/viewmodels: [] # Pure data, zero dependencies
+
+            pkg/plugins/task_manager/presentation/tui/components:
+                - github.com/charmbracelet/bubbles/help
+                - github.com/charmbracelet/bubbles/key
+                - github.com/charmbracelet/bubbles/spinner
+                - github.com/charmbracelet/lipgloss # TUI component wrapper layer
+
+            pkg/plugins/task_manager/presentation/tui/transformers:
+                - pkg/plugins/task_manager/domain/entities
+                - pkg/plugins/task_manager/presentation/tui/viewmodels
+
+            pkg/plugins/task_manager/presentation/tui/queries:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain
+                - pkg/plugins/task_manager/presentation/tui/transformers
+                - pkg/plugins/task_manager/presentation/tui/viewmodels
+
+            pkg/plugins/task_manager/presentation/tui/presenters:
+                - pkg/pluginsdk
+                - pkg/plugins/task_manager/domain
+                - pkg/plugins/task_manager/domain/entities
+                - pkg/plugins/task_manager/presentation/tui/components
+                - pkg/plugins/task_manager/presentation/tui/viewmodels
+                - pkg/plugins/task_manager/presentation/tui/queries
+
             pkg/plugins/task_manager/application/mocks:
                 - pkg/plugins/task_manager/domain/entities
                 - pkg/pluginsdk
@@ -238,7 +277,13 @@ overrides:
                 pkg/plugins/task_manager/application/mocks: 0 # Test utilities, no tests needed
                 pkg/plugins/task_manager/infrastructure/persistence: 50
                 pkg/plugins/task_manager/infrastructure/cli: 0 # CLI commands, tested via integration
-                pkg/plugins/task_manager/presentation/cli: 0 # Testes with e2e tests
+                pkg/plugins/task_manager/presentation/cli: 0 # Tested with e2e tests
+                pkg/plugins/task_manager/presentation/tui: 0 # Tested via integration
+                pkg/plugins/task_manager/presentation/tui/viewmodels: 100 # Pure data, full coverage
+                pkg/plugins/task_manager/presentation/tui/components: 100 # Reusable components, full coverage
+                pkg/plugins/task_manager/presentation/tui/transformers: 100 # Pure functions, full coverage
+                pkg/plugins/task_manager/presentation/tui/queries: 70 # Data orchestration
+                pkg/plugins/task_manager/presentation/tui/presenters: 0 # Bubble Tea components, integration tested
                 pkg/plugins/task_manager/e2e_test: 0
 
                 pkg/pluginsdk: 0 # SDK is interface-only, no tests needed

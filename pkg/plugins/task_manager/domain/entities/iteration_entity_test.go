@@ -18,7 +18,7 @@ func TestNewIterationEntity(t *testing.T) {
 		deliverable string
 		taskIDs     []string
 		status      string
-		rank        int
+		rank        float64
 		wantErr     bool
 		errContains string
 	}{
@@ -134,7 +134,7 @@ func TestNewIterationEntity(t *testing.T) {
 					t.Errorf("Status = %q, want %q", iteration.Status, tt.status)
 				}
 				if iteration.Rank != tt.rank {
-					t.Errorf("Rank = %d, want %d", iteration.Rank, tt.rank)
+					t.Errorf("Rank = %f, want %f", iteration.Rank, tt.rank)
 				}
 			}
 		})
@@ -365,7 +365,7 @@ func TestIterationEntity_GetField(t *testing.T) {
 		{"goal", "Foundation"},
 		{"deliverable", "Core framework"},
 		{"status", "current"},
-		{"rank", 500},
+		{"rank", 500.0},
 	}
 
 	for _, tt := range tests {
@@ -386,7 +386,7 @@ func TestIterationEntity_GetAllFields(t *testing.T) {
 		Goal:        "Foundation",
 		Deliverable: "Core framework",
 		Status:      "current",
-		Rank:        500,
+		Rank:        500.0,
 		TaskIDs:     []string{"DW-task-1", "DW-task-2"},
 		StartedAt:   &now,
 		CreatedAt:   now,

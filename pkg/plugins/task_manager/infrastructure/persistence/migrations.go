@@ -13,7 +13,7 @@ import (
 
 const (
 	// SchemaVersion is the current database schema version
-	SchemaVersion = 6
+	SchemaVersion = 8
 )
 
 // SQL table creation statements
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS iterations (
     name TEXT NOT NULL,
     goal TEXT,
     status TEXT NOT NULL,
-    rank INTEGER NOT NULL DEFAULT 500,
+    rank REAL NOT NULL DEFAULT 500,
     deliverable TEXT,
     started_at TIMESTAMP,
     completed_at TIMESTAMP,
@@ -274,6 +274,31 @@ func InitSchema(db *sql.DB) error {
 		if err := migrateV4ToV5(db); err != nil {
 			return fmt.Errorf("failed to migrate from v4 to v5: %w", err)
 		}
+		currentVersion = 5
+	}
+
+	// If we have version 5, run migration
+	if currentVersion == 5 {
+		if err := migrateV5ToV6(db); err != nil {
+			return fmt.Errorf("failed to migrate from v5 to v6: %w", err)
+		}
+		currentVersion = 6
+	}
+
+	// If we have version 6, run migration
+	if currentVersion == 6 {
+		if err := migrateV6ToV7(db); err != nil {
+			return fmt.Errorf("failed to migrate from v6 to v7: %w", err)
+		}
+		currentVersion = 7
+	}
+
+	// If we have version 7, run migration
+	if currentVersion == 7 {
+		if err := migrateV7ToV8(db); err != nil {
+			return fmt.Errorf("failed to migrate from v7 to v8: %w", err)
+		}
+		currentVersion = 8
 	}
 
 	statements := []string{
@@ -859,5 +884,249 @@ func migrateV4ToV5(db *sql.DB) error {
 	}
 
 	fmt.Println("✓ Migration to schema v5 complete!")
+	return nil
+}
+
+// migrateV5ToV6 migrates database from schema version 5 to version 6
+// Adds documents table for ADR, plan, and retrospective documents
+func migrateV5ToV6(db *sql.DB) error {
+	// Start transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Check if documents table already exists
+	var tableExists int
+	err = tx.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='documents'").Scan(&tableExists)
+	if err != nil {
+		return fmt.Errorf("failed to check for documents table: %w", err)
+	}
+
+	if tableExists > 0 {
+		// Already migrated
+		return tx.Commit()
+	}
+
+	fmt.Println("Migrating database from schema v5 to v6 (adding documents table)...")
+
+	// Create documents table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS documents (
+			id TEXT PRIMARY KEY,
+			title TEXT NOT NULL CHECK(length(title) > 0 AND length(title) <= 200),
+			type TEXT NOT NULL CHECK(type IN ('adr', 'plan', 'retrospective', 'other')),
+			status TEXT NOT NULL CHECK(status IN ('draft', 'published', 'archived')),
+			content TEXT NOT NULL,
+			track_id TEXT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+			iteration_number INTEGER NULL REFERENCES iterations(number) ON DELETE CASCADE,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			metadata TEXT DEFAULT '{}',
+			CHECK(NOT (track_id IS NOT NULL AND iteration_number IS NOT NULL))
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create documents table: %w", err)
+	}
+
+	// Create indexes
+	_, err = tx.Exec("CREATE INDEX IF NOT EXISTS idx_documents_track_id ON documents(track_id)")
+	if err != nil {
+		return fmt.Errorf("failed to create documents track_id index: %w", err)
+	}
+
+	_, err = tx.Exec("CREATE INDEX IF NOT EXISTS idx_documents_iteration_number ON documents(iteration_number)")
+	if err != nil {
+		return fmt.Errorf("failed to create documents iteration_number index: %w", err)
+	}
+
+	_, err = tx.Exec("CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(type)")
+	if err != nil {
+		return fmt.Errorf("failed to create documents type index: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration: %w", err)
+	}
+
+	fmt.Println("✓ Migration to schema v6 complete!")
+	return nil
+}
+
+// migrateV6ToV7 migrates database from schema version 6 to version 7
+// Changes iteration rank column from INTEGER to REAL to support fractional ranking
+func migrateV6ToV7(db *sql.DB) error {
+	// Start transaction
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Check if iterations table has rank column with REAL type (already migrated)
+	var columnType string
+	rows, err := tx.Query("PRAGMA table_info(iterations)")
+	if err != nil {
+		return fmt.Errorf("failed to check iterations table: %w", err)
+	}
+	defer rows.Close()
+
+	rankFound := false
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull, pk int
+		var dfltValue sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dfltValue, &pk); err != nil {
+			return fmt.Errorf("failed to scan column info: %w", err)
+		}
+		if name == "rank" {
+			rankFound = true
+			columnType = typ
+			break
+		}
+	}
+	rows.Close()
+
+	if !rankFound {
+		return fmt.Errorf("iterations table missing rank column")
+	}
+
+	// If already REAL, migration complete
+	if columnType == "REAL" {
+		return tx.Commit()
+	}
+
+	fmt.Println("Migrating database from schema v6 to v7 (iteration rank: INTEGER -> REAL)...")
+
+	// MIGRATE ITERATIONS TABLE
+	// 1. Create new iterations table with REAL rank
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS iterations_new (
+			number INTEGER PRIMARY KEY,
+			name TEXT NOT NULL,
+			goal TEXT,
+			status TEXT NOT NULL,
+			rank REAL NOT NULL DEFAULT 500,
+			deliverable TEXT,
+			started_at TIMESTAMP,
+			completed_at TIMESTAMP,
+			created_at TIMESTAMP NOT NULL,
+			updated_at TIMESTAMP NOT NULL
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create new iterations table: %w", err)
+	}
+
+	// 2. Copy data from old table to new table (INTEGER rank converts automatically to REAL)
+	_, err = tx.Exec(`
+		INSERT INTO iterations_new (number, name, goal, status, rank, deliverable, started_at, completed_at, created_at, updated_at)
+		SELECT
+			number,
+			name,
+			goal,
+			status,
+			CAST(rank AS REAL) as rank,
+			deliverable,
+			started_at,
+			completed_at,
+			created_at,
+			updated_at
+		FROM iterations
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to migrate iterations data: %w", err)
+	}
+
+	// 3. Drop old table and rename new one
+	if _, err = tx.Exec("DROP TABLE iterations"); err != nil {
+		return fmt.Errorf("failed to drop old iterations table: %w", err)
+	}
+	if _, err = tx.Exec("ALTER TABLE iterations_new RENAME TO iterations"); err != nil {
+		return fmt.Errorf("failed to rename new iterations table: %w", err)
+	}
+
+	// 4. Recreate indexes
+	_, err = tx.Exec("CREATE INDEX IF NOT EXISTS idx_iterations_status ON iterations(status)")
+	if err != nil {
+		return fmt.Errorf("failed to create iterations status index: %w", err)
+	}
+
+	_, err = tx.Exec("CREATE INDEX IF NOT EXISTS idx_iterations_rank ON iterations(rank)")
+	if err != nil {
+		return fmt.Errorf("failed to create iterations rank index: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit migration: %w", err)
+	}
+
+	fmt.Println("✓ Migration to schema v7 complete!")
+	return nil
+}
+
+// migrateV7ToV8 normalizes iteration ranks to prevent collisions
+func migrateV7ToV8(db *sql.DB) error {
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Fetch all iterations ordered by current rank and number (database order)
+	rows, err := tx.Query(`
+		SELECT number, rank
+		FROM iterations
+		ORDER BY rank, number
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to query iterations: %w", err)
+	}
+	defer rows.Close()
+
+	// Collect iterations and calculate new ranks
+	type iteration struct {
+		number  int
+		newRank float64
+	}
+	var iterations []iteration
+	index := 0
+	for rows.Next() {
+		var number int
+		var oldRank float64
+		if err := rows.Scan(&number, &oldRank); err != nil {
+			return fmt.Errorf("failed to scan iteration: %w", err)
+		}
+		// Assign new rank with 100-unit spacing
+		newRank := float64(index) * 100.0
+		iterations = append(iterations, iteration{number, newRank})
+		index++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("failed during iteration scan: %w", err)
+	}
+
+	// Update all iterations with new ranks
+	for _, iter := range iterations {
+		_, err := tx.Exec(`
+			UPDATE iterations
+			SET rank = ?
+			WHERE number = ?
+		`, iter.newRank, iter.number)
+		if err != nil {
+			return fmt.Errorf("failed to update iteration %d: %w", iter.number, err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	fmt.Println("✓ Migration to schema v8 complete! (Normalized iteration ranks)")
 	return nil
 }

@@ -15,8 +15,8 @@ type IterationEntity struct {
 	Name        string     `json:"name"`
 	Goal        string     `json:"goal"`
 	TaskIDs     []string   `json:"task_ids"`
-	Status      string     `json:"status"` // planned, current, complete
-	Rank        int        `json:"rank"`   // 1-1000 (lower = higher priority)
+	Status      string     `json:"status"`  // planned, current, complete
+	Rank        float64    `json:"rank"`    // 1-1000 (lower = higher priority, supports fractional values)
 	Deliverable string     `json:"deliverable"`
 	StartedAt   *time.Time `json:"started_at"`
 	CompletedAt *time.Time `json:"completed_at"`
@@ -25,7 +25,7 @@ type IterationEntity struct {
 }
 
 // NewIterationEntity creates a new iteration entity with validation
-func NewIterationEntity(number int, name, goal, deliverable string, taskIDs []string, status string, rank int, startedAt, completedAt, createdAt, updatedAt time.Time) (*IterationEntity, error) {
+func NewIterationEntity(number int, name, goal, deliverable string, taskIDs []string, status string, rank float64, startedAt, completedAt, createdAt, updatedAt time.Time) (*IterationEntity, error) {
 	// Validate number is positive
 	if number <= 0 {
 		return nil, fmt.Errorf("%w: iteration number must be positive", pluginsdk.ErrInvalidArgument)
@@ -36,7 +36,7 @@ func NewIterationEntity(number int, name, goal, deliverable string, taskIDs []st
 		return nil, fmt.Errorf("%w: invalid iteration status: must be one of planned, current, complete", pluginsdk.ErrInvalidArgument)
 	}
 
-	// Validate rank
+	// Validate rank (allow fractional values for fine-grained ordering)
 	if rank < 1 || rank > 1000 {
 		return nil, fmt.Errorf("%w: invalid iteration rank: must be between 1 and 1000", pluginsdk.ErrInvalidArgument)
 	}

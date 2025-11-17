@@ -17,6 +17,7 @@ go.work
 # DarwinFlow CLI binary (only in root)
 /dw
 /dw-stable
+/dw-e2e-test
 
 # DarwinFlow data directory
 .darwinflow/

@@ -14,6 +14,7 @@ import (
 	infracli "github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/infrastructure/cli"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/infrastructure/persistence"
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/cli"
+	presentationTui "github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui"
 	"github.com/kgatilin/darwinflow-pub/pkg/pluginsdk"
 )
 
@@ -456,8 +457,9 @@ func (p *TaskManagerPlugin) GetCommands() []pluginsdk.Command {
 		// ========================================================================
 		// INFRASTRUCTURE COMMANDS (not migrated, appropriately structured)
 		// ========================================================================
-		// TUI command
+		// TUI commands
 		&cli.TUICommand{Plugin: p},
+		&presentationTui.TUINewCommand{Plugin: p},
 		// Prompt command (presentation layer)
 		&cli.PromptCommand{GetPrompt: cli.GetSystemPrompt},
 		// Backup commands (infrastructure layer)
@@ -485,8 +487,9 @@ func (p *TaskManagerPlugin) getCommandsWithoutServices() []pluginsdk.Command {
 		// ========================================================================
 		// INFRASTRUCTURE COMMANDS (not migrated, appropriately structured)
 		// ========================================================================
-		// TUI command
+		// TUI commands
 		&cli.TUICommand{Plugin: p},
+		&presentationTui.TUINewCommand{Plugin: p},
 		// Prompt command (presentation layer)
 		&cli.PromptCommand{GetPrompt: cli.GetSystemPrompt},
 		// Backup commands (infrastructure layer)

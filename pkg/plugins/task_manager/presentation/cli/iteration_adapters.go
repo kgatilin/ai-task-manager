@@ -500,7 +500,7 @@ func (a *IterationShowCommandAdapter) Execute(ctx context.Context, cmdCtx plugin
 		fmt.Fprintf(out, "  Deliverable: %s\n", iteration.Deliverable)
 	}
 	fmt.Fprintf(out, "  Tasks:       %d\n", len(tasks))
-	fmt.Fprintf(out, "  Rank:        %d\n", iteration.Rank)
+	fmt.Fprintf(out, "  Rank:        %.2f\n", iteration.Rank)
 	fmt.Fprintf(out, "  Created:     %s\n", iteration.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(out, "  Updated:     %s\n", iteration.UpdatedAt.Format("2006-01-02 15:04:05"))
 
@@ -968,7 +968,7 @@ func (a *IterationViewCommandAdapter) Execute(ctx context.Context, cmdCtx plugin
 
 	fmt.Fprintf(out, "## Details\n\n")
 	fmt.Fprintf(out, "- **Number**: %d\n", iteration.Number)
-	fmt.Fprintf(out, "- **Rank**: %d\n", iteration.Rank)
+	fmt.Fprintf(out, "- **Rank**: %.2f\n", iteration.Rank)
 	fmt.Fprintf(out, "- **Created**: %s\n", iteration.CreatedAt.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(out, "- **Updated**: %s\n", iteration.UpdatedAt.Format("2006-01-02 15:04:05"))
 
