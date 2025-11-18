@@ -35,7 +35,7 @@ func TestTransformToIterationDetailViewModel(t *testing.T) {
 	acs[0].Status = entities.ACStatusVerified
 	acs[1].Status = entities.ACStatusSkipped
 
-	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, acs)
+	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, acs, []*entities.DocumentEntity{})
 
 	// Verify iteration metadata
 	if vm.Number != 1 {
@@ -132,7 +132,7 @@ func TestTransformToIterationDetailViewModel_EmptyTasks(t *testing.T) {
 		t.Fatalf("failed to create iteration: %v", err)
 	}
 
-	vm := transformers.TransformToIterationDetailViewModel(iteration, []*entities.TaskEntity{}, []*entities.AcceptanceCriteriaEntity{})
+	vm := transformers.TransformToIterationDetailViewModel(iteration, []*entities.TaskEntity{}, []*entities.AcceptanceCriteriaEntity{}, []*entities.DocumentEntity{})
 
 	if len(vm.TODOTasks) != 0 {
 		t.Errorf("expected 0 TODO tasks, got %d", len(vm.TODOTasks))
@@ -169,7 +169,7 @@ func TestTransformToIterationDetailViewModel_AllTasksDone(t *testing.T) {
 		mustCreateTask("TM-task-2", "TM-track-1", "Task 2", "Description 2", "done", 200, "", now, now),
 	}
 
-	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, []*entities.AcceptanceCriteriaEntity{})
+	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, []*entities.AcceptanceCriteriaEntity{}, []*entities.DocumentEntity{})
 
 	if len(vm.TODOTasks) != 0 {
 		t.Errorf("expected 0 TODO tasks, got %d", len(vm.TODOTasks))
@@ -206,7 +206,7 @@ func TestTransformToIterationDetailViewModel_CompletedAtTimestamp(t *testing.T) 
 		t.Fatalf("failed to create iteration: %v", err)
 	}
 
-	vm := transformers.TransformToIterationDetailViewModel(iteration, []*entities.TaskEntity{}, []*entities.AcceptanceCriteriaEntity{})
+	vm := transformers.TransformToIterationDetailViewModel(iteration, []*entities.TaskEntity{}, []*entities.AcceptanceCriteriaEntity{}, []*entities.DocumentEntity{})
 
 	if vm.CompletedAt == "" {
 		t.Error("expected non-empty CompletedAt")
@@ -241,7 +241,7 @@ func TestTransformToIterationDetailViewModel_ACStatusIcons(t *testing.T) {
 	acs[2].Status = entities.ACStatusFailed
 	acs[3].Status = entities.ACStatusNotStarted
 
-	vm := transformers.TransformToIterationDetailViewModel(iteration, []*entities.TaskEntity{}, acs)
+	vm := transformers.TransformToIterationDetailViewModel(iteration, []*entities.TaskEntity{}, acs, []*entities.DocumentEntity{})
 
 	// Verify status icons
 	expectedIcons := []string{"✓", "⊘", "✗", "○"}
@@ -281,7 +281,7 @@ func TestTransformToIterationDetailViewModel_TaskACGrouping(t *testing.T) {
 		entities.NewAcceptanceCriteriaEntity("TM-ac-6", "TM-task-3", "AC 3 for task 3", entities.VerificationTypeManual, "Test 6", now, now),
 	}
 
-	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, acs)
+	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, acs, []*entities.DocumentEntity{})
 
 	// Verify TaskACs grouping
 	if len(vm.TaskACs) != 3 {
@@ -344,7 +344,7 @@ func TestTransformToIterationDetailViewModel_TaskWithoutACs(t *testing.T) {
 		entities.NewAcceptanceCriteriaEntity("TM-ac-1", "TM-task-1", "AC 1", entities.VerificationTypeManual, "Test 1", now, now),
 	}
 
-	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, acs)
+	vm := transformers.TransformToIterationDetailViewModel(iteration, tasks, acs, []*entities.DocumentEntity{})
 
 	// Verify TaskACs - only Task 1 should have a group (Task 2 has no ACs)
 	if len(vm.TaskACs) != 1 {

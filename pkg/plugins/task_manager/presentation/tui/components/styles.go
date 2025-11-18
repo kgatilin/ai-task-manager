@@ -63,7 +63,7 @@ var Icons = struct {
 // ColorScheme defines all colors used in the TUI.
 // This is the single source of truth for the color palette.
 var ColorScheme = struct {
-	Accent       string // "205" - Primary accent (magenta/pink)
+	Accent       string // "117" - Primary accent (light blue)
 	ErrorTitle   string // "196" - Error red
 	ErrorMessage string // "203" - Error message pink
 	Muted        string // "240" - Muted gray for metadata
@@ -73,9 +73,9 @@ var ColorScheme = struct {
 	Info         string // "blue" - Informational states
 	Failed       string // "160" - Failed/error states (dark red)
 	Skipped      string // "gray" - Skipped/disabled states
-	Current      string // "magenta" - Current/active iteration highlight
+	Current      string // "117" - Current/active iteration highlight (light blue)
 }{
-	Accent:       "205",
+	Accent:       "117",
 	ErrorTitle:   "196",
 	ErrorMessage: "203",
 	Muted:        "240",
@@ -85,7 +85,7 @@ var ColorScheme = struct {
 	Info:         "blue",
 	Failed:       "160",
 	Skipped:      "gray",
-	Current:      "magenta",
+	Current:      "117",
 }
 
 // Styles contains all pre-defined lipgloss styles used across the TUI.

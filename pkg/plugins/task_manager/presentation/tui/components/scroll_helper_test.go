@@ -930,3 +930,353 @@ func TestScrollHelperMultiline_VisibleRangeMultiline_LineOffsetClamping(t *testi
 		t.Errorf("expected last in [0,2], got %d", last)
 	}
 }
+
+// ============================================================================
+// Line-based Scrolling Tests (for documents)
+// ============================================================================
+
+func TestScrollHelper_ScrollLineUp(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 5, scroll up by 1
+	// EnsureVisible(100, 14) sets offset to 14 - 10 + 1 = 5
+	sh.EnsureVisible(100, 14)
+	initialOffset := sh.ViewportOffset()
+	if initialOffset != 5 {
+		t.Fatalf("setup failed: expected offset 5, got %d", initialOffset)
+	}
+	sh.ScrollLineUp(100)
+	newOffset := sh.ViewportOffset()
+
+	if newOffset != 4 {
+		t.Errorf("expected offset 4 after scroll up, got %d", newOffset)
+	}
+}
+
+func TestScrollHelper_ScrollLineUp_AtTop(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Already at top, should stay at 0
+	sh.EnsureVisible(100, 0)
+	sh.ScrollLineUp(100)
+	if sh.ViewportOffset() != 0 {
+		t.Errorf("expected offset to stay at 0, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollLineDown(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 0, scroll down by 1
+	sh.EnsureVisible(100, 0)
+	sh.ScrollLineDown(100)
+	newOffset := sh.ViewportOffset()
+
+	if newOffset != 1 {
+		t.Errorf("expected offset 1, got %d", newOffset)
+	}
+}
+
+func TestScrollHelper_ScrollLineDown_AtBottom(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Set up at near bottom: 100 lines total, viewport height 10, offset at 90
+	sh.SetViewportHeight(10)
+	sh.EnsureVisible(100, 95) // offset becomes 90
+	sh.ScrollLineDown(100)
+	newOffset := sh.ViewportOffset()
+
+	// Should be clamped to maxOffset (100 - 10 = 90)
+	maxOffset := 100 - 10
+	if newOffset > maxOffset {
+		t.Errorf("expected offset <= %d, got %d", maxOffset, newOffset)
+	}
+}
+
+func TestScrollHelper_ScrollLineDown_SmallContent(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Content smaller than viewport
+	sh.EnsureVisible(5, 0)
+	sh.ScrollLineDown(5)
+	// Should stay at 0 since all content is visible
+	if sh.ViewportOffset() != 0 {
+		t.Errorf("expected offset to stay at 0, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ViewportHeight(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(15)
+
+	if sh.ViewportHeight() != 15 {
+		t.Errorf("expected ViewportHeight 15, got %d", sh.ViewportHeight())
+	}
+}
+
+func TestScrollHelper_ScrollLineUp_Multiple(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 10, scroll up multiple times
+	// EnsureVisible(100, 19) sets offset to 19 - 10 + 1 = 10
+	sh.EnsureVisible(100, 19)
+	if sh.ViewportOffset() != 10 {
+		t.Fatalf("setup failed: expected offset 10, got %d", sh.ViewportOffset())
+	}
+	sh.ScrollLineUp(100) // offset 9
+	sh.ScrollLineUp(100) // offset 8
+	sh.ScrollLineUp(100) // offset 7
+
+	if sh.ViewportOffset() != 7 {
+		t.Errorf("expected offset 7 after 3 scroll-ups, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollLineDown_Multiple(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 0, scroll down multiple times
+	sh.EnsureVisible(100, 0)
+	sh.ScrollLineDown(100) // offset 1
+	sh.ScrollLineDown(100) // offset 2
+	sh.ScrollLineDown(100) // offset 3
+
+	if sh.ViewportOffset() != 3 {
+		t.Errorf("expected offset 3 after 3 scroll-downs, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollLineUp_Then_Down(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 5
+	// EnsureVisible(100, 14) sets offset to 14 - 10 + 1 = 5
+	sh.EnsureVisible(100, 14)
+	startOffset := sh.ViewportOffset()
+	if startOffset != 5 {
+		t.Fatalf("setup failed: expected offset 5, got %d", startOffset)
+	}
+
+	// Scroll up 2, then down 2
+	sh.ScrollLineUp(100)  // offset 4
+	sh.ScrollLineUp(100)  // offset 3
+	sh.ScrollLineDown(100) // offset 4
+	sh.ScrollLineDown(100) // offset 5
+
+	if sh.ViewportOffset() != startOffset {
+		t.Errorf("expected offset to return to %d, got %d", startOffset, sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollPageUp(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 25
+	sh.EnsureVisible(100, 34) // Sets offset to 25
+	if sh.ViewportOffset() != 25 {
+		t.Fatalf("setup failed: expected offset 25, got %d", sh.ViewportOffset())
+	}
+
+	// Scroll up by one page (viewport - 1 = 9 for overlap)
+	sh.ScrollPageUp(100)
+	if sh.ViewportOffset() != 16 {
+		t.Errorf("expected offset 16 after page up (with overlap), got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollPageUp_AtTop(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 5
+	sh.EnsureVisible(100, 14) // Sets offset to 5
+	if sh.ViewportOffset() != 5 {
+		t.Fatalf("setup failed: expected offset 5, got %d", sh.ViewportOffset())
+	}
+
+	// Scroll up by one page (should clamp to 0)
+	sh.ScrollPageUp(100)
+	if sh.ViewportOffset() != 0 {
+		t.Errorf("expected offset 0 after page up (clamped), got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollPageDown(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 10
+	sh.EnsureVisible(100, 19) // Sets offset 10
+	if sh.ViewportOffset() != 10 {
+		t.Fatalf("setup failed: expected offset 10, got %d", sh.ViewportOffset())
+	}
+
+	// Scroll down by one page (viewport - 1 = 9 for overlap)
+	sh.ScrollPageDown(100)
+	if sh.ViewportOffset() != 19 {
+		t.Errorf("expected offset 19 after page down (with overlap), got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollPageDown_AtBottom(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 85 (near end of 100 lines)
+	sh.EnsureVisible(100, 94) // Sets offset to 85
+	if sh.ViewportOffset() != 85 {
+		t.Fatalf("setup failed: expected offset 85, got %d", sh.ViewportOffset())
+	}
+
+	// Scroll down by one page (should clamp to maxOffset = 100 - 10 = 90)
+	sh.ScrollPageDown(100)
+	if sh.ViewportOffset() != 90 {
+		t.Errorf("expected offset 90 after page down (clamped), got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollPageDown_SmallContent(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Content smaller than viewport (5 lines, viewport 10)
+	sh.ScrollPageDown(5)
+	// maxOffset = 5 - 10 = -5, clamped to 0
+	if sh.ViewportOffset() != 0 {
+		t.Errorf("expected offset 0 for small content, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollToStart(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 42
+	sh.EnsureVisible(100, 51) // Sets offset to 42
+	if sh.ViewportOffset() != 42 {
+		t.Fatalf("setup failed: expected offset 42, got %d", sh.ViewportOffset())
+	}
+
+	// Jump to start
+	sh.ScrollToStart()
+	if sh.ViewportOffset() != 0 {
+		t.Errorf("expected offset 0 after jump to start, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollToEnd(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 0
+	sh.EnsureVisible(100, 0)
+	if sh.ViewportOffset() != 0 {
+		t.Fatalf("setup failed: expected offset 0, got %d", sh.ViewportOffset())
+	}
+
+	// Jump to end (maxOffset = 100 - 10 = 90)
+	sh.ScrollToEnd(100)
+	if sh.ViewportOffset() != 90 {
+		t.Errorf("expected offset 90 after jump to end, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollToEnd_SmallContent(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Content smaller than viewport (5 lines)
+	sh.ScrollToEnd(5)
+	// maxOffset = 5 - 10 = -5, clamped to 0
+	if sh.ViewportOffset() != 0 {
+		t.Errorf("expected offset 0 for small content, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollPageUp_Then_ScrollPageDown(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Start at offset 30
+	sh.EnsureVisible(100, 39) // Sets offset to 30
+	if sh.ViewportOffset() != 30 {
+		t.Fatalf("setup failed: expected offset 30, got %d", sh.ViewportOffset())
+	}
+
+	// Page up twice, then page down twice (overlap = viewport - 1 = 9)
+	sh.ScrollPageUp(100)   // offset 21 (30 - 9)
+	sh.ScrollPageUp(100)   // offset 12 (21 - 9)
+	sh.ScrollPageDown(100) // offset 21 (12 + 9)
+	sh.ScrollPageDown(100) // offset 30 (21 + 9)
+
+	if sh.ViewportOffset() != 30 {
+		t.Errorf("expected offset to return to 30, got %d", sh.ViewportOffset())
+	}
+}
+
+func TestScrollHelper_ScrollPosition_All(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(20)
+
+	// Content fits entirely in viewport
+	position := sh.ScrollPosition(15)
+	if position != "All" {
+		t.Errorf("expected 'All' for small content, got '%s'", position)
+	}
+}
+
+func TestScrollHelper_ScrollPosition_Top(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// At top (offset 0)
+	position := sh.ScrollPosition(100)
+	if position != "Top" {
+		t.Errorf("expected 'Top' at offset 0, got '%s'", position)
+	}
+}
+
+func TestScrollHelper_ScrollPosition_Bottom(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// At bottom (offset = maxOffset = 100 - 10 = 90)
+	sh.ScrollToEnd(100)
+	position := sh.ScrollPosition(100)
+	if position != "Bot" {
+		t.Errorf("expected 'Bot' at end, got '%s'", position)
+	}
+}
+
+func TestScrollHelper_ScrollPosition_Middle(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// Middle position (offset 45, maxOffset 90, percentage = 50%)
+	sh.EnsureVisible(100, 54) // Sets offset to 45
+	position := sh.ScrollPosition(100)
+	if position != "50%" {
+		t.Errorf("expected '50%%' at middle, got '%s'", position)
+	}
+}
+
+func TestScrollHelper_ScrollPosition_Quarter(t *testing.T) {
+	sh := components.NewScrollHelper()
+	sh.SetViewportHeight(10)
+
+	// 25% position (offset ~22, maxOffset 90, percentage = 24%)
+	sh.EnsureVisible(100, 31) // Sets offset to 22
+	position := sh.ScrollPosition(100)
+	if position != "24%" {
+		t.Errorf("expected '24%%' at quarter, got '%s'", position)
+	}
+}

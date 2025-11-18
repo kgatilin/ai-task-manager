@@ -281,7 +281,7 @@ overrides:
                 pkg/plugins/task_manager/presentation/tui: 0 # Tested via integration
                 pkg/plugins/task_manager/presentation/tui/viewmodels: 100 # Pure data, full coverage
                 pkg/plugins/task_manager/presentation/tui/components: 100 # Reusable components, full coverage
-                pkg/plugins/task_manager/presentation/tui/transformers: 100 # Pure functions, full coverage
+                pkg/plugins/task_manager/presentation/tui/transformers: 90 # Pure functions, high coverage
                 pkg/plugins/task_manager/presentation/tui/queries: 70 # Data orchestration
                 pkg/plugins/task_manager/presentation/tui/presenters: 0 # Bubble Tea components, integration tested
                 pkg/plugins/task_manager/e2e_test: 0

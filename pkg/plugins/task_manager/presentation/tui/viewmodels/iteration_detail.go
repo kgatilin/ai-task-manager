@@ -75,6 +75,9 @@ type IterationDetailViewModel struct {
 	// ACs grouped by task (for AC view in ACs tab)
 	TaskACs []*TaskACGroupViewModel
 
+	// Documents attached to this iteration
+	Documents []DocumentListItemViewModel
+
 	// Progress tracking
 	Progress *ProgressViewModel
 
@@ -98,6 +101,7 @@ func NewIterationDetailViewModel(number int, name, goal, deliverable, status str
 		DoneTasks:          []*TaskRowViewModel{},
 		AcceptanceCriteria: []*IterationACViewModel{},
 		TaskACs:            []*TaskACGroupViewModel{},
+		Documents:          []DocumentListItemViewModel{},
 		Progress:           NewProgressViewModel(0, 0),
 	}
 }

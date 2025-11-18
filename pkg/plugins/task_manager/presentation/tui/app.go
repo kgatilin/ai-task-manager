@@ -22,6 +22,7 @@ const (
 	ViewIterationDetailNew
 	ViewTaskDetailNew
 	ViewTrackDetailNew
+	ViewDocumentDetailNew
 )
 
 // AppModelNew is the root Bubble Tea model for the new MVP TUI
@@ -40,8 +41,13 @@ type AppModelNew struct {
 	currentIterationNumber int
 	currentTaskID          string
 	currentTrackID         string
+	currentDocumentID      string                         // Track current document being viewed
 	currentActiveTab       presenters.IterationDetailTab // Track active tab for AC actions
 	dashboardSelectedIndex int                            // Dashboard selected index (for restoring focus on return)
+
+	// Document viewer state (for restoration on ESC)
+	previousActiveTab     presenters.IterationDetailTab
+	previousSelectedIndex int
 
 	width  int
 	height int
@@ -110,6 +116,35 @@ func (m *AppModelNew) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.activePresenter.Init()
 
 	case presenters.BackMsgNew:
+		if m.currentView == ViewDocumentDetailNew {
+			// Return from document viewer to previous view with restored state
+			if m.previousView == ViewIterationDetailNew && m.currentIterationNumber > 0 {
+				m.currentView = ViewLoadingNew
+				loadingVM := viewmodels.NewLoadingViewModel(fmt.Sprintf("Loading iteration #%d...", m.currentIterationNumber))
+				m.activePresenter = presenters.NewLoadingPresenter(loadingVM)
+				return m, tea.Batch(
+					m.activePresenter.Init(),
+					m.loadIterationDetailWithTabAndSelection(m.currentIterationNumber, m.previousActiveTab, m.previousSelectedIndex),
+				)
+			}
+			if m.previousView == ViewTrackDetailNew && m.currentTrackID != "" {
+				m.currentView = ViewLoadingNew
+				loadingVM := viewmodels.NewLoadingViewModel(fmt.Sprintf("Loading track %s...", m.currentTrackID))
+				m.activePresenter = presenters.NewLoadingPresenter(loadingVM)
+				return m, tea.Batch(
+					m.activePresenter.Init(),
+					m.loadTrackDetailWithSelection(m.currentTrackID, m.previousSelectedIndex),
+				)
+			}
+			// Fallback: return to dashboard
+			m.currentView = ViewLoadingNew
+			loadingVM := viewmodels.NewLoadingViewModel("Loading dashboard...")
+			m.activePresenter = presenters.NewLoadingPresenter(loadingVM)
+			return m, tea.Batch(
+				m.activePresenter.Init(),
+				m.loadRoadmapList(),
+			)
+		}
 		if m.currentView == ViewErrorNew {
 			// Navigate back to the view we came from before the error
 			if m.previousView == ViewRoadmapListNew {
@@ -304,6 +339,28 @@ func (m *AppModelNew) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case presenters.RefreshDashboardMsg:
 		// Reload dashboard data, preserving selected index
 		return m, m.loadRoadmapListWithIndex(msg.SelectedIndex)
+
+	case presenters.DrillIntoDocumentMsg:
+		// Navigate to document viewer
+		m.previousView = m.currentView
+		m.currentDocumentID = msg.DocumentID
+
+		// Save current presenter state (activeTab and selectedIndex) before navigating
+		if m.currentView == ViewIterationDetailNew {
+			if iterPresenter, ok := m.activePresenter.(*presenters.IterationDetailPresenter); ok {
+				m.previousActiveTab = iterPresenter.GetActiveTab()
+				m.previousSelectedIndex = iterPresenter.GetSelectedIndex()
+			}
+		} else if m.currentView == ViewTrackDetailNew {
+			if trackPresenter, ok := m.activePresenter.(*presenters.TrackDetailPresenter); ok {
+				m.previousSelectedIndex = trackPresenter.GetSelectedIndex()
+			}
+		}
+
+		m.currentView = ViewDocumentDetailNew
+		presenter := presenters.NewDocumentViewerPresenter(msg.DocumentID, m.repo, m.ctx)
+		m.activePresenter = presenter
+		return m, presenter.Init()
 	}
 
 	if m.activePresenter != nil {

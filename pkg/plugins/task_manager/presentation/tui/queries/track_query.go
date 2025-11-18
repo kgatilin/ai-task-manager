@@ -10,12 +10,13 @@ import (
 )
 
 // LoadTrackDetailData loads track detail data for a specific track.
-// Returns track + tasks + dependency tracks transformed into view model ready for presentation.
+// Returns track + tasks + dependency tracks + documents transformed into view model ready for presentation.
 //
 // Pre-loads:
 // - Track entity
 // - All tasks in the track
 // - All dependency tracks (for display labels)
+// - All documents attached to the track
 //
 // Eliminates N+1 queries by loading all related data upfront.
 func LoadTrackDetailData(
@@ -46,8 +47,15 @@ func LoadTrackDetailData(
 		dependencyTracks = append(dependencyTracks, depTrack)
 	}
 
+	// Fetch documents attached to the track
+	documents, err := repo.FindDocumentsByTrack(ctx, trackID)
+	if err != nil {
+		// Log error but continue (documents are non-critical)
+		documents = []*entities.DocumentEntity{}
+	}
+
 	// Transform to view model
-	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks)
+	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks, documents)
 
 	return vm, nil
 }

@@ -402,6 +402,50 @@ func (c *SQLiteRepositoryComposite) GetNextSequenceNumber(ctx context.Context, e
 }
 
 // ============================================================================
+// Document operations (6 methods) - delegate to Document repository
+// ============================================================================
+
+// SaveDocument persists a new document to storage.
+func (c *SQLiteRepositoryComposite) SaveDocument(ctx context.Context, doc *entities.DocumentEntity) error {
+	return c.Document.SaveDocument(ctx, doc)
+}
+
+// FindDocumentByID retrieves a document by its ID.
+func (c *SQLiteRepositoryComposite) FindDocumentByID(ctx context.Context, id string) (*entities.DocumentEntity, error) {
+	return c.Document.FindDocumentByID(ctx, id)
+}
+
+// FindAllDocuments returns all documents in storage.
+func (c *SQLiteRepositoryComposite) FindAllDocuments(ctx context.Context) ([]*entities.DocumentEntity, error) {
+	return c.Document.FindAllDocuments(ctx)
+}
+
+// FindDocumentsByTrack returns all documents attached to a specific track.
+func (c *SQLiteRepositoryComposite) FindDocumentsByTrack(ctx context.Context, trackID string) ([]*entities.DocumentEntity, error) {
+	return c.Document.FindDocumentsByTrack(ctx, trackID)
+}
+
+// FindDocumentsByIteration returns all documents attached to a specific iteration.
+func (c *SQLiteRepositoryComposite) FindDocumentsByIteration(ctx context.Context, iterationNumber int) ([]*entities.DocumentEntity, error) {
+	return c.Document.FindDocumentsByIteration(ctx, iterationNumber)
+}
+
+// FindDocumentsByType returns all documents of a specific type.
+func (c *SQLiteRepositoryComposite) FindDocumentsByType(ctx context.Context, docType entities.DocumentType) ([]*entities.DocumentEntity, error) {
+	return c.Document.FindDocumentsByType(ctx, docType)
+}
+
+// UpdateDocument updates an existing document.
+func (c *SQLiteRepositoryComposite) UpdateDocument(ctx context.Context, doc *entities.DocumentEntity) error {
+	return c.Document.UpdateDocument(ctx, doc)
+}
+
+// DeleteDocument removes a document from storage.
+func (c *SQLiteRepositoryComposite) DeleteDocument(ctx context.Context, id string) error {
+	return c.Document.DeleteDocument(ctx, id)
+}
+
+// ============================================================================
 // Backward Compatibility
 // ============================================================================
 

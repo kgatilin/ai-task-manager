@@ -122,8 +122,8 @@ func (p *TrackDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 		p.scrollHelper.SetViewportHeight(availableHeight)
 
 		// Ensure current selection is visible with new viewport height
-		totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
-		p.scrollHelper.EnsureVisible(totalTasks, p.selectedIndex)
+		totalItems := p.getTotalSelectableItems()
+		p.scrollHelper.EnsureVisible(totalItems, p.selectedIndex)
 
 	case tea.KeyMsg:
 		switch {
@@ -136,30 +136,36 @@ func (p *TrackDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 		case key.Matches(msg, p.keys.Up):
 			if p.selectedIndex > 0 {
 				p.selectedIndex--
-				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
-				p.scrollHelper.EnsureVisible(totalTasks, p.selectedIndex)
+				totalItems := p.getTotalSelectableItems()
+				p.scrollHelper.EnsureVisible(totalItems, p.selectedIndex)
 			}
 		case key.Matches(msg, p.keys.Down):
 			maxIndex := p.getMaxIndex()
 			if p.selectedIndex < maxIndex {
 				p.selectedIndex++
-				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
-				p.scrollHelper.EnsureVisible(totalTasks, p.selectedIndex)
+				totalItems := p.getTotalSelectableItems()
+				p.scrollHelper.EnsureVisible(totalItems, p.selectedIndex)
 			}
 		case key.Matches(msg, p.keys.PageUp):
-			totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
-			newIndex := p.scrollHelper.PageUp(totalTasks)
+			totalItems := p.getTotalSelectableItems()
+			newIndex := p.scrollHelper.PageUp(totalItems)
 			p.selectedIndex = newIndex
 		case key.Matches(msg, p.keys.PageDown):
-			totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.DoneTasks)
-			newIndex := p.scrollHelper.PageDown(totalTasks, p.selectedIndex)
+			totalItems := p.getTotalSelectableItems()
+			newIndex := p.scrollHelper.PageDown(totalItems, p.selectedIndex)
 			p.selectedIndex = newIndex
 		case key.Matches(msg, p.keys.Enter):
-			// Navigate to task detail
+			// Navigate to task or document detail
 			taskID := p.getSelectedTaskID()
 			if taskID != "" {
 				return p, func() tea.Msg {
 					return TaskSelectedMsg{TaskID: taskID}
+				}
+			}
+			docID := p.getSelectedDocumentID()
+			if docID != "" {
+				return p, func() tea.Msg {
+					return DrillIntoDocumentMsg{DocumentID: docID}
 				}
 			}
 		}
@@ -218,7 +224,7 @@ func (p *TrackDetailPresenter) View() string {
 	b.WriteString(components.Styles.ProgressStyle.Render(progressText))
 	b.WriteString("\n\n")
 
-	// Render tasks
+	// Render tasks and documents
 	p.renderTasksView(&b)
 
 	// Help view
@@ -233,42 +239,56 @@ func (p *TrackDetailPresenter) View() string {
 }
 
 func (p *TrackDetailPresenter) renderTasksView(b *strings.Builder) {
-	// Build flat task list with section info
-	type taskItem struct {
+	// Build combined list of tasks and documents with section info
+	type listItem struct {
+		itemType    string // "task" or "document"
 		task        *viewmodels.TrackDetailTaskViewModel
+		doc         viewmodels.DocumentListItemViewModel
 		section     string
 		sectionName string
 	}
-	allTasks := make([]taskItem, 0)
+	allItems := make([]listItem, 0)
 
+	// Add tasks
 	for _, task := range p.viewModel.TODOTasks {
-		allTasks = append(allTasks, taskItem{task: task, section: "todo", sectionName: "TODO"})
+		allItems = append(allItems, listItem{itemType: "task", task: task, section: "todo", sectionName: "TODO"})
 	}
 	for _, task := range p.viewModel.InProgressTasks {
-		allTasks = append(allTasks, taskItem{task: task, section: "in-progress", sectionName: "IN PROGRESS"})
+		allItems = append(allItems, listItem{itemType: "task", task: task, section: "in-progress", sectionName: "IN PROGRESS"})
 	}
 	for _, task := range p.viewModel.DoneTasks {
-		allTasks = append(allTasks, taskItem{task: task, section: "done", sectionName: "DONE"})
+		allItems = append(allItems, listItem{itemType: "task", task: task, section: "done", sectionName: "DONE"})
 	}
 
-	if len(allTasks) == 0 {
-		b.WriteString(components.Styles.MetadataStyle.Render("No tasks in this track"))
+	// Add documents (always add section header even if empty)
+	docSectionName := fmt.Sprintf("📄 Documents (%d)", len(p.viewModel.Documents))
+	if len(p.viewModel.Documents) > 0 {
+		for _, doc := range p.viewModel.Documents {
+			allItems = append(allItems, listItem{itemType: "document", doc: doc, section: "documents", sectionName: docSectionName})
+		}
+	} else {
+		// Add empty documents section to maintain navigation and display
+		allItems = append(allItems, listItem{itemType: "empty-documents", section: "documents", sectionName: docSectionName})
+	}
+
+	if len(allItems) == 0 {
+		b.WriteString(components.Styles.MetadataStyle.Render("No tasks or documents in this track"))
 		return
 	}
 
 	// Get visible range from scroll helper
-	start, end := p.scrollHelper.VisibleRange(len(allTasks))
+	start, end := p.scrollHelper.VisibleRange(len(allItems))
 
 	// Scroll indicator (above)
 	if start > 0 {
-		b.WriteString(components.Styles.MetadataStyle.Render("  ↑ More tasks above"))
+		b.WriteString(components.Styles.MetadataStyle.Render("  ↑ More items above"))
 		b.WriteString("\n")
 	}
 
-	// Render visible tasks with section headers
+	// Render visible items with section headers
 	currentSection := ""
 	for i := start; i < end; i++ {
-		item := allTasks[i]
+		item := allItems[i]
 
 		// Render section header if new section
 		if item.section != currentSection {
@@ -277,35 +297,61 @@ func (p *TrackDetailPresenter) renderTasksView(b *strings.Builder) {
 			b.WriteString("\n")
 		}
 
-		// Render task
+		// Render item based on type
 		var output string
-		if i == p.selectedIndex {
-			output = components.Styles.SelectedStyle.Render(fmt.Sprintf("  %s: %s", item.task.ID, item.task.Title))
-		} else {
-			output = fmt.Sprintf("  %s: %s", item.task.ID, item.task.Title)
+		if item.itemType == "task" {
+			if i == p.selectedIndex {
+				output = components.Styles.SelectedStyle.Render(fmt.Sprintf("  %s: %s", item.task.ID, item.task.Title))
+			} else {
+				output = fmt.Sprintf("  %s: %s", item.task.ID, item.task.Title)
+			}
+			b.WriteString(output)
+			b.WriteString("\n")
+		} else if item.itemType == "document" {
+			if i == p.selectedIndex {
+				output = components.Styles.SelectedStyle.Render(fmt.Sprintf("  %s - %s [%s]", item.doc.Title, item.doc.Type, item.doc.StatusIcon))
+			} else {
+				output = fmt.Sprintf("  %s - %s [%s]", item.doc.Title, item.doc.Type, item.doc.StatusIcon)
+			}
+			b.WriteString(output)
+			b.WriteString("\n")
+		} else if item.itemType == "empty-documents" {
+			// Render empty documents message
+			output = components.Styles.MetadataStyle.Render("  (No documents)")
+			b.WriteString(output)
+			b.WriteString("\n")
 		}
-		b.WriteString(output)
-		b.WriteString("\n")
 	}
 
 	// Scroll indicator (below)
-	if end < len(allTasks) {
-		b.WriteString(components.Styles.MetadataStyle.Render("  ↓ More tasks below"))
+	if end < len(allItems) {
+		b.WriteString(components.Styles.MetadataStyle.Render("  ↓ More items below"))
 		b.WriteString("\n")
 	}
 }
 
-func (p *TrackDetailPresenter) getMaxIndex() int {
+func (p *TrackDetailPresenter) getTotalSelectableItems() int {
 	return len(p.viewModel.TODOTasks) +
 		len(p.viewModel.InProgressTasks) +
-		len(p.viewModel.DoneTasks) - 1
+		len(p.viewModel.DoneTasks) +
+		len(p.viewModel.Documents)
+}
+
+func (p *TrackDetailPresenter) getMaxIndex() int {
+	total := p.getTotalSelectableItems()
+	if total == 0 {
+		return 0
+	}
+	return total - 1
 }
 
 // getSelectedTaskID returns the task ID of the currently selected task
+// Returns empty string if a document is selected
 func (p *TrackDetailPresenter) getSelectedTaskID() string {
 	index := p.selectedIndex
 	todoLen := len(p.viewModel.TODOTasks)
 	inProgressLen := len(p.viewModel.InProgressTasks)
+	doneLen := len(p.viewModel.DoneTasks)
 
 	if index < todoLen {
 		return p.viewModel.TODOTasks[index].ID
@@ -317,9 +363,33 @@ func (p *TrackDetailPresenter) getSelectedTaskID() string {
 	}
 	index -= inProgressLen
 
-	if index < len(p.viewModel.DoneTasks) {
+	if index < doneLen {
 		return p.viewModel.DoneTasks[index].ID
+	}
+	// index -= doneLen (implicit)
+
+	// If we're past all tasks, user has selected a document
+	return ""
+}
+
+// getSelectedDocumentID returns the document ID of the currently selected document
+func (p *TrackDetailPresenter) getSelectedDocumentID() string {
+	index := p.selectedIndex
+	todoLen := len(p.viewModel.TODOTasks)
+	inProgressLen := len(p.viewModel.InProgressTasks)
+	doneLen := len(p.viewModel.DoneTasks)
+
+	index -= todoLen + inProgressLen + doneLen
+
+	if index >= 0 && index < len(p.viewModel.Documents) {
+		return p.viewModel.Documents[index].ID
 	}
 
 	return ""
 }
+
+// GetSelectedIndex returns the currently selected index
+func (p *TrackDetailPresenter) GetSelectedIndex() int {
+	return p.selectedIndex
+}
+

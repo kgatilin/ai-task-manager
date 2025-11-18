@@ -116,6 +116,65 @@ App (State Machine)              # Navigation, view transitions
 
 **See**: Existing presenter files for implementation examples
 
+### Scrolling Best Practices
+
+**Initial Viewport Sizing**:
+```go
+func (p *Presenter) Init() tea.Cmd {
+    return tea.Batch(
+        p.loadDataCmd(),
+        tea.WindowSize(), // CRITICAL: Request size immediately
+    )
+}
+```
+Without `tea.WindowSize()` in Init(), viewport height uses default (24), causing "1/6 screen" issues.
+
+**Item-Based vs Line-Based Scrolling**:
+
+| Use Case | Methods | When |
+|----------|---------|------|
+| **Item lists** (iterations, tasks, tracks) | `EnsureVisible()`, `PageUp()`, `PageDown()` | Selecting items in a list (cursor-based navigation) |
+| **Documents/content** (markdown, logs, text) | `ScrollLineUp/Down()`, `ScrollPageUp/Down()`, `ScrollToStart/End()` | Scrolling through continuous content (no cursor) |
+
+**Common Mistake**: Using item-based `PageUp()`/`PageDown()` for documents → returns wrong index, breaks scrolling.
+
+**ScrollHelper Method Reference**:
+```go
+// Item-based (lists with selection)
+sh.EnsureVisible(totalItems, selectedIndex)  // Keep selected item in view
+sh.PageUp(totalItems) → newIndex             // Returns new selection
+sh.PageDown(totalItems, currentIndex) → newIndex
+
+// Line-based (documents, continuous content)
+sh.ScrollLineUp(totalLines)                  // Scroll up 1 line
+sh.ScrollLineDown(totalLines)                // Scroll down 1 line
+sh.ScrollPageUp(totalLines)                  // Scroll up by viewport height
+sh.ScrollPageDown(totalLines)                // Scroll down by viewport height
+sh.ScrollToStart()                           // Jump to beginning
+sh.ScrollToEnd(totalLines)                   // Jump to end
+```
+
+**Hotkey Conventions**:
+- **Arrow keys**: Line-by-line (up/down for lists, up/down for documents)
+- **Shift+Up/Down**: Page scrolling (viewport height)
+- **Shift+Left/Right**: Jump to start/end
+- **PageUp/PageDown**: Page scrolling (alternative to Shift+Up/Down)
+
+**Viewport Height Calculation**:
+```go
+case tea.WindowSizeMsg:
+    p.height = msg.Height
+    // Reserve space for headers, help, etc.
+    reservedLines := headerLines + footerLines + helpLines
+    availableHeight := p.height - reservedLines
+    if availableHeight < 5 {
+        availableHeight = 5  // Minimum viewport
+    }
+    p.scrollHelper.SetViewportHeight(availableHeight)
+```
+
+**Anti-Pattern**: Using item methods for content scrolling causes viewport jumps and incorrect offsets.
+
 ---
 
 ## Navigation Flow
@@ -219,4 +278,4 @@ Dashboard (ViewRoadmapListNew)
 
 ---
 
-**Last Updated**: 2025-11-17 (Iteration 28 - MVP pattern with layered architecture)
+**Last Updated**: 2025-11-18 (Iteration 35 - Added scrolling best practices)

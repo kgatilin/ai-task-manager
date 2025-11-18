@@ -2,6 +2,7 @@ package presenters_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -165,4 +166,72 @@ func TestIterationDetailPresenter_TaskTransitionOnlyOnTasksTab(t *testing.T) {
 	_, cmdAfterTab := presenter.Update(iMsg)
 	// On ACs tab, 'i' key should not do anything related to task transitions
 	_ = cmdAfterTab // Should be nil or unrelated to task transition
+}
+
+func TestIterationDetailPresenter_DocumentsTabShowsCount(t *testing.T) {
+	// Create view model with documents
+	vm := &viewmodels.IterationDetailViewModel{
+		Number: 1,
+		Name:   "Test Iteration",
+		Progress: &viewmodels.ProgressViewModel{
+			Completed: 0,
+			Total:     0,
+			Percent:   0.0,
+		},
+		Documents: []viewmodels.DocumentListItemViewModel{
+			{ID: "TM-doc-1", Title: "Design Doc", Type: "adr", StatusIcon: "✓"},
+		},
+	}
+
+	presenter := presenters.NewIterationDetailPresenter(vm, nil, context.Background())
+
+	// Simulate window size message
+	p, _ := presenter.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	presenter = p.(*presenters.IterationDetailPresenter)
+
+	view := presenter.View()
+
+	// Verify Documents tab shows count
+	if !strings.Contains(view, "Documents (1)") {
+		t.Error("Expected Documents tab to show count '(1)'")
+	}
+}
+
+func TestIterationDetailPresenter_GetterMethods(t *testing.T) {
+	vm := &viewmodels.IterationDetailViewModel{
+		Number: 1,
+		Name:   "Test Iteration",
+		Progress: &viewmodels.ProgressViewModel{
+			Completed: 0,
+			Total:     1,
+			Percent:   0.0,
+		},
+		TODOTasks: []*viewmodels.TaskRowViewModel{
+			{ID: "TM-task-1", Title: "Task 1", Status: "todo"},
+		},
+	}
+
+	presenter := presenters.NewIterationDetailPresenter(vm, nil, context.Background())
+
+	// Test GetActiveTab
+	if presenter.GetActiveTab() != presenters.IterationDetailTabTasks {
+		t.Errorf("Expected active tab to be Tasks, got %v", presenter.GetActiveTab())
+	}
+
+	// Test GetSelectedIndex
+	if presenter.GetSelectedIndex() != 0 {
+		t.Errorf("Expected selected index to be 0, got %d", presenter.GetSelectedIndex())
+	}
+
+	// Switch to Documents tab
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	p, _ := presenter.Update(tabMsg)
+	presenter = p.(*presenters.IterationDetailPresenter)
+	p, _ = presenter.Update(tabMsg)
+	presenter = p.(*presenters.IterationDetailPresenter)
+
+	// Verify tab changed
+	if presenter.GetActiveTab() != presenters.IterationDetailTabDocuments {
+		t.Errorf("Expected active tab to be Documents after 2 tabs, got %v", presenter.GetActiveTab())
+	}
 }

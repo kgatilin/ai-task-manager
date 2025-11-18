@@ -1,6 +1,9 @@
 package presenters
 
-import tea "github.com/charmbracelet/bubbletea"
+import (
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/viewmodels"
+)
 
 // IterationSelectedMsg is sent when a user selects an iteration on the dashboard
 type IterationSelectedMsg struct {
@@ -47,6 +50,20 @@ type RefreshDashboardMsg struct {
 	SelectedIndex int // Preserve selected index across reload
 }
 
+// DocumentLoadedMsg is sent when a document has been loaded from repository
+type DocumentLoadedMsg struct {
+	ViewModel *viewmodels.DocumentViewModel
+	Error     error
+}
+
+// DocumentActionCompletedMsg is sent after a successful document action (approve/disapprove)
+type DocumentActionCompletedMsg struct{}
+
+// DrillIntoDocumentMsg is sent when a user navigates to view a document
+type DrillIntoDocumentMsg struct {
+	DocumentID string
+}
+
 // Ensure these are valid Bubble Tea messages
 var (
 	_ tea.Msg = IterationSelectedMsg{}
@@ -57,4 +74,8 @@ var (
 	_ tea.Msg = TaskTransitionCompletedMsg{}
 	_ tea.Msg = ReorderCompletedMsg{}
 	_ tea.Msg = RefreshDashboardMsg{}
+	_ tea.Msg = DocumentLoadedMsg{}
+	_ tea.Msg = DocumentActionCompletedMsg{}
+	_ tea.Msg = DrillIntoDocumentMsg{}
+	_ tea.Msg = BackMsgNew{}
 )

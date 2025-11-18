@@ -1,5 +1,7 @@
 package components
 
+import "fmt"
+
 // ScrollHelper manages viewport scrolling for single-line item lists.
 // It tracks viewport offset and ensures selected items remain visible.
 // This helper is reusable across all presenters (Dashboard, IterationDetail, TaskDetail).
@@ -102,6 +104,115 @@ func (s *ScrollHelper) PageDown(totalItems, currentSelectedIndex int) int {
 // ViewportOffset returns the current viewport offset (for debugging/inspection).
 func (s *ScrollHelper) ViewportOffset() int {
 	return s.viewportOffset
+}
+
+// ViewportHeight returns the current viewport height.
+func (s *ScrollHelper) ViewportHeight() int {
+	return s.viewportHeight
+}
+
+// ScrollLineUp scrolls up by one line (for documents, not item-based lists).
+// Clamps offset to valid range [0, maxOffset].
+func (s *ScrollHelper) ScrollLineUp(totalLines int) {
+	if s.viewportOffset > 0 {
+		s.viewportOffset--
+	}
+}
+
+// ScrollLineDown scrolls down by one line (for documents, not item-based lists).
+// Clamps offset to valid range [0, maxOffset].
+func (s *ScrollHelper) ScrollLineDown(totalLines int) {
+	maxOffset := totalLines - s.viewportHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if s.viewportOffset < maxOffset {
+		s.viewportOffset++
+	}
+}
+
+// ScrollPageUp scrolls up by one viewport height (for documents).
+// Keeps 1 line overlap for context (standard pager behavior).
+// Clamps offset to valid range [0, maxOffset].
+func (s *ScrollHelper) ScrollPageUp(totalLines int) {
+	// Scroll by (viewport - 1) to keep last line visible
+	scrollAmount := s.viewportHeight - 1
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+	s.viewportOffset -= scrollAmount
+	if s.viewportOffset < 0 {
+		s.viewportOffset = 0
+	}
+}
+
+// ScrollPageDown scrolls down by one viewport height (for documents).
+// Keeps 1 line overlap for context (standard pager behavior).
+// Clamps offset to valid range [0, maxOffset].
+func (s *ScrollHelper) ScrollPageDown(totalLines int) {
+	maxOffset := totalLines - s.viewportHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	// Scroll by (viewport - 1) to keep last line visible
+	scrollAmount := s.viewportHeight - 1
+	if scrollAmount < 1 {
+		scrollAmount = 1
+	}
+	s.viewportOffset += scrollAmount
+	if s.viewportOffset > maxOffset {
+		s.viewportOffset = maxOffset
+	}
+}
+
+// ScrollToStart jumps to the beginning of the document.
+func (s *ScrollHelper) ScrollToStart() {
+	s.viewportOffset = 0
+}
+
+// ScrollToEnd jumps to the end of the document.
+// totalLines: total number of lines in the document.
+func (s *ScrollHelper) ScrollToEnd(totalLines int) {
+	maxOffset := totalLines - s.viewportHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	s.viewportOffset = maxOffset
+}
+
+// ScrollPosition returns a string indicating the current scroll position.
+// Returns "All" if all content fits, "Top" at beginning, "Bottom" at end,
+// or percentage (e.g., "25%", "50%", "75%") for middle positions.
+func (s *ScrollHelper) ScrollPosition(totalLines int) string {
+	// All content visible (fits in viewport)
+	if totalLines <= s.viewportHeight {
+		return "All"
+	}
+
+	maxOffset := totalLines - s.viewportHeight
+	if maxOffset <= 0 {
+		return "All"
+	}
+
+	// At top
+	if s.viewportOffset == 0 {
+		return "Top"
+	}
+
+	// At bottom
+	if s.viewportOffset >= maxOffset {
+		return "Bot"
+	}
+
+	// Middle - calculate percentage
+	percentage := int((float64(s.viewportOffset) / float64(maxOffset)) * 100)
+	if percentage < 1 {
+		percentage = 1
+	}
+	if percentage > 99 {
+		percentage = 99
+	}
+	return fmt.Sprintf("%d%%", percentage)
 }
 
 // ScrollHelperMultiline manages viewport scrolling for multi-line item lists.

@@ -21,6 +21,7 @@ type IterationDetailTab int
 const (
 	IterationDetailTabTasks IterationDetailTab = iota
 	IterationDetailTabACs
+	IterationDetailTabDocuments
 )
 
 // IterationDetailKeyMap defines keybindings for iteration detail view
@@ -100,9 +101,11 @@ func NewIterationDetailKeyMap() IterationDetailKeyMap {
 func (k IterationDetailKeyMap) ShortHelp(activeTab IterationDetailTab) []key.Binding {
 	if activeTab == IterationDetailTabTasks {
 		return []key.Binding{k.Up, k.Down, k.Enter, k.InProgress, k.Review, k.Done, k.Tab, k.Back, k.Quit}
+	} else if activeTab == IterationDetailTabACs {
+		return []key.Binding{k.Up, k.Down, k.Enter, k.Verify, k.Skip, k.Fail, k.Tab, k.Back, k.Quit}
 	}
-	// ACs view
-	return []key.Binding{k.Up, k.Down, k.Enter, k.Verify, k.Skip, k.Fail, k.Tab, k.Back, k.Quit}
+	// Documents view
+	return []key.Binding{k.Up, k.Down, k.Enter, k.Tab, k.Back, k.Quit}
 }
 
 // FullHelp returns all keybindings based on active tab
@@ -114,12 +117,18 @@ func (k IterationDetailKeyMap) FullHelp(activeTab IterationDetailTab) [][]key.Bi
 			{k.InProgress, k.Review, k.Done, k.Reopen},
 			{k.Tab, k.Back, k.Help, k.Quit},
 		}
+	} else if activeTab == IterationDetailTabACs {
+		return [][]key.Binding{
+			{k.Up, k.Down, k.Enter},
+			{k.PageUp, k.PageDown},
+			{k.Verify, k.Skip, k.Fail},
+			{k.Tab, k.Back, k.Help, k.Quit},
+		}
 	}
-	// ACs view
+	// Documents view
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Enter},
 		{k.PageUp, k.PageDown},
-		{k.Verify, k.Skip, k.Fail},
 		{k.Tab, k.Back, k.Help, k.Quit},
 	}
 }
@@ -139,9 +148,10 @@ type IterationDetailPresenter struct {
 	acListComponent *ACListComponent
 
 	// Scrolling support
-	scrollHelperTasks *components.ScrollHelper          // For tasks tab (single-line)
-	scrollHelperACs   *components.ScrollHelperMultiline // For ACs tab (multi-line with expansion)
-	terminalHeight    int
+	scrollHelperTasks     *components.ScrollHelper          // For tasks tab (single-line)
+	scrollHelperACs       *components.ScrollHelperMultiline // For ACs tab (multi-line with expansion)
+	scrollHelperDocuments *components.ScrollHelper          // For documents tab (single-line)
+	terminalHeight        int
 }
 
 func NewIterationDetailPresenter(vm *viewmodels.IterationDetailViewModel, repo domain.RoadmapRepository, ctx context.Context) *IterationDetailPresenter {
@@ -169,9 +179,10 @@ func NewIterationDetailPresenterWithSelection(vm *viewmodels.IterationDetailView
 		height:          24,
 
 		// Initialize scroll helpers
-		scrollHelperTasks: components.NewScrollHelper(),
-		scrollHelperACs:   components.NewScrollHelperMultiline(),
-		terminalHeight:    24,
+		scrollHelperTasks:     components.NewScrollHelper(),
+		scrollHelperACs:       components.NewScrollHelperMultiline(),
+		scrollHelperDocuments: components.NewScrollHelper(),
+		terminalHeight:        24,
 	}
 }
 
@@ -201,14 +212,18 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 
 		p.scrollHelperTasks.SetViewportHeight(availableHeight)
 		p.scrollHelperACs.SetViewportHeight(availableHeight)
+		p.scrollHelperDocuments.SetViewportHeight(availableHeight)
 
 		// Ensure current selection is visible with new viewport height
 		if p.activeTab == IterationDetailTabTasks {
 			totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 			p.scrollHelperTasks.EnsureVisible(totalTasks, p.selectedIndex)
-		} else {
+		} else if p.activeTab == IterationDetailTabACs {
 			lineCounts := p.calculateACLineCounts()
 			p.scrollHelperACs.EnsureVisibleMultiline(lineCounts, p.selectedIndex)
+		} else {
+			totalDocuments := len(p.viewModel.Documents)
+			p.scrollHelperDocuments.EnsureVisible(totalDocuments, p.selectedIndex)
 		}
 
 	case tea.KeyMsg:
@@ -235,9 +250,11 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 		case key.Matches(msg, p.keys.Help):
 			p.showFullHelp = !p.showFullHelp
 		case key.Matches(msg, p.keys.Tab):
-			// Switch between tasks and ACs
+			// Cycle through tabs: Tasks → ACs → Documents → Tasks
 			if p.activeTab == IterationDetailTabTasks {
 				p.activeTab = IterationDetailTabACs
+			} else if p.activeTab == IterationDetailTabACs {
+				p.activeTab = IterationDetailTabDocuments
 			} else {
 				p.activeTab = IterationDetailTabTasks
 			}
@@ -249,11 +266,18 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 					p.selectedIndex--
 					p.scrollHelperTasks.EnsureVisible(totalTasks, p.selectedIndex)
 				}
-			} else {
+			} else if p.activeTab == IterationDetailTabACs {
 				if p.selectedIndex > 0 {
 					p.selectedIndex--
 					lineCounts := p.calculateACLineCounts()
 					p.scrollHelperACs.EnsureVisibleMultiline(lineCounts, p.selectedIndex)
+				}
+			} else {
+				// Documents tab
+				if p.selectedIndex > 0 {
+					p.selectedIndex--
+					totalDocuments := len(p.viewModel.Documents)
+					p.scrollHelperDocuments.EnsureVisible(totalDocuments, p.selectedIndex)
 				}
 			}
 		case key.Matches(msg, p.keys.Down):
@@ -263,9 +287,13 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 				if p.activeTab == IterationDetailTabTasks {
 					totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 					p.scrollHelperTasks.EnsureVisible(totalTasks, p.selectedIndex)
-				} else {
+				} else if p.activeTab == IterationDetailTabACs {
 					lineCounts := p.calculateACLineCounts()
 					p.scrollHelperACs.EnsureVisibleMultiline(lineCounts, p.selectedIndex)
+				} else {
+					// Documents tab
+					totalDocuments := len(p.viewModel.Documents)
+					p.scrollHelperDocuments.EnsureVisible(totalDocuments, p.selectedIndex)
 				}
 			}
 		case key.Matches(msg, p.keys.PageUp):
@@ -282,11 +310,17 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 			}
 		case key.Matches(msg, p.keys.Enter):
 			if p.activeTab == IterationDetailTabTasks {
-				// Navigate to task detail
+				// Navigate to task or document detail
 				taskID := p.getSelectedTaskID()
 				if taskID != "" {
 					return p, func() tea.Msg {
 						return TaskSelectedMsg{TaskID: taskID}
+					}
+				}
+				docID := p.getSelectedDocumentID()
+				if docID != "" {
+					return p, func() tea.Msg {
+						return DrillIntoDocumentMsg{DocumentID: docID}
 					}
 				}
 			} else if p.activeTab == IterationDetailTabACs {
@@ -304,6 +338,14 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 								return p, nil
 							}
 						}
+					}
+				}
+			} else if p.activeTab == IterationDetailTabDocuments {
+				// Open document viewer from Documents tab
+				docID := p.getSelectedDocumentIDFromDocumentsTab()
+				if docID != "" {
+					return p, func() tea.Msg {
+						return DrillIntoDocumentMsg{DocumentID: docID}
 					}
 				}
 			}
@@ -413,20 +455,33 @@ func (p *IterationDetailPresenter) View() string {
 	// Tab headers
 	if p.activeTab == IterationDetailTabTasks {
 		b.WriteString(components.Styles.ActiveTabStyle.Render("Tasks"))
-		b.WriteString("  ")
-		b.WriteString(components.Styles.TabStyle.Render("Acceptance Criteria"))
 	} else {
 		b.WriteString(components.Styles.TabStyle.Render("Tasks"))
-		b.WriteString("  ")
+	}
+	b.WriteString("  ")
+
+	if p.activeTab == IterationDetailTabACs {
 		b.WriteString(components.Styles.ActiveTabStyle.Render("Acceptance Criteria"))
+	} else {
+		b.WriteString(components.Styles.TabStyle.Render("Acceptance Criteria"))
+	}
+	b.WriteString("  ")
+
+	documentsTabTitle := fmt.Sprintf("Documents (%d)", len(p.viewModel.Documents))
+	if p.activeTab == IterationDetailTabDocuments {
+		b.WriteString(components.Styles.ActiveTabStyle.Render(documentsTabTitle))
+	} else {
+		b.WriteString(components.Styles.TabStyle.Render(documentsTabTitle))
 	}
 	b.WriteString("\n\n")
 
 	// Content based on active tab
 	if p.activeTab == IterationDetailTabTasks {
 		p.renderTasksView(&b)
-	} else {
+	} else if p.activeTab == IterationDetailTabACs {
 		p.renderACsView(&b)
+	} else {
+		p.renderDocumentsView(&b)
 	}
 
 	// Feedback input component renders inline at bottom if active
@@ -467,45 +522,46 @@ func (p *IterationDetailPresenter) calculateACLineCounts() []int {
 }
 
 func (p *IterationDetailPresenter) renderTasksView(b *strings.Builder) {
-	// Build flat task list with section info
-	type taskItem struct {
+	// Build list of tasks with section info
+	type listItem struct {
 		task        *viewmodels.TaskRowViewModel
 		section     string
 		sectionName string
 	}
-	allTasks := make([]taskItem, 0)
+	allItems := make([]listItem, 0)
 
+	// Add tasks
 	for _, task := range p.viewModel.TODOTasks {
-		allTasks = append(allTasks, taskItem{task: task, section: "todo", sectionName: "TODO"})
+		allItems = append(allItems, listItem{task: task, section: "todo", sectionName: "TODO"})
 	}
 	for _, task := range p.viewModel.InProgressTasks {
-		allTasks = append(allTasks, taskItem{task: task, section: "in-progress", sectionName: "IN PROGRESS"})
+		allItems = append(allItems, listItem{task: task, section: "in-progress", sectionName: "IN PROGRESS"})
 	}
 	for _, task := range p.viewModel.ReviewTasks {
-		allTasks = append(allTasks, taskItem{task: task, section: "review", sectionName: "REVIEW"})
+		allItems = append(allItems, listItem{task: task, section: "review", sectionName: "REVIEW"})
 	}
 	for _, task := range p.viewModel.DoneTasks {
-		allTasks = append(allTasks, taskItem{task: task, section: "done", sectionName: "DONE"})
+		allItems = append(allItems, listItem{task: task, section: "done", sectionName: "DONE"})
 	}
 
-	if len(allTasks) == 0 {
+	if len(allItems) == 0 {
 		b.WriteString(components.Styles.MetadataStyle.Render("No tasks in this iteration"))
 		return
 	}
 
 	// Get visible range from scroll helper
-	start, end := p.scrollHelperTasks.VisibleRange(len(allTasks))
+	start, end := p.scrollHelperTasks.VisibleRange(len(allItems))
 
 	// Scroll indicator (above)
 	if start > 0 {
-		b.WriteString(components.Styles.MetadataStyle.Render("  ↑ More tasks above"))
+		b.WriteString(components.Styles.MetadataStyle.Render("  ↑ More items above"))
 		b.WriteString("\n")
 	}
 
-	// Render visible tasks with section headers
+	// Render visible items with section headers
 	currentSection := ""
 	for i := start; i < end; i++ {
-		item := allTasks[i]
+		item := allItems[i]
 
 		// Render section header if new section
 		if item.section != currentSection {
@@ -527,8 +583,8 @@ func (p *IterationDetailPresenter) renderTasksView(b *strings.Builder) {
 	}
 
 	// Scroll indicator (below)
-	if end < len(allTasks) {
-		b.WriteString(components.Styles.MetadataStyle.Render("  ↓ More tasks below"))
+	if end < len(allItems) {
+		b.WriteString(components.Styles.MetadataStyle.Render("  ↓ More items below"))
 		b.WriteString("\n")
 	}
 }
@@ -626,19 +682,68 @@ func (p *IterationDetailPresenter) renderACsView(b *strings.Builder) {
 	}
 }
 
+func (p *IterationDetailPresenter) renderDocumentsView(b *strings.Builder) {
+	if len(p.viewModel.Documents) == 0 {
+		b.WriteString(components.Styles.MetadataStyle.Render("No documents attached to this iteration"))
+		return
+	}
+
+	// Get visible range from scroll helper
+	start, end := p.scrollHelperDocuments.VisibleRange(len(p.viewModel.Documents))
+
+	// Scroll indicator (above)
+	if start > 0 {
+		b.WriteString(components.Styles.MetadataStyle.Render("  ↑ More documents above"))
+		b.WriteString("\n")
+	}
+
+	// Render visible documents
+	for i := start; i < end; i++ {
+		doc := p.viewModel.Documents[i]
+		var output string
+		if i == p.selectedIndex {
+			output = components.Styles.SelectedStyle.Render(fmt.Sprintf("  %s - %s [%s]", doc.Title, doc.Type, doc.StatusIcon))
+		} else {
+			output = fmt.Sprintf("  %s - %s [%s]", doc.Title, doc.Type, doc.StatusIcon)
+		}
+		b.WriteString(output)
+		b.WriteString("\n")
+	}
+
+	// Scroll indicator (below)
+	if end < len(p.viewModel.Documents) {
+		b.WriteString(components.Styles.MetadataStyle.Render("  ↓ More documents below"))
+		b.WriteString("\n")
+	}
+}
+
 func (p *IterationDetailPresenter) getMaxIndex() int {
 	if p.activeTab == IterationDetailTabTasks {
-		return len(p.viewModel.TODOTasks) +
+		totalItems := len(p.viewModel.TODOTasks) +
 			len(p.viewModel.InProgressTasks) +
 			len(p.viewModel.ReviewTasks) +
-			len(p.viewModel.DoneTasks) - 1
+			len(p.viewModel.DoneTasks)
+		if totalItems == 0 {
+			return 0
+		}
+		return totalItems - 1
+	} else if p.activeTab == IterationDetailTabACs {
+		// ACs view - count total ACs across all task groups
+		totalACs := 0
+		for _, group := range p.viewModel.TaskACs {
+			totalACs += len(group.ACs)
+		}
+		if totalACs == 0 {
+			return 0
+		}
+		return totalACs - 1
 	}
-	// ACs view - count total ACs across all task groups
-	totalACs := 0
-	for _, group := range p.viewModel.TaskACs {
-		totalACs += len(group.ACs)
+	// Documents view
+	totalDocuments := len(p.viewModel.Documents)
+	if totalDocuments == 0 {
+		return 0
 	}
-	return totalACs - 1
+	return totalDocuments - 1
 }
 
 // getSelectedTaskID returns the task ID of the currently selected task
@@ -651,6 +756,7 @@ func (p *IterationDetailPresenter) getSelectedTaskID() string {
 	todoLen := len(p.viewModel.TODOTasks)
 	inProgressLen := len(p.viewModel.InProgressTasks)
 	reviewLen := len(p.viewModel.ReviewTasks)
+	doneLen := len(p.viewModel.DoneTasks)
 
 	if index < todoLen {
 		return p.viewModel.TODOTasks[index].ID
@@ -667,7 +773,7 @@ func (p *IterationDetailPresenter) getSelectedTaskID() string {
 	}
 	index -= reviewLen
 
-	if index < len(p.viewModel.DoneTasks) {
+	if index < doneLen {
 		return p.viewModel.DoneTasks[index].ID
 	}
 
@@ -794,3 +900,34 @@ func (p *IterationDetailPresenter) transitionTaskToDone(taskID string, activeTab
 		return TaskTransitionCompletedMsg{ActiveTab: activeTab, SelectedIndex: currentSelectedIndex}
 	}
 }
+
+// getSelectedDocumentID returns the document ID of the currently selected document in the Tasks tab
+// Deprecated: Documents are no longer in Tasks tab, but kept for backward compatibility
+func (p *IterationDetailPresenter) getSelectedDocumentID() string {
+	return ""
+}
+
+// getSelectedDocumentIDFromDocumentsTab returns the document ID of the currently selected document in the Documents tab
+func (p *IterationDetailPresenter) getSelectedDocumentIDFromDocumentsTab() string {
+	if p.activeTab != IterationDetailTabDocuments {
+		return ""
+	}
+
+	index := p.selectedIndex
+	if index >= 0 && index < len(p.viewModel.Documents) {
+		return p.viewModel.Documents[index].ID
+	}
+
+	return ""
+}
+
+// GetActiveTab returns the currently active tab
+func (p *IterationDetailPresenter) GetActiveTab() IterationDetailTab {
+	return p.activeTab
+}
+
+// GetSelectedIndex returns the currently selected index
+func (p *IterationDetailPresenter) GetSelectedIndex() int {
+	return p.selectedIndex
+}
+

@@ -28,6 +28,9 @@ type TrackDetailViewModel struct {
 	InProgressTasks []*TrackDetailTaskViewModel
 	DoneTasks       []*TrackDetailTaskViewModel
 
+	// Documents attached to this track
+	Documents []DocumentListItemViewModel
+
 	// Progress tracking
 	Progress *ProgressViewModel
 
@@ -50,6 +53,7 @@ func NewTrackDetailViewModel(id, title, description, status, statusLabel string,
 		TODOTasks:        []*TrackDetailTaskViewModel{},
 		InProgressTasks:  []*TrackDetailTaskViewModel{},
 		DoneTasks:        []*TrackDetailTaskViewModel{},
+		Documents:        []DocumentListItemViewModel{},
 		Progress:         NewProgressViewModel(0, 0),
 	}
 }

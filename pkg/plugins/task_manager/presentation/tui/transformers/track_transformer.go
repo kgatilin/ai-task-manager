@@ -7,11 +7,12 @@ import (
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/viewmodels"
 )
 
-// TransformToTrackDetailViewModel transforms track + tasks + dependency tracks to track detail view model
+// TransformToTrackDetailViewModel transforms track + tasks + dependency tracks + documents to track detail view model
 func TransformToTrackDetailViewModel(
 	track *entities.TrackEntity,
 	tasks []*entities.TaskEntity,
 	dependencyTracks []*entities.TrackEntity,
+	documents []*entities.DocumentEntity,
 ) *viewmodels.TrackDetailViewModel {
 	// Build dependency labels map
 	dependencyLabels := make([]string, 0, len(track.Dependencies))
@@ -70,6 +71,9 @@ func TransformToTrackDetailViewModel(
 			vm.DoneTasks = append(vm.DoneTasks, taskRow)
 		}
 	}
+
+	// Transform and add documents
+	vm.Documents = TransformDocumentsToListItems(documents)
 
 	// Calculate progress (done tasks / total tasks)
 	totalTasks := len(tasks)

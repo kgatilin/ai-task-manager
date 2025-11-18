@@ -24,6 +24,8 @@ type MockRepository struct {
 	iterationsForTask   []*entities.IterationEntity
 	tasksForTrack       []*entities.TaskEntity
 	dependencyTracks    map[string]*entities.TrackEntity
+	documentsByTrack    map[string][]*entities.DocumentEntity
+	documentsByIteration map[int][]*entities.DocumentEntity
 	listTracksErr       error
 	listIterationsErr   error
 	getActiveRoadmapErr error
@@ -36,6 +38,8 @@ type MockRepository struct {
 	getTrackErr         error
 	getIterationsForTaskErr error
 	listTasksErr        error
+	findDocumentsByTrackErr error
+	findDocumentsByIterationErr error
 }
 
 // ListIterations returns all iterations.
@@ -545,6 +549,57 @@ func (m *MockRepository) GetNextSequenceNumber(ctx context.Context, entityType s
 	return 0, nil
 }
 
+// FindDocumentsByTrack returns documents attached to a track.
+func (m *MockRepository) FindDocumentsByTrack(ctx context.Context, trackID string) ([]*entities.DocumentEntity, error) {
+	if m.findDocumentsByTrackErr != nil {
+		return nil, m.findDocumentsByTrackErr
+	}
+	if m.documentsByTrack != nil {
+		if docs, exists := m.documentsByTrack[trackID]; exists {
+			return docs, nil
+		}
+	}
+	return []*entities.DocumentEntity{}, nil
+}
+
+// FindDocumentsByIteration returns documents attached to an iteration.
+func (m *MockRepository) FindDocumentsByIteration(ctx context.Context, iterationNumber int) ([]*entities.DocumentEntity, error) {
+	if m.findDocumentsByIterationErr != nil {
+		return nil, m.findDocumentsByIterationErr
+	}
+	if m.documentsByIteration != nil {
+		if docs, exists := m.documentsByIteration[iterationNumber]; exists {
+			return docs, nil
+		}
+	}
+	return []*entities.DocumentEntity{}, nil
+}
+
+// Document stubs (DocumentRepository interface methods)
+func (m *MockRepository) SaveDocument(ctx context.Context, doc *entities.DocumentEntity) error {
+	return nil
+}
+
+func (m *MockRepository) FindDocumentByID(ctx context.Context, id string) (*entities.DocumentEntity, error) {
+	return nil, nil
+}
+
+func (m *MockRepository) FindAllDocuments(ctx context.Context) ([]*entities.DocumentEntity, error) {
+	return []*entities.DocumentEntity{}, nil
+}
+
+func (m *MockRepository) FindDocumentsByType(ctx context.Context, docType entities.DocumentType) ([]*entities.DocumentEntity, error) {
+	return []*entities.DocumentEntity{}, nil
+}
+
+func (m *MockRepository) UpdateDocument(ctx context.Context, doc *entities.DocumentEntity) error {
+	return nil
+}
+
+func (m *MockRepository) DeleteDocument(ctx context.Context, id string) error {
+	return nil
+}
+
 // TestLoadTrackDetailDataSuccess verifies that LoadTrackDetailData successfully loads and transforms data.
 func TestLoadTrackDetailDataSuccess(t *testing.T) {
 	ctx := context.Background()
@@ -707,5 +762,201 @@ func TestLoadTrackDetailDataNoDependencies(t *testing.T) {
 
 	if len(vm.DependencyLabels) != 0 {
 		t.Fatalf("Expected 0 dependency labels, got %d", len(vm.DependencyLabels))
+	}
+}
+
+// TestLoadTrackDetailDataWithDocuments verifies that LoadTrackDetailData loads documents attached to track.
+func TestLoadTrackDetailDataWithDocuments(t *testing.T) {
+	ctx := context.Background()
+
+	track := &entities.TrackEntity{
+		ID:           "TM-track-1",
+		Title:        "Authentication System",
+		Description:  "Implement user authentication",
+		Status:       "in-progress",
+		Dependencies: []string{},
+	}
+
+	tasks := []*entities.TaskEntity{}
+
+	documents := []*entities.DocumentEntity{
+		{
+			ID:    "TM-doc-1",
+			Title: "ADR: OAuth2 Implementation",
+			Type:  entities.DocumentTypeADR,
+			Status: entities.DocumentStatusPublished,
+		},
+		{
+			ID:    "TM-doc-2",
+			Title: "Auth System Plan",
+			Type:  entities.DocumentTypePlan,
+			Status: entities.DocumentStatusDraft,
+		},
+	}
+
+	repo := &MockRepository{
+		track:         track,
+		tasksForTrack: tasks,
+		documentsByTrack: map[string][]*entities.DocumentEntity{
+			"TM-track-1": documents,
+		},
+	}
+
+	vm, err := queries.LoadTrackDetailData(ctx, repo, "TM-track-1")
+	if err != nil {
+		t.Fatalf("LoadTrackDetailData failed: %v", err)
+	}
+
+	if vm == nil {
+		t.Fatal("Expected non-nil ViewModel")
+	}
+
+	// Verify documents were loaded and transformed
+	if len(vm.Documents) != 2 {
+		t.Fatalf("Expected 2 documents, got %d", len(vm.Documents))
+	}
+
+	if vm.Documents[0].ID != "TM-doc-1" {
+		t.Errorf("Expected first document ID 'TM-doc-1', got %s", vm.Documents[0].ID)
+	}
+
+	if vm.Documents[0].Type != "ADR" {
+		t.Errorf("Expected first document type 'ADR', got %s", vm.Documents[0].Type)
+	}
+
+	if vm.Documents[0].StatusIcon != "✓" {
+		t.Errorf("Expected first document status icon '✓', got %s", vm.Documents[0].StatusIcon)
+	}
+
+	if vm.Documents[1].ID != "TM-doc-2" {
+		t.Errorf("Expected second document ID 'TM-doc-2', got %s", vm.Documents[1].ID)
+	}
+
+	if vm.Documents[1].Type != "Plan" {
+		t.Errorf("Expected second document type 'Plan', got %s", vm.Documents[1].Type)
+	}
+
+	if vm.Documents[1].StatusIcon != "○" {
+		t.Errorf("Expected second document status icon '○', got %s", vm.Documents[1].StatusIcon)
+	}
+}
+
+// TestLoadTrackDetailDataDocumentLoadError verifies error handling when document loading fails gracefully.
+func TestLoadTrackDetailDataDocumentLoadError(t *testing.T) {
+	ctx := context.Background()
+
+	track := &entities.TrackEntity{
+		ID:    "TM-track-1",
+		Title: "Authentication System",
+	}
+
+	tasks := []*entities.TaskEntity{}
+
+	repo := &MockRepository{
+		track:                     track,
+		tasksForTrack:             tasks,
+		findDocumentsByTrackErr:   errors.New("database error"),
+	}
+
+	// Should not error - documents are non-critical
+	vm, err := queries.LoadTrackDetailData(ctx, repo, "TM-track-1")
+	if err != nil {
+		t.Fatalf("LoadTrackDetailData failed: %v", err)
+	}
+
+	if vm == nil {
+		t.Fatal("Expected non-nil ViewModel")
+	}
+
+	// Documents should be empty on error
+	if len(vm.Documents) != 0 {
+		t.Fatalf("Expected 0 documents on error, got %d", len(vm.Documents))
+	}
+}
+
+// TestLoadIterationDetailDataWithDocuments verifies that LoadIterationDetailData loads documents attached to iteration.
+func TestLoadIterationDetailDataWithDocuments(t *testing.T) {
+	ctx := context.Background()
+
+	iteration := &entities.IterationEntity{
+		Number: 1,
+		Name:   "Iteration 1",
+		Status: "planned",
+	}
+
+	tasks := []*entities.TaskEntity{}
+	acs := []*entities.AcceptanceCriteriaEntity{}
+
+	documents := []*entities.DocumentEntity{
+		{
+			ID:    "TM-doc-3",
+			Title: "Iteration 1 Plan",
+			Type:  entities.DocumentTypePlan,
+			Status: entities.DocumentStatusPublished,
+		},
+	}
+
+	repo := &MockRepository{
+		iteration:      iteration,
+		iterationTasks: tasks,
+		acsByIteration: acs,
+		documentsByIteration: map[int][]*entities.DocumentEntity{
+			1: documents,
+		},
+	}
+
+	vm, err := queries.LoadIterationDetailData(ctx, repo, 1)
+	if err != nil {
+		t.Fatalf("LoadIterationDetailData failed: %v", err)
+	}
+
+	if vm == nil {
+		t.Fatal("Expected non-nil ViewModel")
+	}
+
+	// Verify documents were loaded and transformed
+	if len(vm.Documents) != 1 {
+		t.Fatalf("Expected 1 document, got %d", len(vm.Documents))
+	}
+
+	if vm.Documents[0].ID != "TM-doc-3" {
+		t.Errorf("Expected document ID 'TM-doc-3', got %s", vm.Documents[0].ID)
+	}
+
+	if vm.Documents[0].Type != "Plan" {
+		t.Errorf("Expected document type 'Plan', got %s", vm.Documents[0].Type)
+	}
+}
+
+// TestLoadIterationDetailDataDocumentLoadError verifies error handling when document loading fails gracefully.
+func TestLoadIterationDetailDataDocumentLoadError(t *testing.T) {
+	ctx := context.Background()
+
+	iteration := &entities.IterationEntity{
+		Number: 1,
+		Name:   "Iteration 1",
+		Status: "planned",
+	}
+
+	repo := &MockRepository{
+		iteration:                      iteration,
+		iterationTasks:                 []*entities.TaskEntity{},
+		acsByIteration:                 []*entities.AcceptanceCriteriaEntity{},
+		findDocumentsByIterationErr:    errors.New("database error"),
+	}
+
+	// Should not error - documents are non-critical
+	vm, err := queries.LoadIterationDetailData(ctx, repo, 1)
+	if err != nil {
+		t.Fatalf("LoadIterationDetailData failed: %v", err)
+	}
+
+	if vm == nil {
+		t.Fatal("Expected non-nil ViewModel")
+	}
+
+	// Documents should be empty on error
+	if len(vm.Documents) != 0 {
+		t.Fatalf("Expected 0 documents on error, got %d", len(vm.Documents))
 	}
 }

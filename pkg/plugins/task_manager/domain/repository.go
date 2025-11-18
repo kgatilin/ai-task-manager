@@ -92,6 +92,16 @@ type RoadmapRepository interface {
 	ListACByIteration(ctx context.Context, iterationNum int) ([]*entities.AcceptanceCriteriaEntity, error)
 	ListFailedAC(ctx context.Context, filters entities.ACFilters) ([]*entities.AcceptanceCriteriaEntity, error)
 
+	// Document operations
+	SaveDocument(ctx context.Context, doc *entities.DocumentEntity) error
+	FindDocumentByID(ctx context.Context, id string) (*entities.DocumentEntity, error)
+	FindAllDocuments(ctx context.Context) ([]*entities.DocumentEntity, error)
+	FindDocumentsByTrack(ctx context.Context, trackID string) ([]*entities.DocumentEntity, error)
+	FindDocumentsByIteration(ctx context.Context, iterationNumber int) ([]*entities.DocumentEntity, error)
+	FindDocumentsByType(ctx context.Context, docType entities.DocumentType) ([]*entities.DocumentEntity, error)
+	UpdateDocument(ctx context.Context, doc *entities.DocumentEntity) error
+	DeleteDocument(ctx context.Context, id string) error
+
 	// Aggregate queries
 	GetRoadmapWithTracks(ctx context.Context, roadmapID string) (*entities.RoadmapEntity, error)
 	GetProjectMetadata(ctx context.Context, key string) (string, error)

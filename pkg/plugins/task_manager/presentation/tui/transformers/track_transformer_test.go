@@ -35,7 +35,7 @@ func TestTransformToTrackDetailViewModel(t *testing.T) {
 	dependencyTracks := []*entities.TrackEntity{dep1, dep2}
 
 	// Transform
-	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks)
+	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks, []*entities.DocumentEntity{})
 
 	// Verify track fields
 	assert.Equal(t, "TM-track-1", vm.ID)
@@ -84,7 +84,7 @@ func TestTransformToTrackDetailViewModel_NoDependencies(t *testing.T) {
 	dependencyTracks := []*entities.TrackEntity{}
 
 	// Transform
-	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks)
+	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks, []*entities.DocumentEntity{})
 
 	// Verify no dependencies
 	assert.Empty(t, vm.Dependencies)
@@ -103,7 +103,7 @@ func TestTransformToTrackDetailViewModel_NoTasks(t *testing.T) {
 	dependencyTracks := []*entities.TrackEntity{}
 
 	// Transform
-	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks)
+	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks, []*entities.DocumentEntity{})
 
 	// Verify empty task lists
 	assert.Empty(t, vm.TODOTasks)
@@ -130,7 +130,7 @@ func TestTransformToTrackDetailViewModel_ReviewTasksGroupedWithInProgress(t *tes
 	dependencyTracks := []*entities.TrackEntity{}
 
 	// Transform
-	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks)
+	vm := transformers.TransformToTrackDetailViewModel(track, tasks, dependencyTracks, []*entities.DocumentEntity{})
 
 	// Verify review tasks are grouped with in-progress
 	assert.Len(t, vm.InProgressTasks, 1)
@@ -157,7 +157,7 @@ func TestTransformToTrackDetailViewModel_AllStatuses(t *testing.T) {
 			track, err := entities.NewTrackEntity("TM-track-1", "roadmap-1", "Track 1", "Description", tt.status, 100, []string{}, now, now)
 			require.NoError(t, err)
 
-			vm := transformers.TransformToTrackDetailViewModel(track, []*entities.TaskEntity{}, []*entities.TrackEntity{})
+			vm := transformers.TransformToTrackDetailViewModel(track, []*entities.TaskEntity{}, []*entities.TrackEntity{}, []*entities.DocumentEntity{})
 
 			assert.Equal(t, tt.status, vm.Status)
 			assert.Equal(t, tt.expectedLabel, vm.StatusLabel)
@@ -175,7 +175,7 @@ func TestTransformToTrackDetailViewModel_DependencyTrackNotFound(t *testing.T) {
 	dependencyTracks := []*entities.TrackEntity{} // Empty - dependency not found
 
 	// Transform
-	vm := transformers.TransformToTrackDetailViewModel(track, []*entities.TaskEntity{}, dependencyTracks)
+	vm := transformers.TransformToTrackDetailViewModel(track, []*entities.TaskEntity{}, dependencyTracks, []*entities.DocumentEntity{})
 
 	// Verify fallback to ID when dependency not found
 	assert.Equal(t, []string{"TM-track-99"}, vm.Dependencies)
@@ -223,7 +223,7 @@ func TestTransformToTrackDetailViewModel_ProgressCalculation(t *testing.T) {
 	}
 
 	// Transform
-	vm := transformers.TransformToTrackDetailViewModel(track, tasks, []*entities.TrackEntity{})
+	vm := transformers.TransformToTrackDetailViewModel(track, tasks, []*entities.TrackEntity{}, []*entities.DocumentEntity{})
 
 	// Verify progress: 3/10 = 0.3 (30%)
 	assert.Equal(t, 3, vm.Progress.Completed)

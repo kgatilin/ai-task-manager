@@ -5,11 +5,12 @@ import (
 	"github.com/kgatilin/darwinflow-pub/pkg/plugins/task_manager/presentation/tui/viewmodels"
 )
 
-// TransformToIterationDetailViewModel transforms iteration + tasks + ACs to iteration detail view model
+// TransformToIterationDetailViewModel transforms iteration + tasks + ACs + documents to iteration detail view model
 func TransformToIterationDetailViewModel(
 	iteration *entities.IterationEntity,
 	tasks []*entities.TaskEntity,
 	acs []*entities.AcceptanceCriteriaEntity,
+	documents []*entities.DocumentEntity,
 ) *viewmodels.IterationDetailViewModel {
 	vm := viewmodels.NewIterationDetailViewModel(
 		iteration.Number,
@@ -92,6 +93,9 @@ func TransformToIterationDetailViewModel(
 			vm.TaskACs = append(vm.TaskACs, group)
 		}
 	}
+
+	// Transform and add documents
+	vm.Documents = TransformDocumentsToListItems(documents)
 
 	// Calculate progress (done tasks / total tasks)
 	totalTasks := len(tasks)
