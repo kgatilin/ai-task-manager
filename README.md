@@ -1,33 +1,23 @@
-# DarwinFlow
+# Task Manager (tm)
 
-**Capture, store, and analyze your Claude Code interactions**
+**A hierarchical roadmap and task management CLI tool built with Clean Architecture**
 
-DarwinFlow is a lightweight logging system that automatically captures all Claude Code interactions as structured events. Built with event sourcing principles, it enables pattern detection, workflow optimization, and deep insights into your AI-assisted development sessions.
+Task Manager is a developer-focused CLI tool for managing complex projects through a structured hierarchy: Roadmap → Tracks → Tasks → Iterations. Built with Domain-Driven Design principles and SQLite storage, it provides powerful command-line workflows and an interactive terminal UI for planning, tracking, and executing software development work.
 
 ## Features
 
-- **Automatic Logging**: Captures all Claude Code events via hooks (tool invocations, user prompts, etc.)
-- **AI-Powered Analysis**: Plugin-agnostic analysis framework using view-based architecture
-  - **View-Based Pattern**: Plugins provide views of their events, framework analyzes any view type
-  - **Multi-Prompt Support**: Session summaries, tool analysis, and custom prompts
-  - **Auto-Triggered Summaries**: Optional automatic analysis on session end (configurable)
-  - **Parallel Execution**: Concurrent analysis with semaphore-based concurrency control
-  - **Token-Aware Selection**: Smart session selection based on token limits
-  - **LLM Abstraction**: Swappable LLM providers (Claude CLI, Anthropic API, OpenAI, etc.)
-- **Interactive TUI**: Browse sessions, view analyses, and manage workflows with a keyboard-driven interface
-- **Plugin System**: Extensible architecture with public SDK for building plugins
-  - **Public SDK**: `pkg/pluginsdk` provides contracts for plugin development
-  - **Bounded Context**: Framework is plugin-agnostic, zero knowledge of specific plugins
-  - **Self-Contained Plugins**: All plugin logic isolated in plugin packages
-  - **Capability-Driven**: Entities implement capabilities (IExtensible, ITrackable, IHasContext, etc.)
-  - **Core Plugins**: Claude Code sessions built-in, extensible for custom entity types
-  - **Plugin Event Bus**: Cross-plugin communication via publish/subscribe pattern
-- **Log Viewer**: Query and explore captured events with `dw logs` command
-- **Event Sourcing**: Immutable event log enabling replay and analysis
-- **SQLite Storage**: Fast, file-based storage with full-text search
-- **Zero Performance Impact**: Non-blocking, concurrent-safe logging
-- **Context-Aware**: Automatically detects project context from environment
-- **Clean Architecture**: Strict 3-layer DDD design enforced by go-arch-lint
+- **Hierarchical Project Structure**: Organize work from vision (Roadmap) down to concrete tasks
+  - **Roadmap**: Project vision and success criteria
+  - **Tracks**: Major work streams with dependencies and priorities
+  - **Tasks**: Atomic work units with status tracking (todo/in-progress/done)
+  - **Iterations**: Time-boxed groupings for sprint planning
+- **Acceptance Criteria**: Task verification with detailed testing instructions
+- **Architecture Decision Records (ADRs)**: Document architectural choices and their rationale
+- **Document Management**: Plans, retrospectives, and other project documentation
+- **Multi-Project Support**: Isolated project databases for separate roadmaps
+- **Interactive TUI**: Keyboard-driven terminal interface for browsing and managing work
+- **Clean Architecture**: Strict separation of concerns with DDD principles
+- **SQLite Storage**: Fast, file-based persistence per project
 
 ## Quick Start
 
@@ -35,709 +25,491 @@ DarwinFlow is a lightweight logging system that automatically captures all Claud
 
 ```bash
 # Clone the repository
-git clone https://github.com/kgatilin/darwinflow-pub.git
-cd darwinflow-pub
+git clone https://github.com/kgatilin/ai-task-manager.git
+cd ai-task-manager
 
 # Build the CLI
-go build -o dw ./cmd/dw
+make build
 
-# Install to your PATH (optional)
-go install ./cmd/dw
+# Optional: Install to GOPATH/bin
+make install
 ```
 
-### Initialize Logging
+### Basic Usage
 
 ```bash
-# Set up Claude Code logging infrastructure
-dw claude-code init    # Or 'dw claude init' for backward compatibility
+# Create a project
+./tm project create myproject
+
+# Initialize a roadmap
+./tm roadmap init \
+  --vision "Build a scalable event-driven architecture" \
+  --success-criteria "Support 10+ microservices, 99.9% uptime"
+
+# Create a track (major work area)
+./tm track create \
+  --title "Core Infrastructure" \
+  --description "Foundation services and frameworks" \
+  --priority high
+
+# Create a task
+./tm task create \
+  --track TM-track-1 \
+  --title "Implement event bus" \
+  --priority high
+
+# Create an iteration
+./tm iteration create \
+  --name "Sprint 1" \
+  --goal "Complete core infrastructure" \
+  --deliverable "Event bus and message broker"
+
+# Add tasks to iteration
+./tm iteration add-task 1 TM-task-1
+
+# Launch interactive UI
+./tm ui
 ```
 
-This will:
-- Create the SQLite database at `.darwinflow/logs/events.db` (project-relative)
-- Configure Claude Code hooks in `.claude/settings.json` (plugin-managed)
-- Enable automatic event capture via PreToolUse, UserPromptSubmit, and SessionEnd hooks
+## Core Concepts
 
-### Start Using Claude Code
+### Project Hierarchy
 
-After running `dw claude init`, restart Claude Code. All your interactions will now be automatically logged!
-
-### Upgrading DarwinFlow
-
-When you upgrade to a new version of DarwinFlow (e.g., after `git pull`), run the refresh command to update your installation:
-
-```bash
-# Rebuild the binary
-go build -o dw ./cmd/dw
-
-# Update database schema and hooks to latest version
-dw refresh
+```
+Roadmap (vision + success criteria)
+  └── Track (work stream)
+        └── Task (concrete work)
+              └── Acceptance Criteria (verification steps)
 ```
 
-The `dw refresh` command:
-- Updates the database schema with new columns, indexes, and tables
-- Migrates existing data safely (e.g., removes duplicates, adds default values)
-- Reinstalls/updates hooks to the latest version
-- Verifies configuration integrity
+**Iterations** group tasks across tracks for time-boxed execution (sprints).
 
-**When to use `dw refresh`:**
-- After updating DarwinFlow to a new version
-- When you see database schema errors (e.g., "no such column")
-- When new hooks are added to DarwinFlow
-- To fix database inconsistencies
+### Entity Types
+
+- **Roadmap**: Root entity defining project vision and success criteria (one per project)
+- **Track**: Major work stream with status, priority, and dependencies
+- **Task**: Atomic work unit with title, description, status (todo/in-progress/done)
+- **Iteration**: Time-boxed grouping with goal, deliverable, and task membership
+- **Acceptance Criteria**: Task verification with description and testing instructions
+- **Document**: ADRs, plans, retrospectives attached to tracks or iterations
+
+### Multi-Project Isolation
+
+Each project has its own SQLite database (`.tm/projects/<name>/roadmap.db`), providing complete isolation between roadmaps. Use `tm project switch` to change the active project, or use `--project <name>` flag to override on any command.
 
 ## Architecture
 
-DarwinFlow follows a strict Domain-Driven Design (DDD) architecture enforced by [go-arch-lint](https://github.com/fdaines/go-arch-lint):
+Task Manager follows Clean Architecture with Domain-Driven Design:
 
 ```
-cmd → internal/app + internal/infra → internal/domain
+cmd/tm → internal/task_manager → [domain, application, infrastructure, presentation]
 ```
 
-**Layers:**
-- **cmd/dw**: CLI entry points and command handlers
-- **internal/app**: Application services, use cases, and plugins
-- **internal/infra**: Infrastructure (database, file I/O, external APIs)
-- **internal/domain**: Pure business logic (entities, capabilities, interfaces)
+### Layers
 
-**Dependency Rule**: Dependencies flow inward only. Domain has zero dependencies.
+- **Domain** (`internal/task_manager/domain/`): Pure business logic, zero dependencies
+  - Entities: 7 aggregates (Roadmap, Track, Task, Iteration, ADR, AcceptanceCriteria, Document)
+  - Services: Domain services (validation, dependency detection, lifecycle management)
+  - Repositories: Interfaces only (implemented in infrastructure)
+- **Application** (`internal/task_manager/application/`): Use cases and orchestration
+  - Services: High-level operations coordinating domain logic
+  - DTOs: Data transfer objects for external communication
+  - Mocks: Generated mocks for testing (126 tests, 82.1% coverage)
+- **Infrastructure** (`internal/task_manager/infrastructure/`): Technical implementations
+  - Persistence: SQLite repository implementations with migrations
+  - Event emission: Domain event publishing decorator
+- **Presentation** (`internal/task_manager/presentation/`): User interfaces
+  - CLI: ~48 Cobra commands for all operations
+  - TUI: Interactive terminal UI (Bubble Tea framework)
 
-### Plugin System
+**Dependency Rule**: Dependencies flow inward only. Domain has zero external dependencies.
 
-**Architecture:**
-- **Public SDK** (`pkg/pluginsdk`): Self-contained plugin API with zero internal dependencies
-- **Plugins** (`pkg/plugins/`): Isolated packages implementing SDK interfaces
-- **Bounded Context**: Framework layers have zero knowledge of specific plugins
-- **Adaptation Layer**: cmd/app layers convert SDK ↔ domain types at boundaries
+## Commands
 
-**Core Concepts:**
-- **Plugin Capabilities**: IEntityProvider, ICommandProvider, IEventEmitter (defined in SDK)
-- **Entity Capabilities**: IExtensible (required), ITrackable, IHasContext (optional)
-- **Plugin Registry**: Routes queries to appropriate plugins based on capabilities
-- **Command Registry**: Discovers and executes commands from registered plugins
-- **Self-Contained Commands**: Plugins manage all their own logic (e.g., hooks, config)
-
-**Current Plugins:**
-- **claude-code** (`pkg/plugins/claude_code`): Claude Code session tracking
-  - Entity: `session` (IExtensible + IHasContext + ITrackable)
-  - Commands: `init`, `emit-event` (for hook integration)
-  - CLI: `dw claude-code <command>` or `dw claude <command>` (backward compat)
-- **task-manager** (`pkg/plugins/task_manager`): Hierarchical roadmap management
-  - Entities: `roadmap`, `track`, `task`, `iteration` (all IExtensible)
-  - Capabilities: Event sourcing, SQLite persistence, interactive TUI
-  - Commands: Full CRUD operations on all entities with CLI and TUI
-  - CLI: `dw task-manager <command>` or `dw task-manager tui` for interactive mode
-
-### Framework Capabilities for Plugin Developers
-
-**Key Principle**: Framework handles infrastructure and cross-plugin concerns. Plugins handle domain logic.
-
-**What the Framework Provides:**
-- **Event Storage** (`EventRepository`): Persistent SQLite storage, queries, full-text search, versioning
-- **Centralized Analysis**: AI-powered session analysis across ALL plugin events with configurable prompts
-- **Cross-Plugin Communication** (`EventBus`): Publish/subscribe real-time communication with filtering
-- **Plugin Lifecycle**: Registration, initialization, context injection, shutdown management
-- **Configuration Management**: YAML config loading/saving, validation
-- **Logging Infrastructure**: Leveled logging with consistent formatting
-- **Command Registry**: Automatic command discovery, routing, help generation
-- **Entity Management**: Cross-plugin entity aggregation and routing
-- **Database Infrastructure**: Centralized SQLite with schema management, migrations, indexing
-- **External Plugin Support**: JSON-RPC 2.0 protocol for language-agnostic plugins
-
-**What Plugins Implement:**
-- Domain logic and business rules
-- Entity definitions and validation
-- Event types and payloads
-- Custom CLI commands
-- External API integrations
-- Event handlers for cross-plugin reactions
-
-**Decision Guide:**
-- Cross-plugin visibility? → Framework (analysis, entity aggregation)
-- Infrastructure? → Framework (database, config, logging, RPC)
-- Shared across plugins? → Framework (event storage, EventBus, Logger)
-- Domain-specific? → Plugin (entities, commands, business rules)
-
-**For Plugin Development:**
-- **Template**: `template/go-plugin/README.md` - Complete plugin template with framework capabilities reference
-- **SDK Docs**: `pkg/pluginsdk/CLAUDE.md` - Full API documentation
-- **Example**: `pkg/plugins/claude_code/` - Reference implementation
-
-### Real-Time Event Streaming (Phase 4)
-
-DarwinFlow now supports real-time event streaming from multiple plugins simultaneously:
-
-- **EventDispatcher**: Background event processing with buffered channels (100 event buffer)
-- **Multi-Plugin Support**: 2+ plugins can emit events concurrently without blocking
-- **High Throughput**: Validated at >30,000 events/sec (far exceeds 1,000/sec requirement)
-- **TUI Real-Time Updates**: Auto-refresh session list when new events arrive
-- **Event Counter Badge**: Shows "+N new" indicator in TUI status bar
-
-#### Task Manager Commands
-
-The task-manager plugin provides comprehensive hierarchical roadmap management with Roadmap → Track → Task → Iteration structure.
-
-**Multi-Project Support:**
-
-The task-manager supports multiple isolated projects (e.g., separate "production" and "test" roadmaps). Each project has its own database and complete isolation.
+### Project Management
 
 ```bash
 # Create a new project
-dw task-manager project create test
+tm project create <name>
 
-# List all projects (* marks active project)
-dw task-manager project list
+# List all projects (* marks active)
+tm project list
 
 # Switch active project
-dw task-manager project switch test
+tm project switch <name>
 
-# Show current active project
-dw task-manager project show
+# Show current project
+tm project show
 
 # Delete a project
-dw task-manager project delete test --force
-
-# Use --project flag to override active project on any command
-dw task-manager track list --project production
+tm project delete <name> --force
 ```
 
-**Project Notes:**
-- First run auto-creates a "default" project with any existing data
-- All commands use the active project by default
-- Use `--project <name>` flag to override on any command
-- Cannot delete the currently active project (switch first)
-
-**Roadmap Commands:**
+### Roadmap Commands
 
 ```bash
-# Initialize a new roadmap
-dw task-manager roadmap init \
-  --vision "Build extensible event-sourced framework" \
-  --success-criteria "10 external plugins, 90% test coverage"
+# Initialize roadmap
+tm roadmap init \
+  --vision "Your project vision" \
+  --success-criteria "Measurable success criteria"
 
-# Show current roadmap
-dw task-manager roadmap show
+# Show roadmap
+tm roadmap show
 
 # Update roadmap
-dw task-manager roadmap update \
+tm roadmap update \
   --vision "Updated vision" \
   --success-criteria "New criteria"
-
-# View complete roadmap overview (NEW in v2)
-dw task-manager roadmap full                          # Full overview with all sections
-dw task-manager roadmap full --verbose                # Include descriptions
-dw task-manager roadmap full --sections vision,tracks # Filter specific sections
-dw task-manager roadmap full --format json            # JSON output
-
-# Migrate timestamp IDs to human-readable format (NEW in v2)
-dw task-manager migrate-ids              # Migrate all IDs (track-123 → DW-track-1)
-dw task-manager migrate-ids --dry-run    # Preview without making changes
 ```
 
-**Track Commands (Major Work Areas):**
+### Track Commands (Work Streams)
 
 ```bash
-# Create a track (ID auto-generated in v2)
-dw task-manager track create \
-  --title "Framework Core" \
-  --description "Core framework implementation" \
-  --priority high
-# Output: Track created with ID: DW-track-1
+# Create track
+tm track create \
+  --title "Track Title" \
+  --description "Description" \
+  --priority high|medium|low \
+  --rank 100
 
-# List all tracks (with filtering)
-dw task-manager track list
-dw task-manager track list --status in-progress --priority critical
+# List tracks
+tm track list
+tm track list --status in-progress --priority high
 
 # Show track details
-dw task-manager track show track-framework-core
+tm track show TM-track-1
 
 # Update track
-dw task-manager track update track-framework-core --status in-progress
+tm track update TM-track-1 \
+  --status planning|in-progress|done|blocked \
+  --priority critical|high|medium|low
 
 # Manage dependencies
-dw task-manager track add-dependency track-plugin-system track-framework-core
-dw task-manager track remove-dependency track-plugin-system track-framework-core
+tm track add-dependency TM-track-2 TM-track-1    # track-2 depends on track-1
+tm track remove-dependency TM-track-2 TM-track-1
 
 # Delete track
-dw task-manager track delete track-framework-core --force
+tm track delete TM-track-1 --force
 ```
 
-**Task Commands (Concrete Work Items):**
+### Task Commands (Work Items)
 
 ```bash
-# Create a task
-dw task-manager task create \
-  --track track-framework-core \
-  --title "Implement LLM abstraction" \
-  --description "Create LLM interface in domain layer" \
-  --priority high
+# Create task
+tm task create \
+  --track TM-track-1 \
+  --title "Task Title" \
+  --description "Description" \
+  --priority high|medium|low \
+  --rank 100
 
-# List tasks (with filtering)
-dw task-manager task list
-dw task-manager task list --track track-framework-core --status todo
+# List tasks
+tm task list
+tm task list --track TM-track-1 --status todo
 
 # Show task details
-dw task-manager task show task-fc-001
+tm task show TM-task-1
 
 # Update task
-dw task-manager task update task-fc-001 \
-  --status in-progress \
-  --branch feat/llm-abstraction
+tm task update TM-task-1 \
+  --status todo|in-progress|done \
+  --priority high|medium|low \
+  --branch feat/my-feature
 
 # Move task to different track
-dw task-manager task move task-fc-001 --track track-plugin-system
+tm task move TM-task-1 --track TM-track-2
 
 # Delete task
-dw task-manager task delete task-fc-001 --force
+tm task delete TM-task-1 --force
 ```
 
-**Iteration Commands (Time-Boxed Sprints):**
+### Iteration Commands (Sprints)
 
 ```bash
-# Create an iteration
-dw task-manager iteration create \
-  --name "Foundation Sprint" \
-  --goal "Complete view-based analysis" \
-  --deliverable "Plugin-agnostic analysis framework"
+# Create iteration
+tm iteration create \
+  --name "Sprint 1" \
+  --goal "Sprint goal" \
+  --deliverable "Expected deliverable"
 
 # List iterations
-dw task-manager iteration list
+tm iteration list
 
 # Show iteration details
-dw task-manager iteration show 1
+tm iteration show 1
 
-# Show current iteration (or next 3 planned if none current - NEW in v2)
-dw task-manager iteration current
+# Show current iteration (or next planned)
+tm iteration current
 
-# Update iteration
-dw task-manager iteration update 1 --name "Sprint 1"
-
-# Add/remove tasks (supports multiple tasks in one command - NEW in v2)
-dw task-manager iteration add-task 1 task-fc-003 task-fc-005
-dw task-manager iteration remove-task 1 task-fc-003
+# Add/remove tasks
+tm iteration add-task 1 TM-task-1 TM-task-2
+tm iteration remove-task 1 TM-task-1
 
 # Start iteration (mark as current)
-dw task-manager iteration start 2
+tm iteration start 1
 
 # Complete iteration
-dw task-manager iteration complete 1
+tm iteration complete 1
 
 # Delete iteration
-dw task-manager iteration delete 1 --force
+tm iteration delete 1 --force
 ```
 
-**Interactive TUI (Terminal User Interface):**
+### Acceptance Criteria Commands
 
 ```bash
-# Launch interactive TUI
-dw task-manager tui
+# Add acceptance criterion
+tm ac add TM-task-1 \
+  --description "What must be verified" \
+  --testing-instructions "1. Run command X\n2. Verify Y\n3. Check Z"
+
+# List acceptance criteria
+tm ac list TM-task-1
+tm ac list-iteration 1               # All ACs in iteration
+
+# Show AC details
+tm ac show TM-ac-1
+
+# Update AC
+tm ac update TM-ac-1 \
+  --description "Updated description" \
+  --testing-instructions "Updated instructions"
+
+# Verify AC
+tm ac verify TM-ac-1
+
+# Mark AC as failed
+tm ac fail TM-ac-1 --feedback "Error message or reason"
+
+# List failed ACs
+tm ac failed                          # All failed
+tm ac failed --iteration 1            # Failed in iteration 1
+tm ac failed --task TM-task-1         # Failed for task
+
+# Delete AC
+tm ac delete TM-ac-1 --force
 ```
 
-Navigation:
-- `j/k` or `↑/↓` - Navigate lists
-- `enter` - Select/drill down
+### Document Commands (ADRs, Plans, etc.)
+
+```bash
+# Create document
+tm doc create \
+  --title "ADR: Use Event Sourcing" \
+  --type adr|plan|retrospective \
+  --content "Document content..." \
+  --track TM-track-1
+
+# Or from file
+tm doc create \
+  --title "ADR: Use Event Sourcing" \
+  --type adr \
+  --from-file ./docs/adr-001.md \
+  --track TM-track-1
+
+# List documents
+tm doc list
+tm doc list --type adr
+
+# Show document
+tm doc show TM-doc-1
+
+# Update document
+tm doc update TM-doc-1 --from-file ./updated.md
+
+# Attach to track or iteration
+tm doc attach TM-doc-1 --track TM-track-2
+tm doc attach TM-doc-1 --iteration 3
+
+# Detach document
+tm doc detach TM-doc-1
+
+# Delete document
+tm doc delete TM-doc-1 --force
+```
+
+### ADR Commands (Architecture Decision Records)
+
+```bash
+# Create ADR
+tm adr create \
+  --title "Use microservices architecture" \
+  --context "Need to scale independently" \
+  --decision "Adopt microservices with event bus" \
+  --consequences "Increased complexity, better scalability" \
+  --track TM-track-1
+
+# List ADRs
+tm adr list
+tm adr list --status accepted --track TM-track-1
+
+# Show ADR
+tm adr show TM-adr-1
+
+# Update ADR
+tm adr update TM-adr-1 \
+  --status proposed|accepted|rejected|superseded|deprecated
+
+# Supersede ADR (with reason)
+tm adr supersede TM-adr-1 TM-adr-2
+
+# Deprecate ADR
+tm adr deprecate TM-adr-1 --reason "No longer relevant"
+
+# Check for superseded/deprecated ADRs
+tm adr check
+
+# Delete ADR
+tm adr delete TM-adr-1 --force
+```
+
+### Interactive TUI
+
+```bash
+# Launch terminal UI
+tm ui
+```
+
+**Navigation:**
+- `j/k` or `↑/↓` - Move up/down
+- `Enter` - Select/drill down
 - `i` - Switch to iteration view
 - `r` - Refresh data
-- `esc` - Go back
+- `Esc` - Go back
 - `q` - Quit
 
 **Features:**
-- Roadmap overview with tracks and task counts
+- Roadmap overview with tracks and tasks
 - Track details with nested task lists
-- Iteration planning and progress visualization
+- Iteration planning and progress
 - Dependency visualization
 - Status and priority filtering
-
-### Plugin Event Bus
-
-DarwinFlow includes a powerful **Plugin Event Bus** for cross-plugin communication using publish/subscribe patterns. Plugins can emit events and subscribe to events from other plugins, enabling rich integrations and workflows.
-
-**Key Features:**
-- **Publish/Subscribe**: Plugins publish events; other plugins subscribe with filters
-- **Event Filtering**: Subscribe to specific event types, labels, or sources
-- **Async Delivery**: Non-blocking event delivery with 30-second timeout per subscriber
-- **Thread-Safe**: Concurrent publish/subscribe operations fully supported
-- **Event Persistence**: Optional SQLite persistence for replay and audit trails
-- **Event Replay**: Late-subscribing plugins can replay historical events
-
-**Event Structure:**
-```go
-type BusEvent struct {
-    ID        string                 // Unique event ID
-    Type      string                 // e.g., "gmail.email_received"
-    Source    string                 // Plugin ID that emitted the event
-    Timestamp time.Time
-    Labels    map[string]string      // Filterable labels
-    Metadata  map[string]interface{} // Additional metadata
-    Payload   []byte                 // JSON-encoded payload
-}
-```
-
-**Example Use Cases:**
-- **Gmail → Telegram**: Gmail plugin detects school event emails → Telegram bot sends notification
-- **Calendar → Multiple Plugins**: Calendar event created → notifications, task creation, reminders
-- **Cross-Plugin Workflows**: Build complex workflows across plugin boundaries
-
-**Example: Publishing Events**
-```go
-// Plugin publishes an event
-event, _ := pluginsdk.NewBusEvent("gmail.email_received", "gmail-plugin", emailData)
-event.Labels["category"] = "school_notification"
-event.Labels["priority"] = "high"
-
-eventBus.Publish(ctx, event)
-```
-
-**Example: Subscribing to Events**
-```go
-// Plugin subscribes to events with filtering
-filter := pluginsdk.EventFilter{
-    TypePattern: "gmail.*",           // All Gmail events
-    Labels: map[string]string{
-        "category": "school_notification",
-    },
-}
-
-handler := &MyEventHandler{}
-subscriptionID, _ := eventBus.Subscribe(filter, handler)
-```
-
-**Event Filtering:**
-- **Type Patterns**: Glob patterns (`gmail.*`, `*.event_detected`) or exact matches
-- **Label Matching**: Filter by label key-value pairs (subset matching)
-- **Source Plugin**: Filter events by originating plugin
-
-**Persistence & Replay:**
-- Events are optionally stored in SQLite for durability
-- Late-subscribing plugins can replay historical events
-- Useful for rebuilding state or catching up on missed events
-
-**Architecture Documentation:**
-- See `docs/arch-generated.md` for complete dependency graph
-- See `CLAUDE.md` for plugin development guide
-- Run `go-arch-lint docs` to regenerate after changes
-
-## Usage
-
-### Commands
-
-```bash
-# Initialize logging infrastructure
-dw claude-code init                        # Or 'dw claude init' (backward compat)
-
-# Update to latest version (run after upgrading DarwinFlow)
-dw refresh                                 # Update database schema and hooks
-
-# Log an event (typically called by hooks - backward compat)
-dw claude log <event-type>
-dw claude-code log <event-type>
-
-# View logged events
-dw logs                                    # Show 20 most recent logs
-dw logs --limit 50                         # Show 50 most recent logs
-dw logs --help                             # Show database schema and help
-
-# Execute arbitrary SQL queries
-dw logs --query "SELECT event_type, COUNT(*) FROM events GROUP BY event_type"
-
-# Interactive UI for session management
-dw ui                                      # Launch interactive terminal UI
-dw ui --debug                              # Launch with debug logging
-dw ui --db /path/to/db                     # Use custom database path
-
-# Analyze sessions using AI
-dw analyze --last                          # Analyze the most recent session
-dw analyze --session-id <id>               # Analyze a specific session
-dw analyze --view --session-id <id>        # View existing analysis
-dw analyze --all                           # Analyze all unanalyzed sessions
-dw analyze --refresh                       # Re-analyze all sessions (even already analyzed)
-dw analyze --refresh --limit 5             # Re-analyze only latest 5 sessions
-
-# Use different analysis prompts
-dw analyze --last --prompt session_summary    # Factual session summary
-dw analyze --last --prompt tool_analysis      # Agent-focused tool suggestions (default)
-
-# Override config settings
-dw analyze --last --model sonnet              # Use different model
-dw analyze --last --token-limit 50000         # Use custom token limit
-
-# Run plugin tools
-dw project session-summary --last             # Display summary of last session
-dw project session-summary --session-id <id>  # Display summary of specific session
-dw project list                               # List all available plugin tools
-```
-
-#### Log Viewing Examples
-
-```bash
-# Show recent activity
-dw logs --limit 10
-
-# Count events by type
-dw logs --query "SELECT event_type, COUNT(*) as count FROM events GROUP BY event_type ORDER BY count DESC"
-
-# Find tool invocations in the last hour
-dw logs --query "SELECT * FROM events WHERE event_type = 'tool.invoked' AND timestamp > strftime('%s', 'now', '-1 hour') * 1000"
-
-# Search for specific content
-dw logs --query "SELECT * FROM events WHERE content LIKE '%sqlite%' LIMIT 10"
-
-# View database schema
-dw logs --help
-```
-
-#### Session Analysis Examples
-
-```bash
-# Analyze your last session to identify patterns
-dw analyze --last
-
-# Analyze a specific session
-dw logs --session-id 8518c46d-51fd-49ec-99ac-b41a613f33ac  # First, view the session
-dw analyze --session-id 8518c46d-51fd-49ec-99ac-b41a613f33ac
-
-# View a previously saved analysis
-dw analyze --view --session-id 8518c46d-51fd-49ec-99ac-b41a613f33ac
-
-# Batch analyze all unanalyzed sessions
-dw analyze --all
-
-# Re-analyze all sessions with updated prompts
-dw analyze --refresh
-
-# Re-analyze only the latest 10 sessions
-dw analyze --refresh --limit 10
-```
-
-The analysis uses an **agent-focused prompt** where Claude Code analyzes its own work from a first-person perspective, identifying:
-- **Tool gaps**: Where the agent lacked the right tools
-- **Repetitive operations**: Where multiple primitive operations could be a single tool
-- **Missing specialized agents**: Task types that would benefit from dedicated subagents
-- **Workflow inefficiencies**: Multi-step sequences that should be automated
-
-The output includes specific tool suggestions categorized as:
-- Specialized Agents (e.g., test generation, refactoring)
-- CLI Tools (command-line utilities to augment capabilities)
-- Claude Code Features (new built-in capabilities)
-- Workflow Automations (multi-step operations as single tools)
-
-#### Interactive UI
-
-The `dw ui` command launches an interactive terminal UI for browsing and managing sessions:
-
-**Features:**
-- **Session List View**: Browse all sessions with analysis status indicators
-  - ✓ = Analyzed
-  - ✗ = Not analyzed
-  - ⟳N = Multiple analyses (N = count)
-- **Session Details**: View session metadata, event counts, and analysis previews
-- **Quick Actions**: Analyze, re-analyze, view, or save analyses to markdown
-- **Keyboard Navigation**: Fast, keyboard-driven interface
-
-**Keyboard Controls:**
-
-*Session List:*
-- `↑/↓` - Navigate sessions
-- `Enter` - View session details
-- `r` - Refresh session list
-- `Esc` - Quit
-
-*Session Detail:*
-- `a` - Analyze session (run new analysis)
-- `r` - Re-analyze session (refresh existing analysis)
-- `s` - Save analysis to markdown file
-- `v` - View full analysis
-- `Esc` - Back to list
-
-**Example Workflow:**
-```bash
-# Launch interactive UI
-dw ui
-
-# Navigate to a session and press Enter
-# View analysis status and previews
-# Press 'a' to analyze if not analyzed
-# Press 's' to save analysis to markdown
-# Press Esc to return to list
-```
-
-Markdown files are saved to the directory configured in `.darwinflow.yaml` (default: `./analysis-outputs/`) with customizable filename templates.
-
-### Configuration
-
-DarwinFlow uses `.darwinflow.yaml` for configuration. Create this file in your project root or home directory:
-
-```yaml
-analysis:
-  token_limit: 100000                      # Max tokens for analysis context
-  # Allowed models: sonnet, opus, haiku (aliases for latest versions)
-  # Or specific versions: claude-sonnet-4-5-20250929, claude-opus-4-20250514,
-  # claude-3-5-sonnet-20241022, claude-3-5-haiku-20241022
-  model: "sonnet"                          # Model alias or full name
-  parallel_limit: 3                        # Max parallel analysis executions
-  # Prompts to run during analysis (runs in parallel)
-  enabled_prompts:
-    - tool_analysis                        # Default: run tool_analysis
-    # - session_summary                    # Uncomment to also run session summaries
-  auto_summary_enabled: false              # Enable auto session summaries
-  auto_summary_prompt: "session_summary"   # Prompt for auto summaries
-  claude_options:
-    allowed_tools: []                      # Tools available during analysis (empty = none)
-    system_prompt_mode: "replace"          # "replace" or "append"
-
-ui:
-  default_output_dir: "./analysis-outputs" # Directory for saved markdown files
-  # Filename template for saved analyses
-  # Available: {{.SessionID}}, {{.PromptName}}, {{.Date}}, {{.Time}}
-  filename_template: "{{.SessionID}}-{{.PromptName}}-{{.Date}}.md"
-  auto_refresh_interval: ""                # e.g., "30s" for auto-refresh (empty = disabled)
-
-prompts:
-  session_summary: |
-    # Your custom session summary prompt here
-  tool_analysis: |
-    # Your custom tool analysis prompt here
-```
-
-**Key Configuration Options**:
-- `enabled_prompts`: Array of prompts to run during analysis (runs in parallel)
-  - `dw analyze --last` runs all enabled prompts
-  - `dw analyze --last --prompt X` runs only prompt X (overrides config)
-  - Prompts must exist in the `prompts` section
-- `auto_summary_enabled`: Set to `true` to automatically analyze sessions when they end
-- `token_limit`: Controls how many sessions can be batch-analyzed together
-- `parallel_limit`: Controls concurrency for parallel analysis
-- CLI flags can override any config setting
-
-### Event Types
-
-Currently captured events:
-
-- `tool.invoked` - Claude Code tool invocation (Read, Write, Bash, etc.)
-- `chat.message.user` - User prompt submission
-
-### Environment Variables
-
-- `DW_CONTEXT` - Set the current context (e.g., `project/myapp`)
-- `DW_MAX_PARAM_LENGTH` - Maximum parameter length for logging (default: 30)
 
 ## Development
 
 ### Prerequisites
 
 - Go 1.25.1 or later
-- [go-arch-lint](https://github.com/fdaines/go-arch-lint) for architecture validation
+- SQLite3 (included via `mattn/go-sqlite3`)
 
 ### Building
 
 ```bash
-# Build the CLI
-make
+# Build binary
+make build          # Creates ./tm
 
 # Run tests
-make test
+make test           # Run all tests
+
+# Install to GOPATH/bin
+make install
 ```
 
-### Architecture Compliance
-
-Before committing, ensure:
-
-1. All tests pass: `go test ./...`
-2. Zero architecture violations: `go-arch-lint .`
-3. Documentation is up-to-date (see [CLAUDE.md](./CLAUDE.md))
-
-### Generated Documentation
-
-Architecture and API documentation is generated automatically:
+### Testing
 
 ```bash
-# Generate comprehensive architecture documentation
+# Run all tests
+go test ./...
+
+# Run with coverage
+go test -cover ./...
+
+# Generate coverage report
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out
+```
+
+**Test Structure:**
+- **Unit tests**: `*_test.go` in each package (black-box pattern)
+- **Integration tests**: Infrastructure layer with real SQLite
+- **E2E tests**: `internal/task_manager/e2e_test/` - full CLI command validation
+
+**Coverage Target**: 70-80% (current: domain 90%+, application 82.1%, infrastructure 52.3%)
+
+### Architecture Validation
+
+Task Manager uses strict dependency rules enforced by linting:
+
+```bash
+# Validate architecture compliance
+go-arch-lint .
+
+# Regenerate architecture documentation
 go-arch-lint docs
 ```
 
-This generates `docs/arch-generated.md` with the complete dependency graph, public APIs, and architectural validation.
+**Dependency Rules:**
+- Domain → NOTHING (pure business logic)
+- Application → Domain
+- Infrastructure → Domain
+- Presentation → Application + Infrastructure
 
 ## Project Structure
 
 ```
-darwinflow-pub/
-├── cmd/dw/                           # CLI entry points
-│   ├── main.go                       # Main command router
-│   ├── bootstrap.go                  # Dependency injection
-│   ├── plugin_registration.go        # Plugin registration & adapters
-│   ├── logs.go                       # Logs command handlers
-│   └── analyze.go                    # Analysis command handlers
-├── pkg/                              # Public APIs
-│   ├── pluginsdk/                    # Plugin SDK (public contract)
-│   │   ├── plugin.go                 # Plugin interface
-│   │   ├── capability.go             # Capability interfaces
-│   │   ├── entity.go                 # Entity interfaces
-│   │   ├── event.go                  # Event types
-│   │   └── context.go                # Plugin context
-│   └── plugins/                      # Plugin implementations
-│       └── claude_code/              # Claude Code plugin
-│           ├── plugin.go             # Plugin implementation
-│           ├── commands.go           # InitCommand, EmitEventCommand
-│           └── session_entity.go     # Session entity
-├── internal/                         # Internal packages
-│   ├── domain/                       # Core domain types
-│   │   ├── event.go                  # Domain event definitions
-│   │   ├── analysis.go               # Analysis domain types
-│   │   └── plugin.go                 # Domain plugin interfaces
-│   ├── app/                          # Application services
-│   │   ├── plugin_registry.go        # Plugin routing
-│   │   ├── command_registry.go       # Command routing
-│   │   ├── plugin_context.go         # SDK context implementation
-│   │   ├── logs.go                   # Logs query service
-│   │   └── analysis.go               # Analysis service
-│   └── infra/                        # Infrastructure implementations
-│       ├── sqlite_repository.go      # SQLite storage
-│       ├── hook_config.go            # Hook configuration (plugin use)
-│       ├── transcript.go             # Transcript parsing
-│       └── context.go                # Context detection
-├── docs/                             # Generated documentation
-│   ├── arch-index.md                 # Architecture index
-│   └── arch-generated.md             # Dependency graph
-├── CLAUDE.md                         # AI agent instructions
-└── README.md                         # This file
+ai-task-manager/
+├── cmd/tm/                              # CLI entry point
+│   ├── main.go                          # Bootstrap and command registration
+│   └── ...                              # Command handlers
+├── internal/task_manager/               # Task manager implementation
+│   ├── domain/                          # Business logic (zero dependencies)
+│   │   ├── entities/                    # Roadmap, Track, Task, Iteration, etc.
+│   │   ├── services/                    # Domain services (validation, dependencies)
+│   │   ├── events/                      # Domain events
+│   │   └── repositories/                # Repository interfaces
+│   ├── application/                     # Use cases and orchestration
+│   │   ├── *_service.go                 # Application services
+│   │   ├── dto/                         # Data transfer objects
+│   │   └── mocks/                       # Generated mocks (mockery)
+│   ├── infrastructure/                  # Technical implementations
+│   │   └── persistence/                 # SQLite repositories + migrations
+│   ├── presentation/                    # User interfaces
+│   │   └── cli/                         # Cobra command adapters
+│   ├── e2e_test/                        # End-to-end tests
+│   └── plugin.go                        # Dependency injection
+├── docs/                                # Documentation
+├── Makefile                             # Build automation
+├── go.mod                               # Go module definition
+├── CLAUDE.md                            # AI agent instructions
+└── README.md                            # This file
 ```
 
-## Roadmap
+## Database
 
-### V1 (Current)
-- ✅ Basic event capture (PreToolUse, UserPromptSubmit)
-- ✅ SQLite storage with full-text search
-- ✅ Hook management and merging
-- ✅ Log viewer with SQL query support (`dw logs`)
-- ✅ AI-powered session analysis (`dw analyze`)
-- ✅ Agent-focused analysis prompt (Claude Code identifies what tools IT needs)
-- ✅ Refresh functionality to re-analyze sessions with updated prompts
-- ✅ Pattern detection and tool suggestions
+Each project uses a SQLite database stored at `.tm/projects/<name>/roadmap.db`.
 
-### V2 (Planned)
-- Vector embeddings for semantic search
-- Cross-session pattern analysis
-- Enhanced context extraction
-- Automated tool generation from patterns
+**Schema (8 tables):**
+- `roadmaps` - One per project (vision, success criteria)
+- `tracks` - Work streams with status/priority
+- `track_dependencies` - Track dependencies (junction table)
+- `tasks` - Work items with status
+- `iterations` - Time-boxed groupings
+- `iteration_tasks` - Iteration membership (junction table)
+- `adrs` - Architecture decision records
+- `acceptance_criteria` - Task verification criteria
+- `documents` - Plans, retrospectives, etc.
 
-### V3 (Future)
-- Workflow optimization suggestions
-- Self-modifying commands based on patterns
-- Advanced analytics and insights
-- Real-time pattern detection during sessions
+Migrations run automatically on first access to ensure schema is up-to-date.
+
+## Key Dependencies
+
+- **Cobra**: CLI framework for command structure
+- **Bubble Tea**: Terminal UI framework for interactive TUI
+- **SQLite3**: Embedded database for persistence
+- **Glamour**: Markdown rendering for terminal
+- **Lipgloss**: Terminal styling and layouts
 
 ## Contributing
 
 Contributions are welcome! Please ensure:
 
-1. Code follows the 3-layer architecture
-2. All tests pass (`go test ./...`)
-3. Architecture linter passes (`go-arch-lint .`)
-4. Documentation is updated for API/architecture changes
+1. Code follows Clean Architecture principles
+2. All tests pass (`make test`)
+3. Domain layer has zero external dependencies
+4. Coverage remains above 70% for new code
+5. Documentation is updated for new features
 
 ## License
 
 MIT License - See LICENSE file for details
 
-## Acknowledgments
-
-Built to enhance [Claude Code](https://www.anthropic.com/claude/code) workflows and enable AI-assisted development insights.

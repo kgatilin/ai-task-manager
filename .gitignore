@@ -4,6 +4,8 @@
 *.dll
 *.so
 *.dylib
+bin/
+tm
 
 # Test binary, built with `go test -c`
 *.test
@@ -14,13 +16,14 @@
 # Go workspace file
 go.work
 
-# DarwinFlow CLI binary (only in root)
-/dw
-/dw-stable
-/dw-e2e-test
+# Task Manager CLI binary (only in root)
+/tm
+/tm-stable
+/tm-e2e-test
 
 # DarwinFlow data directory
 .darwinflow/
+.tm/
 
 # Backup files
 *.backup

@@ -44,7 +44,7 @@ Execute these bash commands to determine the target iteration:
 
 ```bash
 # Get current iteration
-dw task-manager iteration current
+tm iteration current
 ```
 
 **Determine target**:
@@ -54,12 +54,12 @@ dw task-manager iteration current
 - Store as `TARGET_ITERATION`
 
 **If no argument provided**:
-- Parse `dw task-manager iteration current` output
+- Parse `tm iteration current` output
 - If current iteration exists: Use current iteration number
 - If no current iteration:
   ```bash
   # List all iterations to find most recent in-progress
-  dw task-manager iteration list
+  tm iteration list
   ```
   - Find first iteration with status "current" or most recent "in-progress"
   - Store as `TARGET_ITERATION`
@@ -76,7 +76,7 @@ Execute command to get all failed ACs for the iteration:
 
 ```bash
 # Get all failed acceptance criteria for the iteration
-dw task-manager ac failed --iteration $TARGET_ITERATION
+tm ac failed --iteration $TARGET_ITERATION
 ```
 
 **Parse output**:
@@ -121,13 +121,13 @@ Execute these commands to understand the full context:
 
 ```bash
 # Get task details
-dw task-manager task show [TASK-ID]
+tm task show [TASK-ID]
 
 # Get all acceptance criteria for this task
-dw task-manager ac list [TASK-ID]
+tm ac list [TASK-ID]
 
 # Get iteration context
-dw task-manager iteration show [TARGET_ITERATION] --full
+tm iteration show [TARGET_ITERATION] --full
 ```
 
 Read the relevant code files to understand current implementation:
@@ -148,7 +148,7 @@ Based on the failure feedback and code review:
 Design a fix plan that:
 1. **Addresses root cause** directly
 2. **Is minimal** (only fix what's needed for this AC)
-3. **Maintains architecture** (follows DarwinFlow patterns)
+3. **Maintains architecture** (follows Task Manager patterns)
 4. **Is testable** (how to verify the fix)
 5. **Has clear boundaries** (which files to modify)
 
@@ -302,9 +302,8 @@ You are fixing failed acceptance criterion [AC-ID] for task [TASK-ID].
 [From exploration agent report]
 
 ## Architecture Constraints
-- Follow DarwinFlow package structure (see @docs/arch-index.md)
-- Maintain dependency rules (SDK imports nothing, domain imports SDK only)
-- Framework is plugin-agnostic
+- Follow Task Manager package structure (see @docs/arch-index.md)
+- Maintain Clean Architecture dependency rules
 - Zero linter violations required
 - Target 70-80% test coverage
 
@@ -386,10 +385,10 @@ Execute these commands to verify current state:
 
 ```bash
 # Get all acceptance criteria status for the iteration
-dw task-manager ac list-iteration [iteration-number]
+tm ac list-iteration [iteration-number]
 
 # Check for any remaining failed ACs
-dw task-manager ac failed --iteration [iteration-number]
+tm ac failed --iteration [iteration-number]
 ```
 
 ## Step 2: Gate Check - Verify File Changes Are Appropriate

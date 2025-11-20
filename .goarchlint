@@ -5,18 +5,15 @@
 # Your custom 'overrides' section has been preserved.
 #
 
-module: github.com/kgatilin/darwinflow-pub
+module: github.com/kgatilin/ai-task-manager
 ignore_paths:
-    - pkg/plugins/task_manager/e2e_test
+    - internal/task_manager/e2e_test
 
 preset:
     name: ddd
     structure:
         required_directories:
             cmd: Application entry points
-            internal/app: Application services, use cases, orchestration
-            internal/domain: Core business logic, entities, value objects, domain services
-            internal/infra: Infrastructure implementations (DB, external APIs, messaging)
         allow_other_directories: true
     rules:
         directories_import:
@@ -48,6 +45,10 @@ preset:
                 - github.com/stretchr/testify/require
                 - github.com/stretchr/testify/mock
             location: colocated
+            # NOTE: require_blackbox is set to true, but main packages (package main)
+            # cannot use blackbox testing due to Go's limitation that package main
+            # cannot be imported. Tests in cmd/* packages with package main must use
+            # whitebox testing (package main) and will violate this rule.
             require_blackbox: true
         test_coverage:
             enabled: true
@@ -125,8 +126,6 @@ preset:
 overrides:
     structure:
         required_directories:
-            pkg/plugins: "Plugin implementations (built-in and external)"
-            pkg/pluginsdk: "Plugin SDK (interfaces and types for plugin development)"
     rules:
         strict_test_naming: true # Opt-in (default: false)
         test_files:
@@ -145,120 +144,87 @@ overrides:
                 - github.com/mattn/go-sqlite3 # SQLite driver (shared infrastructure)
                 - gopkg.in/yaml.v3 # YAML config (shared configuration utility)
                 - github.com/stretchr/testify/assert
+                - github.com/spf13/cobra
         directories_import:
             cmd:
-                - internal/app
-                - internal/infra
-                - pkg/plugins
-                - pkg/pluginsdk # Allow cmd to import SDK for composition root
-            internal/app:
-                - internal/domain
-                - pkg/pluginsdk
-            internal/domain:
-                - pkg/pluginsdk # Domain can import SDK for plugin contracts
-            internal/infra:
-                - internal/domain
-                - pkg/pluginsdk
-            pkg/plugins/claude_code:
-                - pkg/pluginsdk
-            pkg/plugins/task_manager:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/application
-                - pkg/plugins/task_manager/domain
-                - pkg/plugins/task_manager/domain/services
-                - pkg/plugins/task_manager/domain/entities
-                - pkg/plugins/task_manager/infrastructure/cli
-                - pkg/plugins/task_manager/infrastructure/persistence
-                - pkg/plugins/task_manager/presentation/cli
-                - pkg/plugins/task_manager/presentation/tui
+                - internal/task_manager
 
             # Task Manager Clean Architecture - Domain Layer
-            pkg/plugins/task_manager/domain:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain/entities
+            internal/task_manager/domain:
+                - internal/task_manager/domain/entities
 
-            pkg/plugins/task_manager/domain/entities:
-                - pkg/pluginsdk
+            internal/task_manager/domain/entities:
+                - internal/task_manager/domain/errors
 
-            pkg/plugins/task_manager/domain/repositories:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain/entities
+            internal/task_manager/domain/repositories:
+                - internal/task_manager/domain/entities
 
-            pkg/plugins/task_manager/domain/services:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain/entities
+            internal/task_manager/domain/services:
+                - internal/task_manager/domain/entities
+                - internal/task_manager/domain/errors
 
-            pkg/plugins/task_manager/domain/events:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain/entities
+            internal/task_manager/domain/events:
+                - internal/task_manager/domain/entities
 
             # Task Manager Clean Architecture - Application Layer
-            pkg/plugins/task_manager/application:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain
-                - pkg/plugins/task_manager/application/dto
-                - pkg/plugins/task_manager/application/mocks # Test utilities
+            internal/task_manager/application:
+                - internal/task_manager/domain
+                - internal/task_manager/application/dto
+                - internal/task_manager/application/mocks # Test utilities
 
             # Task Manager Clean Architecture - Infrastructure Layer
-            pkg/plugins/task_manager/infrastructure:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain
+            internal/task_manager/infrastructure:
+                - internal/task_manager/domain
 
-            pkg/plugins/task_manager/infrastructure/cli:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain
+            internal/task_manager/infrastructure/cli:
+                - internal/task_manager/domain
 
-            pkg/plugins/task_manager/infrastructure/persistence:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain
-                - pkg/plugins/task_manager/domain/entities
-                - pkg/plugins/task_manager/domain/repositories
+            internal/task_manager/infrastructure/persistence:
+                - internal/task_manager/domain
+                - internal/task_manager/domain/entities
+                - internal/task_manager/domain/repositories
 
             # Task Manager Clean Architecture - Presentation Layer
-            pkg/plugins/task_manager/presentation/cli:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/application
-                - pkg/plugins/task_manager/domain
+            internal/task_manager/presentation/cli:
+                - internal/task_manager/application
+                - internal/task_manager/domain
 
             # Task Manager TUI - MVP Architecture
-            pkg/plugins/task_manager/presentation/tui:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain
-                - pkg/plugins/task_manager/infrastructure/cli # For PluginProvider interface
-                - pkg/plugins/task_manager/presentation/tui/components
-                - pkg/plugins/task_manager/presentation/tui/presenters
-                - pkg/plugins/task_manager/presentation/tui/viewmodels
-                - pkg/plugins/task_manager/presentation/tui/queries
+            internal/task_manager/presentation/tui:
+                - internal/task_manager/domain
+                - internal/task_manager/infrastructure/cli # For PluginProvider interface
+                - internal/task_manager/presentation/tui/components
+                - internal/task_manager/presentation/tui/presenters
+                - internal/task_manager/presentation/tui/viewmodels
+                - internal/task_manager/presentation/tui/queries
 
-            pkg/plugins/task_manager/presentation/tui/viewmodels: [] # Pure data, zero dependencies
+            internal/task_manager/presentation/tui/viewmodels: [] # Pure data, zero dependencies
 
-            pkg/plugins/task_manager/presentation/tui/components:
+            internal/task_manager/presentation/tui/components:
                 - github.com/charmbracelet/bubbles/help
                 - github.com/charmbracelet/bubbles/key
                 - github.com/charmbracelet/bubbles/spinner
                 - github.com/charmbracelet/lipgloss # TUI component wrapper layer
 
-            pkg/plugins/task_manager/presentation/tui/transformers:
-                - pkg/plugins/task_manager/domain/entities
-                - pkg/plugins/task_manager/presentation/tui/viewmodels
+            internal/task_manager/presentation/tui/transformers:
+                - internal/task_manager/domain
+                - internal/task_manager/domain/entities
+                - internal/task_manager/presentation/tui/viewmodels
 
-            pkg/plugins/task_manager/presentation/tui/queries:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain
-                - pkg/plugins/task_manager/presentation/tui/transformers
-                - pkg/plugins/task_manager/presentation/tui/viewmodels
+            internal/task_manager/presentation/tui/queries:
+                - internal/task_manager/domain
+                - internal/task_manager/presentation/tui/transformers
+                - internal/task_manager/presentation/tui/viewmodels
 
-            pkg/plugins/task_manager/presentation/tui/presenters:
-                - pkg/pluginsdk
-                - pkg/plugins/task_manager/domain
-                - pkg/plugins/task_manager/domain/entities
-                - pkg/plugins/task_manager/presentation/tui/components
-                - pkg/plugins/task_manager/presentation/tui/viewmodels
-                - pkg/plugins/task_manager/presentation/tui/queries
+            internal/task_manager/presentation/tui/presenters:
+                - internal/task_manager/domain
+                - internal/task_manager/domain/entities
+                - internal/task_manager/presentation/tui/components
+                - internal/task_manager/presentation/tui/viewmodels
+                - internal/task_manager/presentation/tui/queries
 
-            pkg/plugins/task_manager/application/mocks:
-                - pkg/plugins/task_manager/domain/entities
-                - pkg/pluginsdk
+            internal/task_manager/application/mocks:
+                - internal/task_manager/domain
 
             pkg/pluginsdk: [] # SDK has zero dependencies - fully public
         test_coverage:
@@ -267,24 +233,25 @@ overrides:
                 pkg/plugins/task_manager: 20 # Tested with e2e tests
 
                 # Task Manager Layer-Specific Coverage Thresholds
-                pkg/plugins/task_manager/domain: 0
-                pkg/plugins/task_manager/domain/entities: 90
-                pkg/plugins/task_manager/domain/services: 90
-                pkg/plugins/task_manager/domain/repositories: 0 # Interface-only, no tests needed
-                pkg/plugins/task_manager/domain/events: 0 # Data structures only, no logic to test
-                pkg/plugins/task_manager/application: 80
-                pkg/plugins/task_manager/application/dto: 0 # Data structures only, no logic to test
-                pkg/plugins/task_manager/application/mocks: 0 # Test utilities, no tests needed
-                pkg/plugins/task_manager/infrastructure/persistence: 50
-                pkg/plugins/task_manager/infrastructure/cli: 0 # CLI commands, tested via integration
-                pkg/plugins/task_manager/presentation/cli: 0 # Tested with e2e tests
-                pkg/plugins/task_manager/presentation/tui: 0 # Tested via integration
-                pkg/plugins/task_manager/presentation/tui/viewmodels: 100 # Pure data, full coverage
-                pkg/plugins/task_manager/presentation/tui/components: 100 # Reusable components, full coverage
-                pkg/plugins/task_manager/presentation/tui/transformers: 90 # Pure functions, high coverage
-                pkg/plugins/task_manager/presentation/tui/queries: 70 # Data orchestration
-                pkg/plugins/task_manager/presentation/tui/presenters: 0 # Bubble Tea components, integration tested
-                pkg/plugins/task_manager/e2e_test: 0
+                internal/task_manager/domain: 0
+                internal/task_manager/domain/entities: 90
+                internal/task_manager/domain/services: 90
+                internal/task_manager/domain/repositories: 0 # Interface-only, no tests needed
+                internal/task_manager/domain/events: 0 # Data structures only, no logic to test
+                internal/task_manager/application: 80
+                internal/task_manager/application/dto: 0 # Data structures only, no logic to test
+                internal/task_manager/application/mocks: 0 # Test utilities, no tests needed
+                internal/task_manager/infrastructure/persistence: 50
+                internal/task_manager/infrastructure/cli: 0 # CLI commands, tested via integration
+                internal/task_manager/presentation/cli: 0 # Tested with e2e tests
+                internal/task_manager/presentation/tui: 0 # Tested via integration
+                internal/task_manager/presentation/tui/viewmodels: 90 # Pure data, full coverage
+                internal/task_manager/presentation/tui/components: 90 # Reusable components, full coverage
+                internal/task_manager/presentation/tui/transformers: 90 # Pure functions, high coverage
+                internal/task_manager/presentation/tui/queries: 70 # Data orchestration
+                internal/task_manager/presentation/tui/presenters: 0 # Bubble Tea components, integration tested
+                internal/task_manager/e2e_test: 0
+                internal/task_manager: 0
 
                 pkg/pluginsdk: 0 # SDK is interface-only, no tests needed
                 cmd: 20

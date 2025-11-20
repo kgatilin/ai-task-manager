@@ -1,42 +1,18 @@
-# DarwinFlow - Claude Code Logging System
+# Task Manager (tm)
 
 ## Project Overview
 
-**DarwinFlow** captures Claude Code interactions as structured events using event sourcing. Events are stored in SQLite for pattern detection and workflow optimization.
+**Task Manager** is a standalone CLI tool for managing software development workflows using Clean Architecture and Domain-Driven Design principles. It provides roadmap tracking, task management, iterations, and acceptance criteria verification.
 
-### Key Components
+### Core Features
 
-- **CLI**: `dw claude init`, `dw refresh`, `dw logs`, `dw ui`, `dw analyze`
-- **Event Logging**: Captures tool invocations and user prompts via hooks
-- **SQLite Storage**: Event storage with full-text search
-- **AI Analysis**: Session analysis with configurable prompts
-- **Interactive TUI**: Browse sessions, view analyses, export to markdown
-- **Plugin Event Bus**: Cross-plugin communication via publish/subscribe (all plugins have access)
-
-### Plugin Architecture
-
-DarwinFlow uses a plugin-based architecture:
-- **SDK** (`pkg/pluginsdk`) - Public plugin contracts (single source of truth)
-- **Core Plugin** (`pkg/plugins/claude_code`) - Claude Code event capture and analysis
-- **Framework** (`internal/*`) - Plugin-agnostic event processing and storage
-
-**Key Principle**: Framework is plugin-agnostic. Plugin-specific types belong in plugin packages.
-
-**Framework vs Plugin Responsibilities**:
-- **Framework handles**: Event storage, centralized analysis, cross-plugin communication (EventBus), logging, config, command routing, entity aggregation, database infrastructure, RPC protocol
-- **Plugins handle**: Domain logic, entity definitions, event types/payloads, custom commands, external API integrations, event handlers
-
-**Decision Guide**: Cross-plugin visibility → Framework. Infrastructure → Framework. Domain-specific → Plugin.
-
-**For Plugin Development**:
-- `template/go-plugin/README.md` - Complete plugin template with framework capabilities reference
-- `pkg/pluginsdk/CLAUDE.md` - Full SDK API documentation
-- `pkg/plugins/claude_code/` - Reference implementation
-- `README.md` (main) - Framework capabilities overview
-
-**Supported Plugins**:
-- `claude_code` - Event capture, session analysis, TUI
-- `task_manager` - Roadmap/task tracking (workflow below, architecture in `pkg/plugins/task_manager/CLAUDE.md`)
+- **Roadmap Management**: Organize work into tracks, tasks, and iterations
+- **Acceptance Criteria**: Define and verify task completion criteria
+- **Iteration Workflow**: Plan and execute work in focused iterations
+- **Document Management**: ADRs, plans, and retrospectives attached to tracks/iterations
+- **SQLite Storage**: Per-project database in `.taskmanager/data.db`
+- **Clean Architecture**: Strict layer separation enforced by go-arch-lint
+- **Cobra CLI**: Robust command-line interface with subcommands
 
 ---
 
@@ -46,127 +22,127 @@ DarwinFlow uses a plugin-based architecture:
 
 ```bash
 # CRITICAL: Always check this first (shows current or next planned iteration)
-dw task-manager iteration current
+tm iteration current
 
 # View all tasks (with status filtering)
-dw task-manager task list                    # All tasks
-dw task-manager task list --status todo      # Backlog
-dw task-manager task list --status in-progress  # Active work
+tm task list                    # All tasks
+tm task list --status todo      # Backlog
+tm task list --status in-progress  # Active work
 
 # View track details and tasks
-dw task-manager track show TM-track-X
+tm track show TM-track-X
 
 # View task details (including acceptance criteria)
-dw task-manager task show TM-task-X
+tm task show TM-task-X
 ```
 
 **Working on Tasks:**
 
 ```bash
 # Start a task (todo → in-progress)
-dw task-manager task update TM-task-X --status in-progress
+tm task update TM-task-X --status in-progress
 
 # Complete a task (USER ONLY - agent does NOT mark done unless asked)
-dw task-manager task update TM-task-X --status done
+tm task update TM-task-X --status done
 
 # Return to backlog (in-progress → todo)
-dw task-manager task update TM-task-X --status todo
+tm task update TM-task-X --status todo
 ```
 
 **Acceptance Criteria:**
 
 ```bash
 # Add acceptance criterion to task
-dw task-manager ac add TM-task-X --description "..."
+tm ac add TM-task-X --description "..."
 
 # List task acceptance criteria
-dw task-manager ac list TM-task-X
+tm ac list TM-task-X
 
 # Mark as verified (USER ONLY - agent does NOT verify unless asked)
-dw task-manager ac verify TM-ac-X
+tm ac verify TM-ac-X
 
 # Mark as failed with feedback (USER ONLY)
-dw task-manager ac fail TM-ac-X --feedback "..."
+tm ac fail TM-ac-X --feedback "..."
 
 # List failed ACs in current iteration (most useful)
-dw task-manager ac failed --iteration <current-iteration-num>
+tm ac failed --iteration <current-iteration-num>
 
 # Or filter by task/track
-dw task-manager ac failed --task TM-task-X
-dw task-manager ac failed --track TM-track-X
+tm ac failed --task TM-task-X
+tm ac failed --track TM-track-X
 ```
 
 **Creating New Work:**
 
 ```bash
 # 1. Create a new track
-dw task-manager track create --title "..." --description "..." --rank 100
+tm track create --title "..." --description "..." --rank 100
 
 # 2. (Optional) Create ADR document for the track
-dw task-manager doc create \
+tm doc create \
   --title "ADR: ..." \
   --type adr \
   --content "# Context\n...\n\n# Decision\n...\n\n# Consequences\n..." \
   --track <track-id>
 
 # Or from file
-dw task-manager doc create \
+tm doc create \
   --title "ADR: ..." \
   --type adr \
   --from-file ./docs/adr.md \
   --track <track-id>
 
 # 3. Create tasks in the track with acceptance criteria
-dw task-manager task create --track TM-track-X --title "..." --rank 100
-dw task-manager ac add TM-task-X --description "..."
+tm task create --track TM-track-X --title "..." --rank 100
+tm ac add TM-task-X --description "..."
 
 # 4. Create iteration and add tasks
-dw task-manager iteration create --name "..." --goal "..." --deliverable "..."
-dw task-manager iteration add-task <iter-num> TM-task-1 TM-task-2
+tm iteration create --name "..." --goal "..." --deliverable "..."
+tm iteration add-task <iter-num> TM-task-1 TM-task-2
 
 # 5. Start working on iteration
-dw task-manager iteration start <iter-num>
+tm iteration start <iter-num>
 ```
 
 **Document Management Commands:**
 
 ```bash
 # Create document (ADR, plan, retrospective, etc.)
-dw task-manager doc create \
+tm doc create \
   --title "..." \
   --type adr \
   --from-file ./docs/adr.md \
   --track TM-track-X
 
 # Or create inline
-dw task-manager doc create \
+tm doc create \
   --title "..." \
   --type plan \
   --content "# Planning doc..."
 
 # List documents (filter by type)
-dw task-manager doc list
-dw task-manager doc list --type adr
+tm doc list
+tm doc list --type adr
 
 # Show document
-dw task-manager doc show TM-doc-X
+tm doc show TM-doc-X
 
 # Update document
-dw task-manager doc update TM-doc-X --from-file ./updated.md
+tm doc update TM-doc-X --from-file ./updated.md
 
 # Attach to track or iteration
-dw task-manager doc attach TM-doc-X --track TM-track-Y
-dw task-manager doc attach TM-doc-X --iteration 5
+tm doc attach TM-doc-X --track TM-track-Y
+tm doc attach TM-doc-X --iteration 5
 
 # Detach document
-dw task-manager doc detach TM-doc-X
+tm doc detach TM-doc-X
 
 # Delete document
-dw task-manager doc delete TM-doc-X [--force]
+tm doc delete TM-doc-X [--force]
 ```
 
 **Priority Guidance**:
-- **CRITICAL**: Always run `dw task-manager iteration current` first to see what to work on
+- **CRITICAL**: Always run `tm iteration current` first to see what to work on
 - Shows current active iteration OR next planned iteration if none active
 - Iteration is the primary working entity (tracks are just grouping)
 
@@ -175,7 +151,7 @@ dw task-manager doc delete TM-doc-X [--force]
 - **Agent responsibility**: Implement work defined in tasks
 - **User responsibility**: Verify all acceptance criteria and mark tasks "done"
 - Agent does NOT verify AC or mark tasks done unless explicitly asked
-- Use `dw task-manager iteration current` to stay focused
+- Use `tm iteration current` to stay focused
 - Use documents (ADRs, plans, retrospectives) for architecture decisions and planning
 
 ### Writing Good Acceptance Criteria
@@ -184,7 +160,7 @@ dw task-manager doc delete TM-doc-X [--force]
 
 **Command Structure**:
 ```bash
-dw task-manager ac add <task-id> \
+tm ac add <task-id> \
   --description "What must be verified (end-user observable)" \
   --testing-instructions "Step-by-step instructions to verify"
 ```
@@ -212,9 +188,9 @@ dw task-manager ac add <task-id> \
 
 Good AC with proper separation:
 ```bash
-dw task-manager ac add TM-task-X \
+tm ac add TM-task-X \
   --description "Domain layer has 90%+ test coverage with all tests passing" \
-  --testing-instructions "1. Run: cd pkg/plugins/task_manager/domain
+  --testing-instructions "1. Run: cd internal/task_manager/domain
 2. Run: go test ./... -coverprofile=coverage.out
 3. Run: go tool cover -func=coverage.out | grep total
 4. Verify: total coverage >= 90%
@@ -224,7 +200,7 @@ dw task-manager ac add TM-task-X \
 
 Bad AC (everything in description):
 ```bash
-dw task-manager ac add TM-task-X \
+tm ac add TM-task-X \
   --description "Domain layer has 90%+ test coverage
 
 Testing instructions:
@@ -275,98 +251,161 @@ Too Granular (should be merged):
 
 ---
 
+## Architecture Overview
+
+**Task Manager** follows Clean Architecture principles with strict layer separation:
+
+```
+Presentation → Application → Domain ← Infrastructure
+     ↓              ↓           ↑            ↑
+   (CLI)      (Use Cases)  (Entities)   (Database)
+```
+
+### Why Clean Architecture?
+
+1. **Testability**: Core business logic isolated and easily testable
+2. **Independence**: Business rules don't depend on frameworks, UI, or database
+3. **Flexibility**: Easy to swap implementations (CLI → Web, SQLite → Postgres)
+4. **Maintainability**: Clear boundaries reduce coupling and increase cohesion
+
+### Why Cobra?
+
+**Cobra** was chosen for the CLI framework because:
+- Industry-standard (used by kubectl, docker, hugo)
+- Excellent command organization and subcommand support
+- Built-in help generation
+- Flag parsing with validation
+- Minimal boilerplate
+- Active maintenance and community support
+
+### Why SQLite Per-Project?
+
+**Per-project SQLite databases** (`.taskmanager/data.db`) because:
+- Zero server setup or configuration
+- Fast local queries (no network latency)
+- Easy backup (just copy the file)
+- Git-friendly (can be committed or gitignored)
+- Each project has isolated task data
+- No shared state between projects
+
+---
+
 ## Package Structure
 
-**Foundation Layer**:
-- `pkg/pluginsdk` - Public plugin SDK (zero internal dependencies) → See `pkg/pluginsdk/CLAUDE.md`
+All code lives under `internal/task_manager/` following Clean Architecture layers:
 
-**Framework Layer**:
-- `internal/domain` - Framework business logic (plugin-agnostic) → See `internal/domain/CLAUDE.md`
-- `internal/infra` - Infrastructure implementations (DB, config, logging) → See `internal/infra/CLAUDE.md`
-- `internal/app` - Application services and orchestration → See `internal/app/CLAUDE.md`
-- `internal/app/tui` - Terminal user interface (Bubble Tea) → See `internal/app/tui/CLAUDE.md`
+**Domain Layer** (`internal/task_manager/domain/`):
+- Pure business logic with zero external dependencies
+- Entities: Track, Task, Iteration, AcceptanceCriteria, Document
+- Repository interfaces (contracts only)
+- Domain services and aggregates
+- Value objects and domain events
 
-**Plugin Layer**:
-- `pkg/plugins/claude_code` - Claude Code plugin implementation → See `pkg/plugins/claude_code/CLAUDE.md`
+**Application Layer** (`internal/task_manager/application/`):
+- Use cases and application services
+- Orchestrates domain logic and infrastructure
+- Transaction coordination
+- Business workflow implementation
+- Maps domain entities to DTOs (if needed)
 
-**Entry Layer**:
-- `cmd/dw` - CLI entry points and bootstrap → See `cmd/dw/CLAUDE.md`
+**Infrastructure Layer** (`internal/task_manager/infrastructure/`):
+- Database implementations (SQLite repositories)
+- File system operations
+- External service integrations
+- Repository implementations for domain interfaces
 
-**Architecture Reference**: `docs/arch-index.md` - Full dependency graph and package details
+**Presentation Layer** (`internal/task_manager/presentation/`):
+- CLI commands (Cobra)
+- Command handlers
+- Input validation and parsing
+- Output formatting
+- User interaction
 
-**Package-Level Docs**: Each package has a `CLAUDE.md` with architectural guidance. Claude will read these automatically when working in those packages.
+**Entry Point** (`cmd/tm/`):
+- Main entry point
+- Dependency injection and wiring
+- Configuration loading
+- Application bootstrap
+
+**E2E Tests** (`internal/task_manager/e2e_test/`):
+- End-to-end integration tests
+- Full workflow validation
+- Real database and file system tests
+
+### Layer Dependencies (Enforced by go-arch-lint)
+
+```
+Presentation → Application → Domain
+Infrastructure → Domain
+
+NEVER:
+Domain → Application
+Domain → Infrastructure
+Domain → Presentation
+```
+
+**Key Rules**:
+- Domain layer imports NOTHING from other layers
+- Application imports Domain only
+- Infrastructure imports Domain only (implements interfaces)
+- Presentation imports Application and Domain (orchestrates)
+- Entry point imports all layers (wires dependencies)
 
 ---
 
----
+## Architecture Quick Reference
 
-## Analysis Architecture
+### Dependency Rules
 
-**View-Based Analysis**: The framework provides AI analysis capabilities for any view type through a plugin-agnostic architecture.
+- **internal/task_manager/domain**: Imports NOTHING from other task_manager packages
+- **internal/task_manager/application**: May import `domain` only
+- **internal/task_manager/infrastructure**: May import `domain` only
+- **internal/task_manager/presentation**: May import `domain`, `application`
+- **cmd/tm**: May import all layers for dependency injection
 
-### Core Components
+**Key Principle**: Dependencies flow inward toward domain. Domain is the most stable layer.
 
-**LLM Abstraction**:
-- `LLM` interface (`internal/domain`) - Abstract LLM provider contract
-- `ClaudeCodeLLM` (`internal/infra`) - Claude Code CLI implementation
-- Swappable implementations (Claude, Anthropic API, OpenAI, etc.)
+### Core Principles
 
-**View-Based Pattern**:
-- `AnalysisView` interface (`pkg/pluginsdk`) - Plugin contract for providing analysis views
-- `Analysis` type (`internal/domain`) - Generic analysis results (view-agnostic)
-- `AnalysisService.AnalyzeView()` - Analyzes any view implementing AnalysisView
+1. **Dependency Inversion**: Define interfaces in domain, implement in infrastructure
+2. **Separation of Concerns**: Each layer has a single, well-defined responsibility
+3. **Domain-Centric**: Business logic is isolated and protected
+4. **Repository Pattern**: One repository per aggregate root
+5. **Use Cases**: Application services represent user actions/workflows
+6. **Clean Boundaries**: No leaking of infrastructure details into domain
 
-**Plugin Implementation**:
-- Plugins implement `AnalysisView` to provide views of their events
-- Example: `SessionView` in Claude Code plugin provides session-based views
-- Framework analyzes any view using `AnalysisService.AnalyzeView()`
-- Plugins control how their events are formatted for LLM analysis
+### Repository Pattern
 
-**Storage**:
-- Generic `analyses` table stores all analysis types
-- View metadata stored as JSON (flexible, plugin-specific)
-- Migrated from old `session_analyses` table (Phase 3)
+Each aggregate root has a repository:
+- **TrackRepository**: Manages Track aggregates
+- **TaskRepository**: Manages Task aggregates
+- **IterationRepository**: Manages Iteration aggregates
+- **AcceptanceCriteriaRepository**: Manages AcceptanceCriteria
+- **DocumentRepository**: Manages Document entities
 
-### Backward Compatibility
+**Pattern**:
+```go
+// Domain defines interface
+type TaskRepository interface {
+    Save(task *Task) error
+    FindByID(id string) (*Task, error)
+    // ... other methods
+}
 
-**SessionAnalysis Type**:
-- Exists in `internal/domain` for backward compatibility with internal code
-- Wraps the generic `Analysis` type (converts SessionAnalysis ↔ Analysis)
-- New features should use `Analysis + AnalysisView` pattern
-- Maintained for internal framework code written before refactoring
+// Infrastructure implements
+type sqliteTaskRepository struct {
+    db *sql.DB
+}
 
-**Repository Interface**:
-- Generic methods: `SaveGenericAnalysis()`, `FindAnalysisByViewID()` (primary)
-- Session methods: `SaveAnalysis()`, `GetAnalysisBySessionID()` (compatibility layer)
-- Both interfaces operate on same underlying `analyses` table
+func (r *sqliteTaskRepository) Save(task *Task) error {
+    // SQLite implementation
+}
 
-### Architecture Flow
-
+// Application receives injected repository
+type TaskService struct {
+    repo domain.TaskRepository
+}
 ```
-Plugin (e.g., claude-code)
-  ↓ implements
-AnalysisView interface (SDK)
-  ↓ provides to
-AnalysisService.AnalyzeView()
-  ↓ uses
-LLM interface (domain)
-  ↓ implemented by
-ClaudeCodeLLM (infra)
-  ↓ stores
-Analysis (generic, domain)
-  ↓ persisted in
-AnalysisRepository
-  ↓ stores as
-analyses table (SQLite)
-```
-
-### Benefits
-
-- **Plugin-Agnostic**: Framework has no knowledge of "sessions" or other plugin entities
-- **Extensible**: Any plugin can leverage analysis (Task Manager, Gmail, Calendar)
-- **Swappable LLM**: Easy to swap LLM providers (Claude CLI → Anthropic API)
-- **Cross-Plugin Analysis**: Future support for analyzing events from multiple plugins
-- **Clean Architecture**: Plugins own views, framework provides capability
 
 ---
 
@@ -374,21 +413,55 @@ analyses table (SQLite)
 
 **Note**: When the user refers to "workflow", they mean these CLAUDE.md instructions.
 
+### Building and Running
+
+```bash
+# Build binary to ./tm
+make build
+
+# Install to GOPATH/bin
+make install
+
+# Run tests
+make test
+
+# Or directly
+go build -o tm ./cmd/tm
+go test ./...
+```
+
 ### Working on Features
 
-1. Check `@docs/arch-index.md` for current package structure
-2. Read relevant package `CLAUDE.md` for architectural guidance
-3. Follow DDD layer rules and dependency constraints
+1. Understand which layer the change belongs to:
+   - New business rule? → Domain
+   - New workflow? → Application
+   - New database query? → Infrastructure
+   - New command? → Presentation
+
+2. Read relevant package `CLAUDE.md` for layer-specific guidance:
+   - `internal/task_manager/CLAUDE.md` - Overall architecture
+   - `internal/task_manager/domain/CLAUDE.md` - Domain patterns
+   - `internal/task_manager/application/CLAUDE.md` - Use case patterns
+   - etc.
+
+3. Follow Clean Architecture rules:
+   - Domain never imports from other layers
+   - Define interfaces in domain, implement in infrastructure
+   - Use dependency injection (constructor injection)
+
 4. Write tests for new functionality (target 70-80% coverage)
+
 5. Update documentation when adding features
+
 6. Run tests and linter before committing
+
 7. Commit after each logical task/iteration
 
 ### Large Tasks - Use Task Tool Delegation
 
 For substantial refactorings or multi-package features:
 
-1. **Decompose** into context-sized chunks (packages, features, components)
+1. **Decompose** into layer-sized chunks (Domain → Application → Infrastructure → Presentation)
 2. **Delegate** each chunk sequentially using Task tool
 3. **Review** sub-agent reports between chunks
 4. **Verify** all tests/linter pass after completion
@@ -398,7 +471,6 @@ For substantial refactorings or multi-package features:
 - [ ] Run `go-arch-lint .` - zero violations
 - [ ] Update README.md (if commands/features changed)
 - [ ] Update CLAUDE.md (if workflow/architecture changed)
-- [ ] Run `go-arch-lint docs` (if architecture/API changed)
 - [ ] Commit with concise message
 
 ### Reporting Completed Work
@@ -484,37 +556,13 @@ Phase 2: Refactored tests...
 [Standard AC verification instructions]
 ```
 
-## Architecture Quick Reference
-
-### Dependency Rules
-
-- **pkg/pluginsdk**: Imports NOTHING (fully public)
-- **internal/domain**: May import `pkg/pluginsdk` (no other internal packages)
-- **internal/infra**: May import `internal/domain`, `pkg/pluginsdk`
-- **internal/app**: May import `internal/domain`, `internal/infra`, `pkg/pluginsdk`
-- **pkg/plugins/***: May import `pkg/pluginsdk` ONLY (no internal packages)
-- **cmd/***: May import `internal/app`, `internal/infra`, `pkg/plugins`
-
-**Key Rule**: SDK is single source of truth. No interface duplication.
-
-### Core Principles
-
-1. **SDK First**: Public plugin contracts in `pkg/pluginsdk`
-2. **Zero Duplication**: If SDK has it, don't duplicate elsewhere
-3. **Framework Agnostic**: `internal/domain` has zero plugin-specific knowledge
-4. **Plugin-Specific Types**: Event types, payloads, analysis → plugin packages
-5. **Dependency Inversion**: Define interfaces in domain/SDK, implement in infra/plugins
-
-**Details**: See package-level `CLAUDE.md` files for layer-specific guidance.
-
 ---
 
 ## Before Every Commit
 
 1. `go test ./...` - all tests must pass
 2. `go-arch-lint .` - **ZERO violations required** (non-negotiable)
-3. Regenerate docs if needed: `go-arch-lint docs`
-4. Update README.md / CLAUDE.md if functionality changed
+3. Update README.md / CLAUDE.md if functionality changed
 
 ---
 
@@ -530,25 +578,24 @@ Phase 2: Refactored tests...
 
 **Common Violations**:
 
-❌ `internal/domain` imports `internal/app` or `internal/infra`
-→ Fix: Define interface in domain/SDK, implement in infra, inject via app
+❌ **Domain imports Application/Infrastructure/Presentation**
+→ Fix: Domain must be pure. Move code to appropriate layer or use interfaces.
 
-❌ `pkg/pluginsdk` imports `internal/*`
-→ Fix: SDK must be fully public with zero internal dependencies
+❌ **Application imports Infrastructure**
+→ Fix: Application should depend on domain interfaces only. Infrastructure implements interfaces, gets injected.
 
-❌ Duplicate interfaces in both `pkg/pluginsdk` and `internal/domain`
-→ Fix: Delete from domain, use SDK (single source of truth)
+❌ **Circular dependencies between layers**
+→ Fix: Review layer responsibilities. Use dependency inversion.
 
-❌ `internal/domain` imports `pkg/plugins/claude_code`
-→ Fix: Framework must be plugin-agnostic; move types to SDK or keep in plugin
+✅ **Application imports Domain** - OK (expected)
+✅ **Infrastructure imports Domain** - OK (implements interfaces)
+✅ **Presentation imports Application + Domain** - OK (orchestrates)
 
-✅ `internal/domain` imports `pkg/pluginsdk` - OK (SDK is public contracts)
-✅ `internal/infra` → `internal/domain` - OK (allowed)
-
-**Example - Domain needs database**:
-- ✅ `internal/domain/repository.go` defines `EventRepository` interface
-- ✅ `internal/infra/sqlite_repository.go` implements `EventRepository`
-- ✅ `internal/app/` receives injected repository
+**Example - Application needs database**:
+- ✅ `domain/repositories.go` defines `TaskRepository` interface
+- ✅ `infrastructure/sqlite_task_repository.go` implements `TaskRepository`
+- ✅ `application/task_service.go` receives injected `domain.TaskRepository`
+- ✅ `cmd/tm/main.go` wires concrete implementation
 
 ---
 
@@ -556,13 +603,13 @@ Phase 2: Refactored tests...
 
 **Coverage Target**: 70-80%
 
-**Package Naming**: `package pkgname_test` (black-box testing)
+**Package Naming**: `package pkgname_test` (black-box testing preferred)
 
 **File Naming**: `*_test.go` in same directory
 
 **Test Naming**:
 - `TestFunctionName` or `TestType_Method`
-- Examples: `TestNewLogger`, `TestSQLiteStore_Init`
+- Examples: `TestNewTaskService`, `TestTask_Validate`
 
 **Running Tests**:
 ```bash
@@ -570,14 +617,28 @@ go test ./...                               # All tests
 go test -cover ./...                        # With coverage
 go test -coverprofile=coverage.out ./...    # Coverage report
 go tool cover -html=coverage.out            # View in browser
+
+# Layer-specific tests
+go test ./internal/task_manager/domain/...
+go test ./internal/task_manager/application/...
+go test ./internal/task_manager/infrastructure/...
 ```
 
 **Best Practices**:
-- Each test is independent
-- Use `t.TempDir()` for file operations
+- Each test is independent (no shared state)
+- Use `t.TempDir()` for file/database operations
 - Use `defer` for cleanup
-- Test public API only (black-box)
+- Test public API only (black-box) when possible
 - `t.Fatalf()` for setup failures, `t.Errorf()` for assertions
+- Mock repositories for application layer tests
+- Use real database for infrastructure tests (with temp DB)
+
+**Test Organization**:
+- **Unit tests**: Domain and application layer (mock dependencies)
+- **Integration tests**: Infrastructure layer (real database)
+- **E2E tests**: `e2e_test/` package (full workflow validation)
+
+---
 
 ## Documentation
 
@@ -589,30 +650,28 @@ go tool cover -html=coverage.out            # View in browser
 - New commands or flags
 - New features
 - Changed behavior
+- Installation instructions
+- Quick start guide
 
 **CLAUDE.md** (this file - development workflow):
 - Workflow changes
 - Architecture changes
 - New patterns or conventions
+- Layer responsibilities
+- Decision rationale (Why Cobra? Why SQLite?)
 
 **Package CLAUDE.md** (package-level architectural guidance):
 - What belongs in this package vs elsewhere
 - Layer-specific patterns and rules
 - Testing strategies
-- **Update with**: `/utility:update_package_docs`
-
-**Generated docs**:
-```bash
-go-arch-lint docs  # Regenerates docs/arch-index.md
-```
+- Examples of proper layer usage
 
 ### Documentation Checklist
 
 - [ ] Code implemented and tested
 - [ ] README.md updated (if user-facing changes)
-- [ ] CLAUDE.md updated (if workflow changes)
+- [ ] CLAUDE.md updated (if workflow/architecture changes)
 - [ ] Package CLAUDE.md updated (if package responsibilities changed)
-- [ ] Architecture docs regenerated (if needed)
 - [ ] All tests pass
 - [ ] Linter passes (zero violations)
 
@@ -620,11 +679,104 @@ go-arch-lint docs  # Regenerates docs/arch-index.md
 
 ## Key References
 
-- **Architecture Index**: `docs/arch-index.md` - Package structure and dependencies
-- **Plugin Template**: `template/go-plugin/README.md` - Plugin template with framework capabilities
-- **Package Documentation**: `<package>/CLAUDE.md` - Package-specific architectural guidance
+- **Main Architecture**: `internal/task_manager/CLAUDE.md` - Task Manager architecture overview
+- **Package Documentation**: `<package>/CLAUDE.md` - Layer-specific architectural guidance
 - **Linter**: `go-arch-lint .` - Validate architecture compliance
+- **Clean Architecture**: [The Clean Architecture (Uncle Bob)](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
+- **DDD**: [Domain-Driven Design Reference](https://www.domainlanguage.com/ddd/reference/)
 
 ---
 
-**Remember**: SDK is single source of truth. Framework is plugin-agnostic. Zero interface duplication.
+## Common Patterns
+
+### Adding a New Command
+
+1. **Presentation**: Create command file in `presentation/cli/`
+   - Define Cobra command
+   - Parse flags and validate input
+   - Call application service
+
+2. **Application**: Create/update service in `application/`
+   - Implement use case
+   - Orchestrate domain logic
+   - Handle transactions
+
+3. **Domain**: Update entities/repositories if needed
+   - Add domain logic to entities
+   - Define new repository methods in interfaces
+
+4. **Infrastructure**: Implement repository methods
+   - Add SQL queries
+   - Implement data mapping
+
+5. **Wire**: Update `cmd/tm/main.go`
+   - Register new command
+   - Inject dependencies
+
+### Adding a New Entity
+
+1. **Domain**: Define entity in `domain/`
+   - Create struct with business logic
+   - Add validation methods
+   - Define repository interface
+
+2. **Infrastructure**: Implement repository
+   - Create SQL migrations
+   - Implement CRUD operations
+   - Handle transactions
+
+3. **Application**: Create service if needed
+   - Implement use cases for entity
+   - Coordinate with other services
+
+4. **Presentation**: Add commands
+   - Create/update/delete commands
+   - List/show commands
+   - Output formatting
+
+### Repository Pattern Example
+
+```go
+// 1. Domain defines interface (domain/repositories.go)
+type TaskRepository interface {
+    Save(task *Task) error
+    FindByID(id string) (*Task, error)
+    FindAll() ([]*Task, error)
+}
+
+// 2. Infrastructure implements (infrastructure/sqlite_task_repository.go)
+type sqliteTaskRepository struct {
+    db *sql.DB
+}
+
+func NewSQLiteTaskRepository(db *sql.DB) domain.TaskRepository {
+    return &sqliteTaskRepository{db: db}
+}
+
+func (r *sqliteTaskRepository) Save(task *domain.Task) error {
+    // SQL implementation
+}
+
+// 3. Application receives injection (application/task_service.go)
+type TaskService struct {
+    taskRepo domain.TaskRepository
+}
+
+func NewTaskService(taskRepo domain.TaskRepository) *TaskService {
+    return &TaskService{taskRepo: taskRepo}
+}
+
+// 4. Main wires dependencies (cmd/tm/main.go)
+db := setupDatabase()
+taskRepo := infrastructure.NewSQLiteTaskRepository(db)
+taskService := application.NewTaskService(taskRepo)
+```
+
+---
+
+**Remember**:
+- Domain is the heart - protect it
+- Dependencies flow inward
+- Use dependency injection
+- Test each layer independently
+- Zero linter violations before commit

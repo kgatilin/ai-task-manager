@@ -44,7 +44,7 @@ You orchestrate a multi-agent workflow to implement TODO tasks in an iteration.
 ## Phase 1: Identify Target Iteration
 
 ```bash
-dw task-manager iteration current
+tm iteration current
 ```
 
 **If argument provided**: Use iteration number or ID
@@ -74,7 +74,7 @@ git checkout iteration-<number> 2>/dev/null || git checkout -b iteration-<number
 
 If iteration status is "planned":
 ```bash
-dw task-manager iteration start $TARGET_ITERATION
+tm iteration start $TARGET_ITERATION
 ```
 
 ---
@@ -82,7 +82,7 @@ dw task-manager iteration start $TARGET_ITERATION
 ## Phase 4: Filter TODO Tasks
 
 ```bash
-dw task-manager iteration show $TARGET_ITERATION --full
+tm iteration show $TARGET_ITERATION --full
 ```
 
 **Parse output** to extract tasks with status "todo"
@@ -97,10 +97,10 @@ dw task-manager iteration show $TARGET_ITERATION --full
 
 ```bash
 # List documents to get IDs
-dw task-manager doc list --iteration $TARGET_ITERATION
+tm doc list --iteration $TARGET_ITERATION
 
 # Read each document
-dw task-manager doc show <doc-id>
+tm doc show <doc-id>
 ```
 
 **Why mandatory**:
@@ -137,10 +137,10 @@ May run multiple explorations for different areas.
 
 ```bash
 # Get iteration details with all tasks and attached documents
-dw task-manager iteration show [iteration-number] --full
+tm iteration show [iteration-number] --full
 
 # Get ALL acceptance criteria for ALL tasks in iteration
-dw task-manager ac list-iteration [iteration-number]
+tm ac list-iteration [iteration-number]
 ```
 
 Parse output to understand:
@@ -152,7 +152,7 @@ Parse output to understand:
 **If iteration has attached documents (MANDATORY)**:
 ```bash
 # Read EACH attached document
-dw task-manager doc show <doc-id>
+tm doc show <doc-id>
 ```
 
 **Why documents are critical**:
@@ -181,7 +181,7 @@ Using exploration findings + iteration context, create plan with:
 1. **Phases**: Decompose TODO tasks into implementation phases (context-sized)
 2. **Dependencies**: Identify phase dependencies
 3. **Parallelization**: Mark which phases can run concurrently
-4. **Architecture**: Follow DarwinFlow patterns (see @docs/arch-index.md, CLAUDE.md)
+4. **Architecture**: Follow Task Manager patterns (see @docs/arch-index.md, CLAUDE.md)
 5. **Testing**: Each phase has verification steps (70-80% coverage target)
 
 **Plan format**:
@@ -246,7 +246,7 @@ Implement Phase [N]: [Name] for iteration [number]
 [Relevant AC from TODO tasks - for awareness, NOT for you to verify]
 
 ## Architecture Constraints
-- Follow DarwinFlow structure (@docs/arch-index.md, CLAUDE.md)
+- Follow Task Manager structure (@docs/arch-index.md, CLAUDE.md)
 - Maintain dependency rules
 - Zero linter violations
 - 70-80% test coverage
@@ -285,7 +285,7 @@ Wait for ALL before dependent phases
 - Check tests/linter
 - Update task statuses:
   ```bash
-  dw task-manager task update <task-id> --status review  # If phase completes TODO task implementation
+  tm task update <task-id> --status review  # If phase completes TODO task implementation
   ```
   **Note**: Move to "review" (not "done") so user can verify before final approval
 - **If issues**: Don't proceed, report blocker, ask user
@@ -312,8 +312,8 @@ Verify iteration [number] implementation.
 ## Step 1: Gather Current State
 
 ```bash
-dw task-manager iteration show [number] --full
-dw task-manager ac list-iteration [number]
+tm iteration show [number] --full
+tm ac list-iteration [number]
 ```
 
 Filter: Focus on TODO_TASKS, confirm now "done" (if fully implemented)

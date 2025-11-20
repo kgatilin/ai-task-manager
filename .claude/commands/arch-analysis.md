@@ -12,7 +12,7 @@ description: Analyze project architecture for duplication, SRP violations, and S
 
 # Architecture Analysis Command
 
-You are an expert software architect. Perform a **strategic architecture analysis** of the DarwinFlow project.
+You are an expert software architect. Perform a **strategic architecture analysis** of the Task Manager project.
 
 ultrathink throughout - reason deeply about architectural patterns and violations.
 

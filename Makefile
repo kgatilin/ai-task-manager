@@ -8,14 +8,14 @@ help: ## Show this help message
 	@echo 'Available targets:'
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
 
-build: ## Build binary to ./dw
-	go build -o dw ./cmd/dw
+build: ## Build tm binary to ./tm
+	go build -o tm ./cmd/tm
 
-build-stable: ## Build stable binary to ./dw-stable
-	go build -o dw-stable ./cmd/dw
+build-stable: ## Build stable tm binary to ./tm-stable
+	go build -o tm-stable ./cmd/tm
 
-install: ## Install binary to GOPATH/bin
-	go install ./cmd/dw
+install: ## Install tm binary to GOPATH/bin
+	go install ./cmd/tm
 	@echo "Installed to: $(INSTALL_PATH)"
 
 test: ## Run all tests

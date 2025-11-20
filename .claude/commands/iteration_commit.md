@@ -24,7 +24,7 @@ git branch --show-current
 Store the branch name, then check if it's main (if so, error and exit). If branch matches pattern "iteration-N", extract the iteration number and show iteration details:
 
 ```bash
-dw task-manager iteration show <ITERATION_NUM> --full
+tm iteration show <ITERATION_NUM> --full
 ```
 
 Get latest version tag:
