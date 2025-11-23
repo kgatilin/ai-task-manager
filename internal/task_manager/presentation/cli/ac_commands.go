@@ -180,10 +180,15 @@ func newACListIterationCommand(acService *application.ACApplicationService) *cob
 		Short: "List acceptance criteria for an iteration",
 		Long:  `Lists all acceptance criteria for all tasks in an iteration, grouped by task with status indicators.`,
 		Example: `  # List ACs for iteration 1
-  tm ac list-iteration 1`,
+  tm ac list-iteration 1
+
+  # List ACs with testing instructions
+  tm ac list-iteration 1 --with-testing`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+
+			withTesting, _ := cmd.Flags().GetBool("with-testing")
 
 			// Parse iteration number
 			var iteration int
@@ -241,6 +246,19 @@ func newACListIterationCommand(acService *application.ACApplicationService) *cob
 				for _, ac := range taskACs {
 					statusIcon := getStatusIndicator(ac.Status)
 					fmt.Fprintf(cmd.OutOrStdout(), "  %s [%s] %s\n", statusIcon, ac.ID, ac.Description)
+
+					// Display testing instructions if flag is set and AC has them
+					if withTesting && ac.TestingInstructions != "" {
+						fmt.Fprintf(cmd.OutOrStdout(), "    Testing Instructions:\n")
+						// Indent each line of testing instructions with 6 spaces
+						lines := strings.Split(ac.TestingInstructions, "\n")
+						for _, line := range lines {
+							if line != "" {
+								fmt.Fprintf(cmd.OutOrStdout(), "      %s\n", line)
+							}
+						}
+						fmt.Fprintf(cmd.OutOrStdout(), "\n")
+					}
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "\n")
 			}
@@ -248,6 +266,8 @@ func newACListIterationCommand(acService *application.ACApplicationService) *cob
 			return nil
 		},
 	}
+
+	cmd.Flags().Bool("with-testing", false, "Include testing instructions in output")
 
 	return cmd
 }

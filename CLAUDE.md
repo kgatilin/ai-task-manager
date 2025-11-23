@@ -1,5 +1,25 @@
 # Task Manager (tm)
 
+## CRITICAL: Path Convention
+
+**NEVER use absolute paths** in documentation, commands, or code references.
+
+- ✅ **Always use relative paths from project root**: `internal/task_manager/domain/task.go`
+- ✅ **Project root is your frame of reference**: All paths start from repository root
+- ❌ **Never use `/workspace/`**: Different environments use different absolute paths
+- ❌ **Never use `/Users/...` or `/home/...`**: Machine-specific paths break portability
+
+**Why**: Project root may be `/workspace/` in container, `/Users/name/projects/task-manager/` on Mac, `/home/user/tm/` on Linux, etc. Only relative paths are portable.
+
+**Examples**:
+- Good: `internal/task_manager/CLAUDE.md`
+- Good: `.agent/iteration-38-plan-2025-11-22.md`
+- Good: `cmd/tm/main.go`
+- Bad: `/workspace/internal/task_manager/CLAUDE.md`
+- Bad: `/Users/kgatilin/PersonalProjects/darwinflow-pub/internal/...`
+
+---
+
 ## Project Overview
 
 **Task Manager** is a standalone CLI tool for managing software development workflows using Clean Architecture and Domain-Driven Design principles. It provides roadmap tracking, task management, iterations, and acceptance criteria verification.

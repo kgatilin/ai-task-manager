@@ -260,8 +260,9 @@ func TestTransformToRoadmapListViewModel(t *testing.T) {
 		t.Errorf("expected track ID 'TM-track-1', got %q", vm.ActiveTracks[0].ID)
 	}
 
-	if vm.ActiveTracks[0].TaskCount != 3 {
-		t.Errorf("expected track task count 3, got %d", vm.ActiveTracks[0].TaskCount)
+	// Track task count should exclude done/cancelled tasks (2 active out of 3 total)
+	if vm.ActiveTracks[0].TaskCount != 2 {
+		t.Errorf("expected track task count 2 (excluding done/cancelled), got %d", vm.ActiveTracks[0].TaskCount)
 	}
 
 	// Verify backlog tasks (exclude done)
@@ -328,14 +329,52 @@ func TestTransformToRoadmapListViewModel_TaskCountCalculation(t *testing.T) {
 
 	vm := transformers.TransformToRoadmapListViewModel(roadmap, []*entities.IterationEntity{}, tracks, tasks)
 
-	// Track 1 should have 3 tasks
+	// Track 1 should have 3 tasks (all active)
 	if vm.ActiveTracks[0].TaskCount != 3 {
 		t.Errorf("expected track 1 task count 3, got %d", vm.ActiveTracks[0].TaskCount)
 	}
 
-	// Track 2 should have 1 task
+	// Track 2 should have 1 task (all active)
 	if vm.ActiveTracks[1].TaskCount != 1 {
 		t.Errorf("expected track 2 task count 1, got %d", vm.ActiveTracks[1].TaskCount)
+	}
+}
+
+// TestTransformToRoadmapListViewModel_TaskCountExcludesDoneAndCancelled verifies that done/cancelled tasks are excluded from track counts
+func TestTransformToRoadmapListViewModel_TaskCountExcludesDoneAndCancelled(t *testing.T) {
+	now := time.Now()
+
+	roadmap := &entities.RoadmapEntity{
+		ID:              "roadmap-1",
+		Vision:          "Test vision",
+		SuccessCriteria: "Test criteria",
+		CreatedAt:       now,
+		UpdatedAt:       now,
+	}
+
+	tracks := []*entities.TrackEntity{
+		mustCreateTrack("TM-track-1", "roadmap-1", "Track 1", "Description 1", "in-progress", 100, []string{}, now, now),
+	}
+
+	tasks := []*entities.TaskEntity{
+		mustCreateTask("TM-task-1", "TM-track-1", "Task 1 - todo", "Description 1", "todo", 100, "", now, now),
+		mustCreateTask("TM-task-2", "TM-track-1", "Task 2 - in-progress", "Description 2", "in-progress", 200, "", now, now),
+		mustCreateTask("TM-task-3", "TM-track-1", "Task 3 - done", "Description 3", "done", 300, "", now, now),
+		mustCreateTask("TM-task-4", "TM-track-1", "Task 4 - cancelled", "Description 4", "cancelled", 400, "", now, now),
+		mustCreateTask("TM-task-5", "TM-track-1", "Task 5 - todo", "Description 5", "todo", 500, "", now, now),
+	}
+
+	vm := transformers.TransformToRoadmapListViewModel(roadmap, []*entities.IterationEntity{}, tracks, tasks)
+
+	// Track should count only active tasks (3: todo, in-progress, todo)
+	// Done and cancelled tasks should be excluded
+	if vm.ActiveTracks[0].TaskCount != 3 {
+		t.Errorf("expected track task count 3 (excluding done/cancelled), got %d", vm.ActiveTracks[0].TaskCount)
+	}
+
+	// Backlog should have 3 active tasks (exclude done and cancelled)
+	if len(vm.BacklogTasks) != 3 {
+		t.Errorf("expected 3 backlog tasks (excluding done/cancelled), got %d", len(vm.BacklogTasks))
 	}
 }
 

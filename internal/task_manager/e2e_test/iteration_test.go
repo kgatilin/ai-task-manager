@@ -346,3 +346,66 @@ func (s *IterationTestSuite) TestIterationUpdateOnlySpecifiedFields() {
 	s.Contains(showOutput, "Original Goal", "goal should remain unchanged")
 	s.Contains(showOutput, "Original Deliverable", "deliverable should remain unchanged")
 }
+
+// TestIterationCurrentWithFullShowsACs tests that "tm iteration current --full" displays acceptance criteria (TM-ac-709)
+// This tests in the WorkflowTestSuite to have a clean database and controlled iteration state
+func (s *IterationWorkflowTestSuite) TestIterationCurrentWithFullShowsACs() {
+	// Step 1: Create a track
+	trackOutput, err := s.run("track", "create", "--title", "AC Test Track", "--rank", "100")
+	s.requireSuccess(trackOutput, err, "failed to create track")
+	trackID := s.parseID(trackOutput, "track")
+
+	// Step 2: Create tasks in the track
+	task1Output, err := s.run("task", "create", "--track", trackID, "--title", "AC Test Task 1", "--rank", "100")
+	s.requireSuccess(task1Output, err, "failed to create task 1")
+	task1ID := s.parseID(task1Output, "task")
+
+	task2Output, err := s.run("task", "create", "--track", trackID, "--title", "AC Test Task 2", "--rank", "200")
+	s.requireSuccess(task2Output, err, "failed to create task 2")
+	task2ID := s.parseID(task2Output, "task")
+
+	// Step 3: Create an iteration
+	iterOutput, err := s.run("iteration", "create",
+		"--name", "AC Test Iteration",
+		"--goal", "Test AC display",
+		"--deliverable", "ACs visible in --full")
+	s.requireSuccess(iterOutput, err, "failed to create iteration")
+	iterNumber := s.parseIterationNumber(iterOutput)
+
+	// Step 4: Add tasks to iteration
+	addTaskOutput, err := s.run("iteration", "add-task", iterNumber, task1ID, task2ID)
+	s.requireSuccess(addTaskOutput, err, "failed to add tasks to iteration")
+
+	// Step 5: Add acceptance criteria to both tasks
+	ac1Output, err := s.run("ac", "add", task1ID, "--description", "AC 1 for Task 1", "--testing-instructions", "Test AC 1")
+	s.requireSuccess(ac1Output, err, "failed to add AC 1")
+
+	ac2Output, err := s.run("ac", "add", task1ID, "--description", "AC 2 for Task 1", "--testing-instructions", "Test AC 2")
+	s.requireSuccess(ac2Output, err, "failed to add AC 2")
+
+	ac3Output, err := s.run("ac", "add", task2ID, "--description", "AC 3 for Task 2", "--testing-instructions", "Test AC 3")
+	s.requireSuccess(ac3Output, err, "failed to add AC 3")
+
+	// Step 6: Start the iteration
+	startOutput, err := s.run("iteration", "start", iterNumber)
+	s.requireSuccess(startOutput, err, "failed to start iteration")
+
+	// Step 7: Test "iteration current --full" shows ACs
+	currentOutput, err := s.run("iteration", "current", "--full")
+	s.requireSuccess(currentOutput, err, "iteration current --full should succeed")
+
+	// Verify the output contains both task titles and their ACs
+	s.Contains(currentOutput, "AC Test Task 1", "should show task 1 title")
+	s.Contains(currentOutput, "AC Test Task 2", "should show task 2 title")
+
+	// Verify ACs are displayed
+	s.Contains(currentOutput, "Acceptance Criteria", "should show acceptance criteria header")
+	s.Contains(currentOutput, "AC 1 for Task 1", "should show AC 1 description")
+	s.Contains(currentOutput, "AC 2 for Task 1", "should show AC 2 description")
+	s.Contains(currentOutput, "AC 3 for Task 2", "should show AC 3 description")
+
+	// Verify status indicators are shown (✓, ○, ✗, ⏸)
+	s.True(
+		strings.Contains(currentOutput, "○") || strings.Contains(currentOutput, "✓"),
+		"should show status indicators for ACs")
+}

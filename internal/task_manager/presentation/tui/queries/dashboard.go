@@ -16,7 +16,7 @@ import (
 // - All iterations
 // - Active roadmap
 // - All tracks for the roadmap
-// - All backlog tasks (not in any iteration)
+// - All tasks (for accurate track counts; transformer filters for display)
 //
 // Eliminates N+1 queries by loading all related data upfront.
 func LoadRoadmapListData(
@@ -41,14 +41,15 @@ func LoadRoadmapListData(
 		return nil, err
 	}
 
-	// Fetch backlog tasks (not in any iteration)
-	backlogTasks, err := repo.GetBacklogTasks(ctx)
+	// Fetch ALL tasks (for accurate track counts)
+	// The transformer will filter appropriately for display and counting
+	allTasks, err := repo.ListTasks(ctx, entities.TaskFilters{})
 	if err != nil {
 		return nil, err
 	}
 
 	// Transform to view model with filtering
-	vm := transformers.TransformToRoadmapListViewModel(roadmap, iterations, tracks, backlogTasks)
+	vm := transformers.TransformToRoadmapListViewModel(roadmap, iterations, tracks, allTasks)
 
 	return vm, nil
 }

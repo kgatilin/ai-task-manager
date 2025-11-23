@@ -13,7 +13,7 @@ import (
 
 // TestNewIterationCommands verifies that NewIterationCommands returns a valid Cobra command group
 func TestNewIterationCommands_Structure(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 
 	assert.NotNil(t, iterationCommands, "NewIterationCommands should return a command group")
 	assert.Equal(t, "iteration", iterationCommands.Name(), "command name should be 'iteration'")
@@ -23,7 +23,7 @@ func TestNewIterationCommands_Structure(t *testing.T) {
 
 // TestIterationCommands_AllSubcommands verifies all 10 subcommands are present
 func TestIterationCommands_AllSubcommands(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 
 	expectedSubcommands := []string{
 		"create",
@@ -50,7 +50,7 @@ func TestIterationCommands_AllSubcommands(t *testing.T) {
 
 // TestIterationCreateCommand_Flags verifies create command has required flags
 func TestIterationCreateCommand_Flags(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	createCmd := findCommand(iterationCommands, "create")
 
 	assert.NotNil(t, createCmd, "create command should exist")
@@ -62,7 +62,7 @@ func TestIterationCreateCommand_Flags(t *testing.T) {
 
 // TestIterationListCommand_Structure verifies list command exists
 func TestIterationListCommand_Structure(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	listCmd := findCommand(iterationCommands, "list")
 
 	assert.NotNil(t, listCmd, "list command should exist")
@@ -71,7 +71,7 @@ func TestIterationListCommand_Structure(t *testing.T) {
 
 // TestIterationShowCommand_Arguments verifies show command requires iteration number
 func TestIterationShowCommand_Arguments(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	showCmd := findCommand(iterationCommands, "show")
 
 	assert.NotNil(t, showCmd, "show command should exist")
@@ -81,7 +81,7 @@ func TestIterationShowCommand_Arguments(t *testing.T) {
 
 // TestIterationCurrentCommand_Structure verifies current command exists
 func TestIterationCurrentCommand_Structure(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	currentCmd := findCommand(iterationCommands, "current")
 
 	assert.NotNil(t, currentCmd, "current command should exist")
@@ -91,7 +91,7 @@ func TestIterationCurrentCommand_Structure(t *testing.T) {
 
 // TestIterationStartCommand_Arguments verifies start command requires iteration number
 func TestIterationStartCommand_Arguments(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	startCmd := findCommand(iterationCommands, "start")
 
 	assert.NotNil(t, startCmd, "start command should exist")
@@ -100,7 +100,7 @@ func TestIterationStartCommand_Arguments(t *testing.T) {
 
 // TestIterationCompleteCommand_Arguments verifies complete command requires iteration number
 func TestIterationCompleteCommand_Arguments(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	completeCmd := findCommand(iterationCommands, "complete")
 
 	assert.NotNil(t, completeCmd, "complete command should exist")
@@ -109,7 +109,7 @@ func TestIterationCompleteCommand_Arguments(t *testing.T) {
 
 // TestIterationAddTaskCommand_Arguments verifies add-task command requires iteration and tasks
 func TestIterationAddTaskCommand_Arguments(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	addTaskCmd := findCommand(iterationCommands, "add-task")
 
 	assert.NotNil(t, addTaskCmd, "add-task command should exist")
@@ -118,7 +118,7 @@ func TestIterationAddTaskCommand_Arguments(t *testing.T) {
 
 // TestIterationRemoveTaskCommand_Arguments verifies remove-task command requires iteration and tasks
 func TestIterationRemoveTaskCommand_Arguments(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	removeTaskCmd := findCommand(iterationCommands, "remove-task")
 
 	assert.NotNil(t, removeTaskCmd, "remove-task command should exist")
@@ -127,7 +127,7 @@ func TestIterationRemoveTaskCommand_Arguments(t *testing.T) {
 
 // TestIterationDeleteCommand_Arguments verifies delete command requires iteration number
 func TestIterationDeleteCommand_Arguments(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	deleteCmd := findCommand(iterationCommands, "delete")
 
 	assert.NotNil(t, deleteCmd, "delete command should exist")
@@ -136,7 +136,7 @@ func TestIterationDeleteCommand_Arguments(t *testing.T) {
 
 // TestIterationUpdateCommand_Flags verifies update command has optional field flags
 func TestIterationUpdateCommand_Flags(t *testing.T) {
-	iterationCommands := cli.NewIterationCommands(nil, nil)
+	iterationCommands := cli.NewIterationCommands(nil, nil, nil)
 	updateCmd := findCommand(iterationCommands, "update")
 
 	assert.NotNil(t, updateCmd, "update command should exist")

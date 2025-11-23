@@ -468,3 +468,75 @@ func (s *ACTestSuite) TestACVerificationEnforcement_NoACs() {
 	s.requireSuccess(taskShowOutput, err, "failed to show task")
 	s.Contains(taskShowOutput, "done", "task should be in 'done' status")
 }
+
+// TestACListIterationWithTestingInstructions tests that "tm ac list-iteration --with-testing" shows testing instructions (TM-ac-710)
+func (s *ACTestSuite) TestACListIterationWithTestingInstructions() {
+	// Step 1: Create a track
+	trackOutput, err := s.run("track", "create", "--title", "Testing Track", "--rank", "100")
+	s.requireSuccess(trackOutput, err, "failed to create track")
+	trackID := s.parseID(trackOutput, "track")
+
+	// Step 2: Create tasks
+	task1Output, err := s.run("task", "create", "--track", trackID, "--title", "Testing Task 1", "--rank", "100")
+	s.requireSuccess(task1Output, err, "failed to create task 1")
+	task1ID := s.parseID(task1Output, "task")
+
+	task2Output, err := s.run("task", "create", "--track", trackID, "--title", "Testing Task 2", "--rank", "200")
+	s.requireSuccess(task2Output, err, "failed to create task 2")
+	task2ID := s.parseID(task2Output, "task")
+
+	// Step 3: Create iteration with these tasks
+	iterOutput, err := s.run("iteration", "create",
+		"--name", "Testing Iteration",
+		"--goal", "Test with-testing flag",
+		"--deliverable", "Testing instructions visible")
+	s.requireSuccess(iterOutput, err, "failed to create iteration")
+	iterNumber := s.parseIterationNumber(iterOutput)
+
+	// Step 4: Add tasks to iteration
+	s.run("iteration", "add-task", iterNumber, task1ID, task2ID)
+
+	// Step 5: Add ACs with testing instructions
+	ac1Output, err := s.run("ac", "add", task1ID,
+		"--description", "AC with testing",
+		"--testing-instructions", "Step 1: Do this\nStep 2: Do that\nStep 3: Verify result")
+	s.requireSuccess(ac1Output, err, "failed to add AC 1")
+
+	ac2Output, err := s.run("ac", "add", task1ID,
+		"--description", "AC without testing",
+		"--testing-instructions", "")
+	s.requireSuccess(ac2Output, err, "failed to add AC 2")
+
+	ac3Output, err := s.run("ac", "add", task2ID,
+		"--description", "Another AC with testing",
+		"--testing-instructions", "1. First\n2. Second\n3. Third")
+	s.requireSuccess(ac3Output, err, "failed to add AC 3")
+
+	// Step 6: Test "ac list-iteration <num>" WITHOUT --with-testing (should not show testing instructions)
+	listOutput, err := s.run("ac", "list-iteration", iterNumber)
+	s.requireSuccess(listOutput, err, "ac list-iteration should succeed")
+	s.Contains(listOutput, "AC with testing", "should show AC description")
+	s.Contains(listOutput, "AC without testing", "should show AC description")
+	s.Contains(listOutput, "Another AC with testing", "should show AC description")
+	// Should NOT contain testing instructions
+	s.NotContains(listOutput, "Step 1: Do this", "without flag, should not show testing instructions")
+	s.NotContains(listOutput, "First", "without flag, should not show testing instructions")
+
+	// Step 7: Test "ac list-iteration <num> --with-testing" (should show testing instructions)
+	withTestingOutput, err := s.run("ac", "list-iteration", iterNumber, "--with-testing")
+	s.requireSuccess(withTestingOutput, err, "ac list-iteration --with-testing should succeed")
+
+	// Verify ACs are displayed
+	s.Contains(withTestingOutput, "AC with testing", "should show AC 1 description")
+	s.Contains(withTestingOutput, "AC without testing", "should show AC 2 description")
+	s.Contains(withTestingOutput, "Another AC with testing", "should show AC 3 description")
+
+	// Verify testing instructions are displayed
+	s.Contains(withTestingOutput, "Testing Instructions", "should show testing instructions header")
+	s.Contains(withTestingOutput, "Step 1: Do this", "should show step 1 of AC 1")
+	s.Contains(withTestingOutput, "Step 2: Do that", "should show step 2 of AC 1")
+	s.Contains(withTestingOutput, "Step 3: Verify result", "should show step 3 of AC 1")
+	s.Contains(withTestingOutput, "1. First", "should show first of AC 3")
+	s.Contains(withTestingOutput, "2. Second", "should show second of AC 3")
+	s.Contains(withTestingOutput, "3. Third", "should show third of AC 3")
+}

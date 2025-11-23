@@ -15,7 +15,7 @@ import (
 // ============================================================================
 
 // NewIterationCommands creates and returns the iteration command group with all subcommands.
-func NewIterationCommands(iterationService *application.IterationApplicationService, docService *application.DocumentApplicationService) *cobra.Command {
+func NewIterationCommands(iterationService *application.IterationApplicationService, docService *application.DocumentApplicationService, acService *application.ACApplicationService) *cobra.Command {
 	iterCmd := &cobra.Command{
 		Use:     "iteration",
 		Short:   "Manage iterations",
@@ -31,7 +31,7 @@ func NewIterationCommands(iterationService *application.IterationApplicationServ
 		newIterationCreateCommand(iterationService),
 		newIterationListCommand(iterationService),
 		newIterationShowCommand(iterationService, docService),
-		newIterationCurrentCommand(iterationService),
+		newIterationCurrentCommand(iterationService, acService),
 		newIterationStartCommand(iterationService),
 		newIterationCompleteCommand(iterationService),
 		newIterationAddTaskCommand(iterationService),
@@ -257,7 +257,7 @@ func newIterationShowCommand(iterationService *application.IterationApplicationS
 // iteration current command
 // ============================================================================
 
-func newIterationCurrentCommand(iterationService *application.IterationApplicationService) *cobra.Command {
+func newIterationCurrentCommand(iterationService *application.IterationApplicationService, acService *application.ACApplicationService) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "current",
 		Short: "Show the current active iteration",
@@ -328,6 +328,16 @@ func newIterationCurrentCommand(iterationService *application.IterationApplicati
 					fmt.Fprintf(cmd.OutOrStdout(), "\n  Tasks:\n")
 					for _, task := range tasks {
 						fmt.Fprintf(cmd.OutOrStdout(), "    - %s (%s): %s\n", task.ID, task.Status, task.Title)
+
+						// Fetch and display ACs for this task
+						acs, err := acService.ListAC(ctx, task.ID)
+						if err == nil && len(acs) > 0 {
+							fmt.Fprintf(cmd.OutOrStdout(), "      Acceptance Criteria:\n")
+							for _, ac := range acs {
+								statusIcon := getStatusIndicator(ac.Status)
+								fmt.Fprintf(cmd.OutOrStdout(), "        %s [%s] %s\n", statusIcon, ac.ID, ac.Description)
+							}
+						}
 					}
 				}
 			}

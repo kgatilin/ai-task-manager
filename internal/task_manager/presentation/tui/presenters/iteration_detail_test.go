@@ -235,3 +235,123 @@ func TestIterationDetailPresenter_GetterMethods(t *testing.T) {
 		t.Errorf("Expected active tab to be Documents after 2 tabs, got %v", presenter.GetActiveTab())
 	}
 }
+
+// TestIterationDetailPresenter_ViewportHeightSetOnTabSwitch verifies viewport height is set when switching to AC tab
+func TestIterationDetailPresenter_ViewportHeightSetOnTabSwitch(t *testing.T) {
+	vm := &viewmodels.IterationDetailViewModel{
+		Number: 1,
+		Name:   "Test Iteration",
+		Progress: &viewmodels.ProgressViewModel{
+			Completed: 0,
+			Total:     1,
+			Percent:   0.0,
+		},
+		TODOTasks: []*viewmodels.TaskRowViewModel{
+			{ID: "TM-task-1", Title: "Task 1", Status: "todo"},
+		},
+		TaskACs: []*viewmodels.TaskACGroupViewModel{
+			{
+				Task: &viewmodels.TaskRowViewModel{ID: "TM-task-1", Title: "Task 1"},
+				ACs: []*viewmodels.IterationACViewModel{
+					{
+						ID:                  "TM-ac-1",
+						Description:         "AC 1",
+						TestingInstructions: "1. Do this\n2. Do that",
+						Status:              "not-started",
+						IsExpanded:          false,
+					},
+				},
+			},
+		},
+	}
+
+	presenter := presenters.NewIterationDetailPresenter(vm, nil, context.Background())
+
+	// Simulate window size message to set up terminal height
+	sizeMsg := tea.WindowSizeMsg{Width: 80, Height: 30}
+	p, _ := presenter.Update(sizeMsg)
+	presenter = p.(*presenters.IterationDetailPresenter)
+
+	// Verify initial state is Tasks tab
+	if presenter.GetActiveTab() != presenters.IterationDetailTabTasks {
+		t.Fatal("Expected to start on Tasks tab")
+	}
+
+	// Switch to ACs tab via Tab key
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	p, _ = presenter.Update(tabMsg)
+	presenter = p.(*presenters.IterationDetailPresenter)
+
+	// Verify we're now on ACs tab
+	if presenter.GetActiveTab() != presenters.IterationDetailTabACs {
+		t.Fatal("Expected to be on ACs tab after Tab key")
+	}
+
+	// Viewport height should have been set during tab switch
+	// (internal state, but we can verify by checking that rendering works)
+	view := presenter.View()
+	if !strings.Contains(view, "Acceptance Criteria") {
+		t.Error("Expected ACs tab to be displayed in view")
+	}
+}
+
+// TestIterationDetailPresenter_ViewportHeightSetOnACExpansion verifies viewport height is recalculated when AC is expanded
+func TestIterationDetailPresenter_ViewportHeightSetOnACExpansion(t *testing.T) {
+	vm := &viewmodels.IterationDetailViewModel{
+		Number: 1,
+		Name:   "Test Iteration",
+		Progress: &viewmodels.ProgressViewModel{
+			Completed: 0,
+			Total:     1,
+			Percent:   0.0,
+		},
+		TaskACs: []*viewmodels.TaskACGroupViewModel{
+			{
+				Task: &viewmodels.TaskRowViewModel{ID: "TM-task-1", Title: "Task 1"},
+				ACs: []*viewmodels.IterationACViewModel{
+					{
+						ID:                  "TM-ac-1",
+						Description:         "AC 1",
+						TestingInstructions: "1. Do this\n2. Do that\n3. Verify result",
+						Status:              "not-started",
+						IsExpanded:          false,
+					},
+				},
+			},
+		},
+	}
+
+	presenter := presenters.NewIterationDetailPresenter(vm, nil, context.Background())
+
+	// Simulate window size message
+	sizeMsg := tea.WindowSizeMsg{Width: 80, Height: 30}
+	p, _ := presenter.Update(sizeMsg)
+	presenter = p.(*presenters.IterationDetailPresenter)
+
+	// Switch to ACs tab
+	tabMsg := tea.KeyMsg{Type: tea.KeyTab}
+	p, _ = presenter.Update(tabMsg)
+	presenter = p.(*presenters.IterationDetailPresenter)
+
+	// Initial state: AC is collapsed
+	initialView := presenter.View()
+	if !strings.Contains(initialView, "TM-ac-1") {
+		t.Error("Expected AC to be shown in collapsed view")
+	}
+
+	// Expand AC via Enter key
+	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
+	p, _ = presenter.Update(enterMsg)
+	presenter = p.(*presenters.IterationDetailPresenter)
+
+	// Verify AC is expanded
+	if !vm.TaskACs[0].ACs[0].IsExpanded {
+		t.Error("Expected AC to be expanded after Enter key")
+	}
+
+	// Viewport height should have been recalculated during expansion
+	expandedView := presenter.View()
+	if !strings.Contains(expandedView, "Do this") {
+		t.Error("Expected AC testing instructions to be shown when expanded")
+	}
+}

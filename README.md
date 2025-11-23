@@ -23,6 +23,20 @@ Task Manager is a developer-focused CLI tool for managing complex projects throu
 
 ### Installation
 
+#### From GitHub (Go Install)
+
+```bash
+# Full binary with TUI support
+go install github.com/kgatilin/ai-task-manager/cmd/tm@latest
+
+# Headless binary (CLI-only, ~30% smaller - for Docker/agents)
+go install -tags=headless github.com/kgatilin/ai-task-manager/cmd/tm@latest
+```
+
+The headless build excludes the interactive TUI and is ideal for Docker containers, CI/CD pipelines, and headless environments.
+
+#### From Source
+
 ```bash
 # Clone the repository
 git clone https://github.com/kgatilin/ai-task-manager.git
@@ -394,15 +408,59 @@ tm ui
 
 ### Building
 
+#### Full Binary (with TUI)
+
 ```bash
-# Build binary
-make build          # Creates ./tm
+make build          # Creates ./tm (with interactive UI support)
+```
+
+#### Headless Binary (for Docker/Agents)
+
+```bash
+make build-headless # Creates ./tm-headless (CLI only, ~30% smaller)
+```
+
+The headless binary excludes the Bubble Tea TUI framework and dependencies,
+resulting in a lightweight binary suitable for Docker containers and headless
+execution. All CLI commands work identically; only `tm ui` is unavailable
+and returns a clear error message.
+
+#### Size Comparison
+
+```bash
+make size-comparison
+# Output example:
+# Binary sizes:
+# 20M  tm
+# 14M  tm-headless
+```
+
+#### Other Targets
+
+```bash
+# Build both binaries
+make build-all      # Creates both ./tm and ./tm-headless
 
 # Run tests
 make test           # Run all tests
 
 # Install to GOPATH/bin
 make install
+```
+
+#### Docker Usage
+
+Example Dockerfile for headless binary:
+
+```dockerfile
+FROM golang:1.23-alpine AS builder
+WORKDIR /build
+COPY . .
+RUN make build-headless
+
+FROM alpine:latest
+COPY --from=builder /build/tm-headless /usr/local/bin/tm
+ENTRYPOINT ["tm"]
 ```
 
 ### Testing

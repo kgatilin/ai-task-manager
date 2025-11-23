@@ -200,9 +200,9 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 		p.help.SetWidth(msg.Width)
 
 		// Calculate available viewport height for scrolling
-		// Account for: title (1) + metadata (4-5) + progress (1) + tab headers (2) + help (2)
+		// Account for: title (1) + metadata (4-5) + progress (1) + tab headers (2) + help (2) + padding (1)
 		headerHeight := 11
-		footerHeight := 2 // Help text
+		footerHeight := 3 // Help text + padding to keep tabs visible
 		availableHeight := msg.Height - headerHeight - footerHeight
 		if availableHeight < 5 {
 			availableHeight = 5 // Minimum height
@@ -217,8 +217,10 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 			totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
 			p.scrollHelperTasks.EnsureVisible(totalTasks, p.selectedIndex)
 		} else if p.activeTab == IterationDetailTabACs {
+			// Always start at top when first entering/resizing AC view
+			// User can navigate down with arrow keys
 			lineCounts := p.calculateACLineCounts()
-			p.scrollHelperACs.EnsureVisibleMultiline(lineCounts, p.selectedIndex)
+			p.scrollHelperACs.EnsureVisibleMultiline(lineCounts, 0)  // Show top, not selectedIndex
 		} else {
 			totalDocuments := len(p.viewModel.Documents)
 			p.scrollHelperDocuments.EnsureVisible(totalDocuments, p.selectedIndex)
@@ -257,6 +259,18 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 				p.activeTab = IterationDetailTabTasks
 			}
 			p.selectedIndex = 0
+
+			// Ensure viewport height is set for new tab
+			// This handles initial state where WindowSizeMsg may not have been processed yet
+			if p.activeTab == IterationDetailTabACs {
+				headerHeight := 11
+				footerHeight := 2
+				availableHeight := p.terminalHeight - headerHeight - footerHeight
+				if availableHeight < 5 {
+					availableHeight = 5
+				}
+				p.scrollHelperACs.SetViewportHeight(availableHeight)
+			}
 		case key.Matches(msg, p.keys.Up):
 			if p.activeTab == IterationDetailTabTasks {
 				totalTasks := len(p.viewModel.TODOTasks) + len(p.viewModel.InProgressTasks) + len(p.viewModel.ReviewTasks) + len(p.viewModel.DoneTasks)
@@ -330,7 +344,17 @@ func (p *IterationDetailPresenter) Update(msg tea.Msg) (Presenter, tea.Cmd) {
 						for _, ac := range group.ACs {
 							if ac.ID == acID {
 								ac.IsExpanded = !ac.IsExpanded
-								// Recalculate line counts with new expansion state
+
+								// Recalculate viewport height after expansion state changes
+								headerHeight := 11
+								footerHeight := 2
+								availableHeight := p.terminalHeight - headerHeight - footerHeight
+								if availableHeight < 5 {
+									availableHeight = 5
+								}
+								p.scrollHelperACs.SetViewportHeight(availableHeight)
+
+								// Recalculate line counts with new expansion state and ensure visible
 								lineCounts := p.calculateACLineCounts()
 								p.scrollHelperACs.EnsureVisibleMultiline(lineCounts, p.selectedIndex)
 								return p, nil
@@ -500,20 +524,69 @@ func (p *IterationDetailPresenter) View() string {
 	return b.String()
 }
 
-// calculateACLineCounts returns the line count for each AC based on expansion state
-// Collapsed AC = 1 line, Expanded AC = header + testing instruction lines
+// calculateACLineCounts returns the line count for each AC based on expansion state and text wrapping.
+// Accounts for wrapped lines when AC descriptions exceed terminal width.
 func (p *IterationDetailPresenter) calculateACLineCounts() []int {
 	lineCounts := make([]int, 0)
+	availableWidth := p.width
+	if availableWidth < 40 {
+		availableWidth = 40 // Minimum width
+	}
+
 	for _, group := range p.viewModel.TaskACs {
 		for _, ac := range group.ACs {
-			if ac.IsExpanded && ac.TestingInstructions != "" {
-				// Count lines in testing instructions + header + spacing
-				lines := strings.Count(ac.TestingInstructions, "\n") + 3 // +3 for header, content, spacing
-				lineCounts = append(lineCounts, lines)
-			} else {
-				// Collapsed AC is 1 line
-				lineCounts = append(lineCounts, 1)
+			totalLines := 0
+
+			// Calculate header line count (accounting for text wrapping)
+			hasInstructions := ""
+			if ac.TestingInstructions != "" {
+				hasInstructions = " 📋"
 			}
+			headerText := fmt.Sprintf("  %s %s: %s%s", ac.StatusIcon, ac.ID, ac.Description, hasInstructions)
+
+			// Calculate how many lines the wrapped header takes
+			// Lipgloss wrapping: text is split at availableWidth
+			headerLines := (len(headerText) + availableWidth - 1) / availableWidth
+			if headerLines < 1 {
+				headerLines = 1
+			}
+			totalLines += headerLines
+
+			// If expanded, add testing instruction lines
+			if ac.IsExpanded && ac.TestingInstructions != "" {
+				totalLines += 1 // "Testing Instructions:" header
+				// Count actual instruction lines
+				instructionLines := strings.Split(ac.TestingInstructions, "\n")
+				for _, line := range instructionLines {
+					if line != "" {
+						// Each instruction line may wrap
+						wrappedLines := (len(line) + (availableWidth - 6) - 1) / (availableWidth - 6)
+						if wrappedLines < 1 {
+							wrappedLines = 1
+						}
+						totalLines += wrappedLines
+					}
+				}
+			}
+
+			// If has notes, add those lines (for failed/skipped ACs)
+			if ac.Notes != "" &&
+				ac.Status != string(entities.ACStatusVerified) &&
+				ac.Status != string(entities.ACStatusAutomaticallyVerified) {
+				totalLines += 1 // Notes header
+				// Notes are wrapped at availableWidth - label - margins
+				noteWidth := availableWidth - 20 // Approximate
+				if noteWidth < 20 {
+					noteWidth = 20
+				}
+				noteLines := (len(ac.Notes) + noteWidth - 1) / noteWidth
+				if noteLines < 1 {
+					noteLines = 1
+				}
+				totalLines += noteLines
+			}
+
+			lineCounts = append(lineCounts, totalLines)
 		}
 	}
 	return lineCounts

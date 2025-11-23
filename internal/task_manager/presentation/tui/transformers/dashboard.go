@@ -45,9 +45,12 @@ func TransformToRoadmapListViewModel(
 	}
 
 	// Build task count map for tracks
+	// Only count active tasks (exclude done and cancelled) to match backlog display
 	trackTaskCounts := make(map[string]int)
 	for _, task := range tasks {
-		trackTaskCounts[task.TrackID]++
+		if task.Status != string(entities.TaskStatusDone) && task.Status != string(entities.TaskStatusCancelled) {
+			trackTaskCounts[task.TrackID]++
+		}
 	}
 
 	// Filter and transform tracks (exclude complete)

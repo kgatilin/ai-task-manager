@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/kgatilin/ai-task-manager/internal/task_manager/presentation/cli"
-	"github.com/kgatilin/ai-task-manager/internal/task_manager/presentation/tui"
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +33,8 @@ func NewRootCmd(app *App) *cobra.Command {
 
 	// Add application commands from the Cobra command groups
 	if app != nil {
-		rootCmd.AddCommand(tui.NewUICommand(app.RepositoryCommon, app.Logger))
+		// Register TUI command (implementation varies by build tag)
+		registerTUICommand(rootCmd, app)
 
 		// Add project commands
 		rootCmd.AddCommand(cli.NewProjectCommands(app.ProjectService))
@@ -43,7 +43,7 @@ func NewRootCmd(app *App) *cobra.Command {
 		rootCmd.AddCommand(cli.NewTaskCommands(app.TaskService, app.ACService))
 
 		// Add iteration commands from the Cobra command group
-		rootCmd.AddCommand(cli.NewIterationCommands(app.IterationService, app.DocumentService))
+		rootCmd.AddCommand(cli.NewIterationCommands(app.IterationService, app.DocumentService, app.ACService))
 
 		// Add AC commands from the Cobra command group
 		rootCmd.AddCommand(cli.NewACCommands(app.ACService, app.TaskService))
