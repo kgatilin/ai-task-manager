@@ -4,16 +4,18 @@ This directory contains the Claude Code plugin metadata.
 
 ## plugin.json
 
-Defines the plugin structure and metadata:
+Defines the plugin metadata. Skills are auto-discovered from the `skills/` directory.
 
+**Required fields:**
 - **name**: Unique identifier for the plugin (string)
 - **description**: What the plugin does (string)
 - **version**: Semantic version (string, e.g., "1.0.0")
-- **author**: Plugin creator (string)
+
+**Optional fields:**
+- **author**: Plugin creator (object with `name` field)
 - **repository**: Source code location (string URL)
 - **homepage**: Plugin homepage (string URL)
 - **license**: License type (string, e.g., "MIT")
-- **skills**: Array of skill definitions with name and path
 
 ## Plugin Structure
 
@@ -48,39 +50,35 @@ tm-claude-plugin/
 - `version` - Semantic version
 
 ### Optional but Recommended
-- `author` - Creator name (string)
+- `author` - Creator (object: `{ "name": "..." }`)
 - `homepage` - Plugin website URL (string)
 - `repository` - Source code URL (string)
 - `license` - License type (string, e.g., "MIT", "Apache-2.0")
 
-### Skills
-- `skills` - Array of skill definitions
-  - `name` - Skill identifier (string)
-  - `path` - Relative path to skill directory (string)
+### Skills Auto-Discovery
 
-## Updating plugin.json
+Skills are automatically discovered from the `skills/` directory. Each subdirectory with a `SKILL.md` file is treated as a skill. No explicit declaration needed in plugin.json!
 
-When adding new skills:
+## Adding New Skills
 
-1. Create the skill directory and SKILL.md file
-2. Add entry to `skills` array in plugin.json
-3. Update version number
+To add a new skill to the plugin:
+
+1. Create directory: `skills/my-new-skill/`
+2. Create `skills/my-new-skill/SKILL.md` with proper frontmatter
+3. Update version in plugin.json
 4. Test the plugin loads correctly
 
-Example:
+The skill will be automatically discovered! No changes to plugin.json needed beyond version bump.
+
+**Minimal plugin.json:**
 ```json
 {
-  "name": "my-plugin",
-  "version": "1.1.0",
-  "skills": [
-    {
-      "name": "existing-skill",
-      "path": "skills/existing-skill"
-    },
-    {
-      "name": "my-new-skill",
-      "path": "skills/my-new-skill"
-    }
-  ]
+  "name": "task-manager-plugin",
+  "description": "Plugin description",
+  "version": "1.0.0",
+  "author": {
+    "name": "your-name"
+  },
+  "license": "MIT"
 }
 ```

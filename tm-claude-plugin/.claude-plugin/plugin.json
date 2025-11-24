@@ -2,14 +2,11 @@
   "name": "task-manager-plugin",
   "description": "Master Task Manager (tm) CLI workflows with expert guidance for iterations, tasks, acceptance criteria, and documents. Helps Claude understand when to use tm iteration current, tm task list, tm ac add, and other tm commands.",
   "version": "1.0.0",
-  "author": "kgatilin",
+  "author": {
+    "name": "kgatilin"
+  },
   "homepage": "https://github.com/kgatilin/ai-task-manager",
   "repository": "https://github.com/kgatilin/ai-task-manager.git",
   "license": "MIT",
-  "skills": [
-    {
-      "name": "task-manager-workflows",
-      "path": "skills/task-manager-workflows"
-    }
-  ]
+  "keywords": ["task-manager", "cli", "workflow", "iteration", "acceptance-criteria", "roadmap"]
 }
