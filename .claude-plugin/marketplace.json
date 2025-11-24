@@ -1,0 +1,17 @@
+{
+  "name": "ai-task-manager-marketplace",
+  "description": "Claude Code plugins for Task Manager",
+  "version": "1.0.0",
+  "owner": {
+    "name": "kgatilin",
+    "url": "https://github.com/kgatilin"
+  },
+  "plugins": [
+    {
+      "name": "tm-claude-plugin",
+      "path": "tm-claude-plugin",
+      "description": "Master Task Manager (tm) CLI workflows with expert guidance, custom commands, and automation for iterations, tasks, acceptance criteria, and documents",
+      "version": "1.0.0"
+    }
+  ]
+}
