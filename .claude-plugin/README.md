@@ -46,7 +46,7 @@ The `marketplace.json` file defines available plugins:
   "plugins": [
     {
       "name": "plugin-name",
-      "path": "relative/path/to/plugin",
+      "source": "./relative/path/to/plugin",
       "description": "Plugin description",
       "version": "1.0.0"
     }
@@ -54,4 +54,4 @@ The `marketplace.json` file defines available plugins:
 }
 ```
 
-Each plugin's `path` should point to a directory containing `.claude-plugin/plugin.json`.
+Each plugin's `source` should point to a directory containing `.claude-plugin/plugin.json`.
