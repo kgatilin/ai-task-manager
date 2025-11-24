@@ -18,6 +18,7 @@ go.work
 
 # Task Manager CLI binary (only in root)
 /tm
+/tm-headless
 /tm-stable
 /tm-e2e-test
 
