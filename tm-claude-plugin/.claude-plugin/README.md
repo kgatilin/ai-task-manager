@@ -4,14 +4,16 @@ This directory contains the Claude Code plugin metadata.
 
 ## plugin.json
 
-Defines the plugin structure, components, and metadata:
+Defines the plugin structure and metadata:
 
-- **name**: Unique identifier for the plugin
-- **description**: What the plugin does (shown in plugin listings)
-- **version**: Semantic version (1.0.0)
-- **author**: Plugin creator information
-- **repository**: Source code location
-- **components**: Skills and commands bundled in this plugin
+- **name**: Unique identifier for the plugin (string)
+- **description**: What the plugin does (string)
+- **version**: Semantic version (string, e.g., "1.0.0")
+- **author**: Plugin creator (string)
+- **repository**: Source code location (string URL)
+- **homepage**: Plugin homepage (string URL)
+- **license**: License type (string, e.g., "MIT")
+- **skills**: Array of skill definitions with name and path
 
 ## Plugin Structure
 
@@ -24,12 +26,7 @@ tm-claude-plugin/
 │   └── task-manager-workflows/
 │       ├── SKILL.md            # Main skill definition
 │       └── references/         # Detailed documentation
-├── commands/                    # Slash commands (explicit invocation)
-│   ├── tm-current.md
-│   ├── tm-status.md
-│   └── tm-validate.md
 ├── README.md                    # User-facing documentation
-├── INSTALLATION.md              # Installation guide
 └── LICENSE                      # MIT License
 ```
 
@@ -42,11 +39,6 @@ tm-claude-plugin/
 - Teaches best practices, patterns, and troubleshooting
 - Includes comprehensive workflow documentation
 
-### Commands
-
-**tm-current** - Show current or next planned iteration
-**tm-validate** - Validate acceptance criteria in iteration
-**tm-status** - Comprehensive project status overview
 
 ## Metadata Fields
 
@@ -56,45 +48,39 @@ tm-claude-plugin/
 - `version` - Semantic version
 
 ### Optional but Recommended
-- `author` - Creator information
-- `homepage` - Plugin website/documentation
-- `repository` - Source code location
-- `license` - License type (MIT, Apache, etc.)
-- `keywords` - Search/discovery terms
+- `author` - Creator name (string)
+- `homepage` - Plugin website URL (string)
+- `repository` - Source code URL (string)
+- `license` - License type (string, e.g., "MIT", "Apache-2.0")
 
-### Components
+### Skills
 - `skills` - Array of skill definitions
-  - `name` - Skill identifier
-  - `path` - Relative path to skill directory
-- `commands` - Array of slash command definitions
-  - `name` - Command name (invoked as /name)
-  - `path` - Relative path to command markdown
+  - `name` - Skill identifier (string)
+  - `path` - Relative path to skill directory (string)
 
 ## Updating plugin.json
 
-When adding new skills or commands:
+When adding new skills:
 
-1. Create the skill/command file
-2. Add entry to `components` in plugin.json
+1. Create the skill directory and SKILL.md file
+2. Add entry to `skills` array in plugin.json
 3. Update version number
 4. Test the plugin loads correctly
 
 Example:
 ```json
 {
-  "components": {
-    "skills": [
-      {
-        "name": "my-new-skill",
-        "path": "skills/my-new-skill"
-      }
-    ],
-    "commands": [
-      {
-        "name": "my-command",
-        "path": "commands/my-command.md"
-      }
-    ]
-  }
+  "name": "my-plugin",
+  "version": "1.1.0",
+  "skills": [
+    {
+      "name": "existing-skill",
+      "path": "skills/existing-skill"
+    },
+    {
+      "name": "my-new-skill",
+      "path": "skills/my-new-skill"
+    }
+  ]
 }
 ```
